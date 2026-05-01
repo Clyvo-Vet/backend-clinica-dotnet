@@ -1,5 +1,6 @@
 namespace Kura.Application.Services;
 
+using Kura.Application.DTOs.Pet;
 using Kura.Application.DTOs.Tutor;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Entities;
@@ -8,18 +9,34 @@ using Kura.Domain.Interfaces;
 
 public sealed class TutorService : ITutorService
 {
-    private readonly IRepository<Tutor> _repository;
+    private readonly ITutorRepository _repository;
+    private readonly ITutorPetRepository _tutorPetRepository;
+    private readonly IRepository<Especie> _especieRepository;
+    private readonly IRepository<Raca> _racaRepository;
     private readonly IUnitOfWork _uow;
 
-    public TutorService(IRepository<Tutor> repository, IUnitOfWork uow)
+    public TutorService(
+        ITutorRepository repository,
+        ITutorPetRepository tutorPetRepository,
+        IRepository<Especie> especieRepository,
+        IRepository<Raca> racaRepository,
+        IUnitOfWork uow)
     {
         _repository = repository;
+        _tutorPetRepository = tutorPetRepository;
+        _especieRepository = especieRepository;
+        _racaRepository = racaRepository;
         _uow = uow;
     }
 
-    public async Task<IEnumerable<TutorResponseDto>> GetAllAsync()
+    public async Task<IEnumerable<TutorResponseDto>> SearchAsync(string? busca)
     {
-        var tutores = await _repository.GetAllAsync();
+        IEnumerable<Tutor> tutores;
+        if (string.IsNullOrWhiteSpace(busca))
+            tutores = await _repository.GetAllAsync();
+        else
+            tutores = await _repository.SearchAsync(busca);
+
         return tutores.Select(ToResponse);
     }
 
@@ -28,6 +45,36 @@ public sealed class TutorService : ITutorService
         var tutor = await _repository.GetByIdAsync(id)
             ?? throw new EntidadeNaoEncontradaException("Tutor", id);
         return ToResponse(tutor);
+    }
+
+    public async Task<IEnumerable<PetResponseDto>> GetPetsAsync(long id)
+    {
+        _ = await _repository.GetByIdAsync(id)
+            ?? throw new EntidadeNaoEncontradaException("Tutor", id);
+
+        var vinculos = await _tutorPetRepository.GetByTutorIdAsync(id);
+        var result = new List<PetResponseDto>();
+        foreach (var vinculo in vinculos)
+        {
+            var pet = vinculo.Pet;
+            var especie = await _especieRepository.GetByIdAsync(pet.IdEspecie);
+            var raca = await _racaRepository.GetByIdAsync(pet.IdRaca);
+            result.Add(new PetResponseDto
+            {
+                Id = pet.Id,
+                NmPet = pet.NmPet,
+                IdEspecie = pet.IdEspecie,
+                NmEspecie = especie?.NmEspecie ?? string.Empty,
+                IdRaca = pet.IdRaca,
+                NmRaca = raca?.NmRaca ?? string.Empty,
+                IdVeterinarioResp = pet.IdVeterinarioResp,
+                DtNascimento = pet.DtNascimento,
+                SgSexo = pet.SgSexo,
+                SgPorte = pet.SgPorte,
+                StAtiva = pet.StAtiva
+            });
+        }
+        return result;
     }
 
     public async Task<TutorResponseDto> CreateAsync(TutorCreateDto dto)
@@ -53,19 +100,10 @@ public sealed class TutorService : ITutorService
         tutor.NrCpf = dto.NrCpf;
         tutor.DsEmail = dto.DsEmail;
         tutor.NrTelefone = dto.NrTelefone;
-        tutor.DtAtualizacao = DateTime.UtcNow;
 
         _repository.Update(tutor);
         await _uow.CommitAsync();
         return ToResponse(tutor);
-    }
-
-    public async Task SoftDeleteAsync(long id)
-    {
-        var tutor = await _repository.GetByIdAsync(id)
-            ?? throw new EntidadeNaoEncontradaException("Tutor", id);
-        _repository.SoftDelete(tutor);
-        await _uow.CommitAsync();
     }
 
     private static TutorResponseDto ToResponse(Tutor t) => new()

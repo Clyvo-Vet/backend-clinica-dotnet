@@ -9,4 +9,7 @@ public sealed class PetCreateDto
     public DateTime DtNascimento { get; init; }
     public char SgSexo { get; init; }
     public char SgPorte { get; init; }
+    public long TutorId { get; init; }
+    public char StPrincipal { get; init; } = 'S';
+    public string DsVinculo { get; init; } = "PROPRIETARIO";
 }
