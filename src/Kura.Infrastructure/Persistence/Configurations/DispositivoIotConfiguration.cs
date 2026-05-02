@@ -54,6 +54,5 @@ public class DispositivoIotConfiguration : IEntityTypeConfiguration<DispositivoI
             .HasForeignKey(e => e.IdClinica)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

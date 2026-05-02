@@ -13,21 +13,25 @@ public sealed class PrescricaoService : IPrescricaoService
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Prescricao> _prescricaoRepository;
     private readonly IUnitOfWork _uow;
+    private readonly IClinicaContext _clinicaContext;
 
     public PrescricaoService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Prescricao> prescricaoRepository,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IClinicaContext clinicaContext)
     {
         _eventoRepository = eventoRepository;
         _prescricaoRepository = prescricaoRepository;
         _uow = uow;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<PrescricaoResponseDto> CreateAsync(PrescricaoCreateDto dto)
     {
         var evento = new EventoClinico
         {
+            IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
             IdTipoEvento = IdTipoEventoPrescricao,

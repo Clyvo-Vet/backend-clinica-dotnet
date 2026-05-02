@@ -13,19 +13,22 @@ public sealed class PetService : IPetService
     private readonly IRepository<Especie> _especieRepository;
     private readonly IRepository<Raca> _racaRepository;
     private readonly IUnitOfWork _uow;
+    private readonly IClinicaContext _clinicaContext;
 
     public PetService(
         IPetRepository repository,
         ITutorPetRepository tutorPetRepository,
         IRepository<Especie> especieRepository,
         IRepository<Raca> racaRepository,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IClinicaContext clinicaContext)
     {
         _repository = repository;
         _tutorPetRepository = tutorPetRepository;
         _especieRepository = especieRepository;
         _racaRepository = racaRepository;
         _uow = uow;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<IEnumerable<PetResponseDto>> GetByFiltersAsync(long? tutorId, long? especieId, char? porte)
@@ -48,6 +51,7 @@ public sealed class PetService : IPetService
     {
         var pet = new Pet
         {
+            IdClinica = _clinicaContext.IdClinica,
             IdEspecie = dto.IdEspecie,
             IdRaca = dto.IdRaca,
             IdVeterinarioResp = dto.IdVeterinarioResp,

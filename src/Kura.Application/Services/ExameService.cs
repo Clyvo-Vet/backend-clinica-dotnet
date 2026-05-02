@@ -13,21 +13,25 @@ public sealed class ExameService : IExameService
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Exame> _exameRepository;
     private readonly IUnitOfWork _uow;
+    private readonly IClinicaContext _clinicaContext;
 
     public ExameService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Exame> exameRepository,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IClinicaContext clinicaContext)
     {
         _eventoRepository = eventoRepository;
         _exameRepository = exameRepository;
         _uow = uow;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<ExameResponseDto> CreateAsync(ExameCreateDto dto)
     {
         var evento = new EventoClinico
         {
+            IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
             IdTipoEvento = IdTipoEventoExame,

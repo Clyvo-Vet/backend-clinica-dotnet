@@ -4,4 +4,5 @@ public interface IClinicaContext
 {
     long IdClinica { get; }
     long IdVeterinario { get; }
+    long? IdClinicaFiltro { get; }
 }

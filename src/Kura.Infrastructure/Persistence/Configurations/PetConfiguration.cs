@@ -12,6 +12,10 @@ public class PetConfiguration : IEntityTypeConfiguration<Pet>
 
         builder.HasKey(e => e.Id);
 
+        builder.Property(e => e.IdClinica)
+            .HasColumnName("ID_CLINICA")
+            .IsRequired();
+
         builder.Property(e => e.Id)
             .HasColumnName("ID")
             .HasDefaultValueSql("SEQ_PET.NEXTVAL");
@@ -68,6 +72,5 @@ public class PetConfiguration : IEntityTypeConfiguration<Pet>
             .HasForeignKey(e => e.IdRaca)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

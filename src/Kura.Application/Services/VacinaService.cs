@@ -13,21 +13,25 @@ public sealed class VacinaService : IVacinaService
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Vacina> _vacinaRepository;
     private readonly IUnitOfWork _uow;
+    private readonly IClinicaContext _clinicaContext;
 
     public VacinaService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Vacina> vacinaRepository,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IClinicaContext clinicaContext)
     {
         _eventoRepository = eventoRepository;
         _vacinaRepository = vacinaRepository;
         _uow = uow;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<VacinaResponseDto> CreateAsync(VacinaCreateDto dto)
     {
         var evento = new EventoClinico
         {
+            IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
             IdTipoEvento = IdTipoEventoVacina,

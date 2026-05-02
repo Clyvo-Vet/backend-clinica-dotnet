@@ -66,6 +66,5 @@ public class NotificacaoConfiguration : IEntityTypeConfiguration<Notificacao>
             .HasForeignKey(e => e.IdVeterinario)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

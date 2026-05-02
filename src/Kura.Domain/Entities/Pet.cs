@@ -2,6 +2,7 @@ namespace Kura.Domain.Entities;
 
 public class Pet : EntidadeBase
 {
+    public long IdClinica { get; set; }
     public long IdEspecie { get; set; }
     public long IdRaca { get; set; }
     public long? IdVeterinarioResp { get; set; }

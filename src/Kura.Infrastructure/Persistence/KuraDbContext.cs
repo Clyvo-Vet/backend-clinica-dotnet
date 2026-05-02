@@ -1,13 +1,18 @@
 namespace Kura.Infrastructure.Persistence;
 
 using Kura.Domain.Entities;
+using Kura.Domain.Interfaces;
 using Kura.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 
 public class KuraDbContext : DbContext
 {
-    public KuraDbContext(DbContextOptions<KuraDbContext> options) : base(options)
+    private readonly IClinicaContext _clinicaContext;
+
+    public KuraDbContext(DbContextOptions<KuraDbContext> options, IClinicaContext clinicaContext)
+        : base(options)
     {
+        _clinicaContext = clinicaContext;
     }
 
     public DbSet<Clinica> Clinicas => Set<Clinica>();
@@ -40,6 +45,36 @@ public class KuraDbContext : DbContext
             .HasNoKey()
             .ToView("VW_TIMELINE_PET");
 
+        ApplyTenantFilters(modelBuilder);
+
         base.OnModelCreating(modelBuilder);
+    }
+
+    private void ApplyTenantFilters(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Veterinario>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<Pet>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<EventoClinico>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<Notificacao>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<DispositivoIot>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
     }
 }

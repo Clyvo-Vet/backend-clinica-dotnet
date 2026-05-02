@@ -12,6 +12,10 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
 
         builder.HasKey(e => e.Id);
 
+        builder.Property(e => e.IdClinica)
+            .HasColumnName("ID_CLINICA")
+            .IsRequired();
+
         builder.Property(e => e.Id)
             .HasColumnName("ID")
             .HasDefaultValueSql("SEQ_EVENTO_CLINICO.NEXTVAL");
@@ -64,6 +68,5 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
             .HasForeignKey(e => e.IdTipoEvento)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

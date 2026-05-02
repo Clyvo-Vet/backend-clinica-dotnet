@@ -59,6 +59,5 @@ public class VeterinarioConfiguration : IEntityTypeConfiguration<Veterinario>
             .HasForeignKey(e => e.IdClinica)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }
