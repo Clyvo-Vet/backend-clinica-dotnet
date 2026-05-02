@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeituraTemperaturaService, LeituraTemperaturaService>();
         services.AddScoped<IAlertaTemperaturaService, AlertaTemperaturaService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IDashboardService, DashboardService>();
 
         return services;
     }
@@ -68,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITutorPetRepository, TutorPetRepository>();
         services.AddScoped<IEventoClinicoRepository, EventoClinicoRepository>();
         services.AddScoped<ITimelineRepository, TimelineRepository>();
+        services.AddScoped<IAgendamentoRepository, AgendamentoRepository>();
 
         return services;
     }

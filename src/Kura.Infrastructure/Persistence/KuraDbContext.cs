@@ -35,6 +35,7 @@ public class KuraDbContext : DbContext
     public DbSet<AlertaTemperatura> AlertasTemperatura => Set<AlertaTemperatura>();
     public DbSet<LogErro> LogsErro => Set<LogErro>();
     public DbSet<TimelineItem> TimelineItems => Set<TimelineItem>();
+    public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +45,18 @@ public class KuraDbContext : DbContext
         modelBuilder.Entity<TimelineItem>()
             .HasNoKey()
             .ToView("VW_TIMELINE_PET");
+
+        modelBuilder.Entity<Agendamento>()
+            .HasNoKey()
+            .ToTable("AGENDAMENTO");
+
+        modelBuilder.Entity<Agendamento>().Property(e => e.Id).HasColumnName("ID");
+        modelBuilder.Entity<Agendamento>().Property(e => e.IdPet).HasColumnName("ID_PET");
+        modelBuilder.Entity<Agendamento>().Property(e => e.IdVeterinario).HasColumnName("ID_VETERINARIO");
+        modelBuilder.Entity<Agendamento>().Property(e => e.NmPaciente).HasColumnName("NM_PACIENTE");
+        modelBuilder.Entity<Agendamento>().Property(e => e.DtAgendamento).HasColumnName("DT_AGENDAMENTO");
+        modelBuilder.Entity<Agendamento>().Property(e => e.DsServico).HasColumnName("DS_SERVICO");
+        modelBuilder.Entity<Agendamento>().Property(e => e.StStatus).HasColumnName("ST_STATUS");
 
         ApplyTenantFilters(modelBuilder);
 
