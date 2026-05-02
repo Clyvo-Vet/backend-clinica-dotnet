@@ -6,4 +6,5 @@ public interface IAlertaTemperaturaService
 {
     Task<IEnumerable<AlertaTemperaturaResponseDto>> GetByDispositivoAsync(long idDispositivo);
     Task ResolverAsync(long id);
+    Task<IEnumerable<AlertaTemperaturaResponseDto>> GetAllAsync(bool? apenasNaoResolvidos);
 }

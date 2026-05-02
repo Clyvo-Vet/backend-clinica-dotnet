@@ -4,6 +4,7 @@ using Kura.Application.DTOs.LeituraTemperatura;
 
 public interface ILeituraTemperaturaService
 {
-    Task<LeituraTemperaturaResponseDto> IngerirAsync(LeituraTemperaturaCreateDto dto);
-    Task<IEnumerable<LeituraTemperaturaResponseDto>> GetByDispositivoAsync(long idDispositivo);
+    Task<LeituraTemperaturaResponseDto> RegistrarLeituraAsync(LeituraTemperaturaCreateDto dto);
+    Task<IEnumerable<LeituraTemperaturaResponseDto>> GetByDispositivoAsync(
+        long idDispositivo, DateTime? dataInicio, DateTime? dataFim);
 }

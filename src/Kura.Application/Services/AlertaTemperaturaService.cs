@@ -31,6 +31,14 @@ public sealed class AlertaTemperaturaService : IAlertaTemperaturaService
         return alertas.Select(ToResponse);
     }
 
+    public async Task<IEnumerable<AlertaTemperaturaResponseDto>> GetAllAsync(bool? apenasNaoResolvidos)
+    {
+        var alertas = await _alertaRepository.GetAllAsync();
+        if (apenasNaoResolvidos == true)
+            alertas = alertas.Where(a => a.StResolvido == 'N');
+        return alertas.Select(ToResponse);
+    }
+
     public async Task ResolverAsync(long id)
     {
         var alerta = await _alertaRepository.GetByIdAsync(id)
