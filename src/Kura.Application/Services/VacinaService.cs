@@ -14,21 +14,30 @@ public sealed class VacinaService : IVacinaService
     private readonly IRepository<Vacina> _vacinaRepository;
     private readonly IUnitOfWork _uow;
     private readonly IClinicaContext _clinicaContext;
+    private readonly IPetRepository _petRepository;
 
     public VacinaService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Vacina> vacinaRepository,
         IUnitOfWork uow,
-        IClinicaContext clinicaContext)
+        IClinicaContext clinicaContext,
+        IPetRepository petRepository)
     {
         _eventoRepository = eventoRepository;
         _vacinaRepository = vacinaRepository;
         _uow = uow;
         _clinicaContext = clinicaContext;
+        _petRepository = petRepository;
     }
 
     public async Task<VacinaResponseDto> CreateAsync(VacinaCreateDto dto)
     {
+        _ = await _petRepository.GetByIdAsync(dto.IdPet)
+            ?? throw new EntidadeNaoEncontradaException("Pet", dto.IdPet);
+
+        if (dto.DtProximaDose.HasValue && dto.DtProximaDose.Value < dto.DtEvento)
+            throw new RegraDeNegocioException("DtProximaDose não pode ser anterior à data de aplicação.");
+
         var evento = new EventoClinico
         {
             IdClinica = _clinicaContext.IdClinica,

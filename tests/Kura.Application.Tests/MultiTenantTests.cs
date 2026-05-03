@@ -19,8 +19,11 @@ public class MultiTenantTests
         var racaMock = new Mock<IRepository<Raca>>();
         var uowMock = new Mock<IUnitOfWork>();
         var ctxMock = new Mock<IClinicaContext>();
+        var tutorRepoMock = new Mock<ITutorRepository>();
 
         ctxMock.Setup(c => c.IdClinica).Returns(clinicaId);
+        tutorRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<long>()))
+            .ReturnsAsync(new Tutor { Id = 1, NmTutor = "João" });
         especieMock.Setup(r => r.GetByIdAsync(It.IsAny<long>()))
             .ReturnsAsync(new Especie { Id = 1, NmEspecie = "Cão" });
         racaMock.Setup(r => r.GetByIdAsync(It.IsAny<long>()))
@@ -34,7 +37,7 @@ public class MultiTenantTests
             .Returns(Task.CompletedTask);
 
         var sut = new PetService(repoMock.Object, tutorPetMock.Object,
-            especieMock.Object, racaMock.Object, uowMock.Object, ctxMock.Object);
+            especieMock.Object, racaMock.Object, uowMock.Object, ctxMock.Object, tutorRepoMock.Object);
 
         await sut.CreateAsync(new PetCreateDto
         {

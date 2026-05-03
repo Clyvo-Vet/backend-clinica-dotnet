@@ -14,6 +14,7 @@ public sealed class PetService : IPetService
     private readonly IRepository<Raca> _racaRepository;
     private readonly IUnitOfWork _uow;
     private readonly IClinicaContext _clinicaContext;
+    private readonly ITutorRepository _tutorRepository;
 
     public PetService(
         IPetRepository repository,
@@ -21,7 +22,8 @@ public sealed class PetService : IPetService
         IRepository<Especie> especieRepository,
         IRepository<Raca> racaRepository,
         IUnitOfWork uow,
-        IClinicaContext clinicaContext)
+        IClinicaContext clinicaContext,
+        ITutorRepository tutorRepository)
     {
         _repository = repository;
         _tutorPetRepository = tutorPetRepository;
@@ -29,6 +31,7 @@ public sealed class PetService : IPetService
         _racaRepository = racaRepository;
         _uow = uow;
         _clinicaContext = clinicaContext;
+        _tutorRepository = tutorRepository;
     }
 
     public async Task<IEnumerable<PetResponseDto>> GetByFiltersAsync(long? tutorId, long? especieId, char? porte)
@@ -49,6 +52,9 @@ public sealed class PetService : IPetService
 
     public async Task<PetResponseDto> CreateAsync(PetCreateDto dto)
     {
+        _ = await _tutorRepository.GetByIdAsync(dto.TutorId)
+            ?? throw new EntidadeNaoEncontradaException("Tutor", dto.TutorId);
+
         var pet = new Pet
         {
             IdClinica = _clinicaContext.IdClinica,
@@ -105,7 +111,7 @@ public sealed class PetService : IPetService
 
         var jaExiste = await _tutorPetRepository.ExistsAsync(dto.IdTutor, idPet);
         if (jaExiste)
-            throw new RegraDeNegocioException("Já existe vínculo ativo entre este tutor e este pet.");
+            throw new RegraDeNegocioException("Tutor já vinculado a este pet.");
 
         var tutorPet = new TutorPet
         {

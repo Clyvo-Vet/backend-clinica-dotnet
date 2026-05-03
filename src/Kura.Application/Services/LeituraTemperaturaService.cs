@@ -34,8 +34,7 @@ public sealed class LeituraTemperaturaService : ILeituraTemperaturaService
             ?? throw new EntidadeNaoEncontradaException("DispositivoIot", dto.IdDispositivoIot);
 
         if (dispositivo.StAtiva != 'S')
-            throw new RegraDeNegocioException(
-                $"Dispositivo {dto.IdDispositivoIot} está inativo.");
+            throw new RegraDeNegocioException("Dispositivo IoT inativo.");
 
         var leitura = new LeituraTemperatura
         {
