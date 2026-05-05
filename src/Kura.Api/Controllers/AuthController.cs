@@ -2,6 +2,7 @@ namespace Kura.Api.Controllers;
 
 using Kura.Application.DTOs.Auth;
 using Kura.Application.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -19,5 +20,18 @@ public class AuthController : ControllerBase
     {
         var result = await _service.LoginAsync(dto);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Cadastro público de nova clínica. Não requer autenticação.
+    /// </summary>
+    [HttpPost("register-clinica")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(RegisterClinicaResponseDto), 201)]
+    [ProducesResponseType(typeof(ProblemDetails), 422)]
+    public async Task<IActionResult> RegisterClinica([FromBody] RegisterClinicaDto dto)
+    {
+        var result = await _service.RegisterClinicaAsync(dto);
+        return CreatedAtAction(nameof(RegisterClinica), new { id = result.IdClinica }, result);
     }
 }

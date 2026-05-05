@@ -5,4 +5,5 @@ using Kura.Application.DTOs.Auth;
 public interface IAuthService
 {
     Task<TokenResponseDto> LoginAsync(LoginDto dto);
+    Task<RegisterClinicaResponseDto> RegisterClinicaAsync(RegisterClinicaDto dto);
 }
