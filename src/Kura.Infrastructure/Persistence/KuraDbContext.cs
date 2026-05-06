@@ -46,21 +46,31 @@ public class KuraDbContext : DbContext
             .HasNoKey()
             .ToView("VW_TIMELINE_PET");
 
-        modelBuilder.Entity<Agendamento>()
-            .HasNoKey()
-            .ToTable("AGENDAMENTO");
-
-        modelBuilder.Entity<Agendamento>().Property(e => e.Id).HasColumnName("ID");
-        modelBuilder.Entity<Agendamento>().Property(e => e.IdPet).HasColumnName("ID_PET");
-        modelBuilder.Entity<Agendamento>().Property(e => e.IdVeterinario).HasColumnName("ID_VETERINARIO");
-        modelBuilder.Entity<Agendamento>().Property(e => e.NmPaciente).HasColumnName("NM_PACIENTE");
-        modelBuilder.Entity<Agendamento>().Property(e => e.DtAgendamento).HasColumnName("DT_AGENDAMENTO");
-        modelBuilder.Entity<Agendamento>().Property(e => e.DsServico).HasColumnName("DS_SERVICO");
-        modelBuilder.Entity<Agendamento>().Property(e => e.StStatus).HasColumnName("ST_STATUS");
-
         ApplyTenantFilters(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
+    }
+
+    public override int SaveChanges()
+    {
+        BloquearEscritaEmAgendamento();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    {
+        BloquearEscritaEmAgendamento();
+        return await base.SaveChangesAsync(ct);
+    }
+
+    private void BloquearEscritaEmAgendamento()
+    {
+        var entradasAgendamento = ChangeTracker.Entries<Agendamento>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+        if (entradasAgendamento.Count > 0)
+            throw new InvalidOperationException(
+                "AGENDAMENTO é read-only no .NET. Operações de escrita são responsabilidade do backend Java.");
     }
 
     private void ApplyTenantFilters(ModelBuilder modelBuilder)
