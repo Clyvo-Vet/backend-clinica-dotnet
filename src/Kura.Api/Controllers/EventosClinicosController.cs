@@ -17,17 +17,20 @@ public class EventosClinicosController : ControllerBase
     private readonly IVacinaService _vacinaService;
     private readonly IPrescricaoService _prescricaoService;
     private readonly IExameService _exameService;
+    private readonly IConsultaService _consultaService;
 
     public EventosClinicosController(
         IEventoClinicoService eventoService,
         IVacinaService vacinaService,
         IPrescricaoService prescricaoService,
-        IExameService exameService)
+        IExameService exameService,
+        IConsultaService consultaService)
     {
         _eventoService = eventoService;
         _vacinaService = vacinaService;
         _prescricaoService = prescricaoService;
         _exameService = exameService;
+        _consultaService = consultaService;
     }
 
     [HttpGet]
@@ -77,5 +80,17 @@ public class EventosClinicosController : ControllerBase
     {
         var result = await _exameService.CreateAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = result.IdEventoClinico }, result);
+    }
+
+    /// <summary>
+    /// Registra uma consulta clínica (EventoClinico + Consulta em transação única).
+    /// </summary>
+    [HttpPost("consultas")]
+    [ProducesResponseType(typeof(ConsultaResponseDto), 201)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> CriarConsulta([FromBody] ConsultaCreateDto dto)
+    {
+        var result = await _consultaService.CriarConsultaAsync(dto);
+        return CreatedAtAction(nameof(CriarConsulta), new { id = result.IdConsulta }, result);
     }
 }

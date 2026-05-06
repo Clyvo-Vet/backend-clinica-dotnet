@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IVacinaService, VacinaService>();
         services.AddScoped<IPrescricaoService, PrescricaoService>();
         services.AddScoped<IExameService, ExameService>();
+        services.AddScoped<IConsultaService, ConsultaService>();
 
         // GROUP D — Supporting entities
         services.AddScoped<INotificacaoService, NotificacaoService>();

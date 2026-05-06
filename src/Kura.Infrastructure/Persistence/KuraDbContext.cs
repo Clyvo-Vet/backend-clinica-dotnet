@@ -35,6 +35,7 @@ public class KuraDbContext : DbContext
     public DbSet<AlertaTemperatura> AlertasTemperatura => Set<AlertaTemperatura>();
     public DbSet<LogErro> LogsErro => Set<LogErro>();
     public DbSet<TimelineItem> TimelineItems => Set<TimelineItem>();
+    public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
