@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAgendaService, AgendaService>();
+        services.AddScoped<ILunaService, LunaService>();
 
         return services;
     }
@@ -74,6 +75,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITimelineRepository, TimelineRepository>();
         services.AddScoped<IAgendamentoRepository, AgendamentoRepository>();
         services.AddScoped<IAgendamentoReadRepository, AgendaReadRepository>();
+        services.AddScoped<ITriagemLunaRepository, TriagemLunaRepository>();
 
         return services;
     }

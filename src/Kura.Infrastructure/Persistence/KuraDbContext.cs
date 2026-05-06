@@ -36,6 +36,7 @@ public class KuraDbContext : DbContext
     public DbSet<LogErro> LogsErro => Set<LogErro>();
     public DbSet<TimelineItem> TimelineItems => Set<TimelineItem>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
+    public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -97,6 +98,11 @@ public class KuraDbContext : DbContext
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
 
         modelBuilder.Entity<DispositivoIot>()
+            .HasQueryFilter(e => e.StAtiva == 'S' &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<TriagemLuna>()
             .HasQueryFilter(e => e.StAtiva == 'S' &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
