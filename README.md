@@ -130,6 +130,17 @@ O Oracle XE sobe automaticamente. Aguarde o healthcheck (~2 min) antes da primei
 | POST | `/api/v1/eventos-clinicos/vacinas` | Registrar vacina | JWT |
 | POST | `/api/v1/eventos-clinicos/prescricoes` | Registrar prescrição | JWT |
 | POST | `/api/v1/eventos-clinicos/exames` | Registrar exame | JWT |
+| POST | `/api/v1/eventos-clinicos/consultas` | Registrar consulta clínica | JWT |
+
+### Agenda
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET | `/api/v1/agenda?dataInicio=&dataFim=&veterinarioId=` | Agenda do intervalo (read-only de AGENDAMENTO — Java) | JWT |
+
+### Luna (IA de triagem)
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET | `/api/v1/luna/triagens/relatorio?dataInicio=&dataFim=` | Relatório agregado de triagens | JWT |
 
 ### Dashboard
 | Método | Rota | Descrição | Auth |
@@ -156,7 +167,7 @@ O Oracle XE sobe automaticamente. Aguarde o healthcheck (~2 min) antes da primei
 ### Medicamentos
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/api/v1/medicamentos` | Listar medicamentos | JWT |
+| GET | `/api/v1/medicamentos?busca=&page=&pageSize=` | Listar medicamentos paginados (padrão page=1, pageSize=20, max 100) | JWT |
 | GET | `/api/v1/medicamentos/{id}` | Buscar por ID | JWT |
 | POST | `/api/v1/medicamentos` | Cadastrar medicamento | JWT |
 
