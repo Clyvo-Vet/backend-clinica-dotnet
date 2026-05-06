@@ -1,5 +1,6 @@
 namespace Kura.Api.Controllers;
 
+using Kura.Application.DTOs.Common;
 using Kura.Application.DTOs.Medicamento;
 using Kura.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -14,11 +15,17 @@ public class MedicamentosController : ControllerBase
 
     public MedicamentosController(IMedicamentoService service) => _service = service;
 
+    /// <summary>
+    /// Lista medicamentos paginados. Use ?busca= para autocomplete.
+    /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<MedicamentoResponseDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] string? busca)
+    [ProducesResponseType(typeof(PagedResultDto<MedicamentoResponseDto>), 200)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? busca = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        var result = await _service.SearchAsync(busca);
+        var result = await _service.ListarAsync(busca, page, pageSize);
         return Ok(result);
     }
 

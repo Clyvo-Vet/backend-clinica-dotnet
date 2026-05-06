@@ -1,5 +1,6 @@
 namespace Kura.Application.Services;
 
+using Kura.Application.DTOs.Common;
 using Kura.Application.DTOs.Medicamento;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Entities;
@@ -15,6 +16,35 @@ public sealed class MedicamentoService : IMedicamentoService
     {
         _repository = repository;
         _uow = uow;
+    }
+
+    public async Task<PagedResultDto<MedicamentoResponseDto>> ListarAsync(string? busca, int page, int pageSize)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        IEnumerable<Medicamento> medicamentos;
+        if (string.IsNullOrWhiteSpace(busca))
+            medicamentos = await _repository.GetAllAsync();
+        else
+            medicamentos = await _repository.FindAsync(
+                m => m.NmMedicamento.ToLower().Contains(busca.ToLower()) ||
+                     m.DsPrincipioAtivo.ToLower().Contains(busca.ToLower()));
+
+        var list = medicamentos.ToList();
+        var total = list.Count;
+        var items = list
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(ToResponse);
+
+        return new PagedResultDto<MedicamentoResponseDto>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        };
     }
 
     public async Task<IEnumerable<MedicamentoResponseDto>> SearchAsync(string? busca)
