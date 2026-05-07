@@ -49,7 +49,7 @@ Criar `src/Kura.Api/appsettings.Development.json` com a connection string Oracle
 ```json
 {
   "ConnectionStrings": {
-    "OracleConnection": "User Id=RM562999;Password=<sua-senha>;Data Source=oracle.fiap.com.br:1521/orcl"
+    "DefaultConnection": "User Id=RM562999;Password=<sua-senha>;Data Source=oracle.fiap.com.br:1521/orcl"
   },
   "Jwt": {
     "Key": "kura-api-secret-key-fiap-2026-clyvovet",
@@ -76,7 +76,7 @@ docker-compose up --build
 # Health:  http://localhost:8080/health
 ```
 
-O Oracle XE sobe automaticamente. Aguarde o healthcheck (~2 min) antes da primeira request.
+A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco local é necessário.
 
 ## Endpoints principais
 
@@ -84,6 +84,7 @@ O Oracle XE sobe automaticamente. Aguarde o healthcheck (~2 min) antes da primei
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
 | POST | `/api/v1/auth/login` | Autenticação — retorna JWT | Público |
+| POST | `/api/v1/auth/register-clinica` | Cadastro de nova clínica | Público |
 
 ### Clínicas
 | Método | Rota | Descrição | Auth |
@@ -180,7 +181,7 @@ O Oracle XE sobe automaticamente. Aguarde o healthcheck (~2 min) antes da primei
 
 | Variável | Descrição | Exemplo |
 |---|---|---|
-| `ConnectionStrings__OracleConnection` | String de conexão Oracle | `User Id=RM562999;Password=...;Data Source=host:1521/orcl` |
+| `ConnectionStrings__DefaultConnection` | String de conexão Oracle | `User Id=RM562999;Password=...;Data Source=host:1521/orcl` |
 | `Jwt__Key` | Chave secreta para assinar o JWT | `kura-api-secret-key-fiap-2026-clyvovet` |
 | `Jwt__Issuer` | Emissor do token JWT | `kura-api` |
 | `Jwt__Audience` | Audiência do token JWT | `kura-client` |

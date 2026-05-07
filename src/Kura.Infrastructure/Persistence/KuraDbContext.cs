@@ -50,6 +50,22 @@ public class KuraDbContext : DbContext
 
         ApplyTenantFilters(modelBuilder);
 
+        // Conversão global de bool → int para compatibilidade com Oracle
+        // Oracle não aceita o literal FALSE — usa 0 e 1
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(bool) || property.ClrType == typeof(bool?))
+                {
+                    property.SetProviderClrType(typeof(int));
+                    property.SetValueConverter(
+                        new Microsoft.EntityFrameworkCore.Storage.ValueConversion.BoolToZeroOneConverter<int>()
+                    );
+                }
+            }
+        }
+
         base.OnModelCreating(modelBuilder);
     }
 
