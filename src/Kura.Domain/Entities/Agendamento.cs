@@ -16,6 +16,7 @@ public class Agendamento
     public string DsStatus { get; set; } = string.Empty;
     public string DsOrigem { get; set; } = string.Empty;
     public char StAtiva { get; set; } = 'S';
+    public long NrVersion { get; set; }
 
     public Pet? Pet { get; set; }
     public Tutor? Tutor { get; set; }

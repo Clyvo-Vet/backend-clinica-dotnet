@@ -8,7 +8,7 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
 {
     public void Configure(EntityTypeBuilder<Agendamento> builder)
     {
-        builder.ToTable("AGENDAMENTO", tb => tb.ExcludeFromMigrations());
+        builder.ToTable("AGENDAMENTO");
 
         builder.HasKey(e => e.Id);
 
@@ -63,6 +63,10 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
             .HasColumnName("ST_ATIVA")
             .HasColumnType("CHAR(1)")
             .IsRequired();
+
+        builder.Property(e => e.NrVersion)
+            .HasColumnName("NR_VERSION")
+            .IsConcurrencyToken();
 
         builder.HasOne(e => e.Pet)
             .WithMany()

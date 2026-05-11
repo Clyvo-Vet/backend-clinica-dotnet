@@ -6,6 +6,7 @@ using Kura.Application.Services;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Interfaces;
 using Kura.Infrastructure.Persistence;
+using Kura.Infrastructure.Persistence.Interceptors;
 using Kura.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -57,8 +58,11 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException(
                 "Connection string 'DefaultConnection' not configured.");
 
-        services.AddDbContext<KuraDbContext>(options =>
-            options.UseOracle(connectionString));
+        services.AddDbContext<KuraDbContext>((sp, options) =>
+        {
+            options.UseOracle(connectionString);
+            options.AddInterceptors(new ReadOnlyTablesInterceptor());
+        });
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));

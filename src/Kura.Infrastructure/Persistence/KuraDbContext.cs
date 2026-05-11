@@ -38,6 +38,8 @@ public class KuraDbContext : DbContext
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
+    public DbSet<ContaTutor> ContasTutor => Set<ContaTutor>();
+    public DbSet<Consentimento> Consentimentos => Set<Consentimento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,28 +69,6 @@ public class KuraDbContext : DbContext
         }
 
         base.OnModelCreating(modelBuilder);
-    }
-
-    public override int SaveChanges()
-    {
-        BloquearEscritaEmAgendamento();
-        return base.SaveChanges();
-    }
-
-    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
-    {
-        BloquearEscritaEmAgendamento();
-        return await base.SaveChangesAsync(ct);
-    }
-
-    private void BloquearEscritaEmAgendamento()
-    {
-        var entradasAgendamento = ChangeTracker.Entries<Agendamento>()
-            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .ToList();
-        if (entradasAgendamento.Count > 0)
-            throw new InvalidOperationException(
-                "AGENDAMENTO é read-only no .NET. Operações de escrita são responsabilidade do backend Java.");
     }
 
     private void ApplyTenantFilters(ModelBuilder modelBuilder)

@@ -7,6 +7,7 @@ using Microsoft.OpenApi;
 using Kura.Api.Middlewares;
 using Kura.Api.Extensions;
 using Kura.Infrastructure.Logging;
+using Kura.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +72,22 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// Validação de migrations pendentes — apenas aviso, NÃO aplica nada (schema é responsabilidade do Flyway)
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
+    var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+    if (pendingMigrations.Any())
+    {
+        app.Logger.LogWarning(
+            "Existem {Count} migrations pendentes no EF Core. " +
+            "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
+            "Migrations pendentes: {Migrations}",
+            pendingMigrations.Count(),
+            string.Join(", ", pendingMigrations));
+    }
+}
 
 // ExceptionHandlerMiddleware must be first
 app.UseMiddleware<ExceptionHandlerMiddleware>();
