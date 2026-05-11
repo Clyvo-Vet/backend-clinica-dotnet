@@ -21,4 +21,11 @@ public class AgendamentoRepository : IAgendamentoRepository
             .Take(limite)
             .ToListAsync();
     }
+
+    public Task<Agendamento?> GetByIdAsync(long id, long idClinica)
+        => _context.Agendamentos
+            .FirstOrDefaultAsync(a => a.Id == id && a.IdClinica == idClinica);
+
+    public void Update(Agendamento agendamento)
+        => _context.Agendamentos.Update(agendamento);
 }

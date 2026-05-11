@@ -18,4 +18,5 @@ public class AgendamentoItemDto
     public string NmVeterinario { get; set; } = string.Empty;
     public string DsTipoConsulta { get; set; } = string.Empty;
     public string DsStatus { get; set; } = string.Empty;
+    public long NrVersion { get; set; }
 }

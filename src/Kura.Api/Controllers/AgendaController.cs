@@ -20,4 +20,16 @@ public class AgendaController(IAgendaService agendaService) : ControllerBase
         var result = await agendaService.GetAgendaAsync(dataInicio, dataFim, veterinarioId);
         return Ok(result);
     }
+
+    [HttpPatch("~/api/v1/agendamentos/{id:long}/status")]
+    [ProducesResponseType(typeof(AgendamentoItemDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    [ProducesResponseType(422)]
+    public async Task<IActionResult> AtualizarStatus(long id, [FromBody] AtualizarStatusAgendamentoDto dto)
+    {
+        var result = await agendaService.AtualizarStatusAsync(id, dto);
+        return Ok(result);
+    }
 }

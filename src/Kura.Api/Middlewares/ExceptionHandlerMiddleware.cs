@@ -30,6 +30,7 @@ public class ExceptionHandlerMiddleware
             {
                 EntidadeNaoEncontradaException => StatusCodes.Status404NotFound,
                 RegraDeNegocioException => StatusCodes.Status422UnprocessableEntity,
+                ConflitoConcorrenciaException => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status500InternalServerError
             };
 

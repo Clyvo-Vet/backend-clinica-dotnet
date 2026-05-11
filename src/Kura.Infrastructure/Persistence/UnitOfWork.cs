@@ -1,6 +1,8 @@
 namespace Kura.Infrastructure.Persistence;
 
+using Kura.Domain.Exceptions;
 using Kura.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 public class UnitOfWork : IUnitOfWork
 {
@@ -11,9 +13,16 @@ public class UnitOfWork : IUnitOfWork
         _context = context;
     }
 
-    public Task<int> CommitAsync()
+    public async Task<int> CommitAsync()
     {
-        return _context.SaveChangesAsync();
+        try
+        {
+            return await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflitoConcorrenciaException();
+        }
     }
 
     public void Dispose()
