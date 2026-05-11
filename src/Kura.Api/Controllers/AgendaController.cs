@@ -5,13 +5,27 @@ using Kura.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// Consulta e atualização da agenda de agendamentos (tabela AGENDAMENTO gerenciada pelo backend Java).
+/// O .NET realiza leitura e atualização de status com controle de concorrência otimista (NrVersion).
+/// </summary>
 [ApiController]
 [Route("api/v1/agenda")]
 [Authorize]
 public class AgendaController(IAgendaService agendaService) : ControllerBase
 {
+    /// <summary>
+    /// Retorna os agendamentos de um intervalo de datas, com filtro opcional por veterinário.
+    /// </summary>
+    /// <param name="dataInicio">Data inicial do intervalo (inclusive).</param>
+    /// <param name="dataFim">Data final do intervalo (inclusive, máx. 31 dias).</param>
+    /// <param name="veterinarioId">Filtrar por veterinário responsável (opcional).</param>
+    /// <returns>Agenda do intervalo com lista de agendamentos mapeados.</returns>
+    /// <response code="200">Agenda retornada com sucesso.</response>
+    /// <response code="422">Intervalo inválido ou superior a 31 dias.</response>
     [HttpGet]
     [ProducesResponseType(typeof(AgendaResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 422)]
     public async Task<IActionResult> GetAgenda(
         [FromQuery] DateTime dataInicio,
         [FromQuery] DateTime dataFim,
@@ -21,12 +35,24 @@ public class AgendaController(IAgendaService agendaService) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Atualiza o status de um agendamento com controle de concorrência otimista.
+    /// O cliente deve enviar o NrVersion obtido na última leitura para evitar sobrescrita silenciosa.
+    /// </summary>
+    /// <param name="id">Identificador do agendamento.</param>
+    /// <param name="dto">Novo status (REALIZADO | CANCELADO), NrVersion atual e observação opcional.</param>
+    /// <returns>Agendamento com status e NrVersion atualizados.</returns>
+    /// <response code="200">Status atualizado com sucesso.</response>
+    /// <response code="400">Dados inválidos (status ou versão).</response>
+    /// <response code="404">Agendamento não encontrado.</response>
+    /// <response code="409">Conflito de concorrência — outro processo atualizou o agendamento. Atualize e tente novamente.</response>
+    /// <response code="422">Agendamento já está em estado final (REALIZADO ou CANCELADO).</response>
     [HttpPatch("~/api/v1/agendamentos/{id:long}/status")]
     [ProducesResponseType(typeof(AgendamentoItemDto), 200)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(404)]
-    [ProducesResponseType(409)]
-    [ProducesResponseType(422)]
+    [ProducesResponseType(typeof(ProblemDetails), 400)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    [ProducesResponseType(typeof(ProblemDetails), 409)]
+    [ProducesResponseType(typeof(ProblemDetails), 422)]
     public async Task<IActionResult> AtualizarStatus(long id, [FromBody] AtualizarStatusAgendamentoDto dto)
     {
         var result = await agendaService.AtualizarStatusAsync(id, dto);
