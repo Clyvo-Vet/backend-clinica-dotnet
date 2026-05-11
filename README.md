@@ -1,4 +1,4 @@
-﻿# KURA API
+# KURA API
 
 Backend clínico do sistema de gestão veterinária **Clyvo Vet**. Desenvolvido em .NET 10.0 como parte do Challenge FIAP 2026.
 
@@ -15,7 +15,7 @@ Backend clínico do sistema de gestão veterinária **Clyvo Vet**. Desenvolvido 
 | JWT Bearer | — | Autenticação |
 | Serilog | — | Logging estruturado |
 | Docker | — | Containerização |
-| Azure App Service | — | Hospedagem em produção |
+| Azure VM Linux | Ubuntu 22.04 | Hospedagem em produção |
 
 ## Arquitetura
 
@@ -78,7 +78,36 @@ docker-compose up --build
 
 A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco local é necessário.
 
-## Endpoints principais
+---
+
+## Como testar autenticação
+
+1. **Criar clínica** — `POST /api/v1/auth/register-clinica` (sem token)
+2. **Fazer login** — `POST /api/v1/auth/login` → copiar o campo `token` da resposta
+3. **Autorizar no Swagger** — clicar em **Authorize** e preencher `Bearer {token}`
+4. Todos os endpoints com cadeado agora funcionam
+
+```bash
+# Exemplo via curl
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"dsEmail":"admin@clinica.com","dsSenha":"Senha123!"}' \
+  | jq -r '.token')
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tutores
+```
+
+## Contextos de autenticação
+
+| Contexto | Mecanismo | Quem usa |
+|---|---|---|
+| Front da clínica | JWT Bearer (`Authorization: Bearer {token}`) | Veterinários, gestores |
+| Dispositivos IoT (ESP32) | API Key (`X-Api-Key: {key}`) | Sensores de temperatura |
+| IA Luna (Python) | API Key (`X-Api-Key: {key}`) | Chatbot de triagem |
+
+---
+
+## Endpoints
 
 ### Auth
 | Método | Rota | Descrição | Auth |
@@ -105,11 +134,13 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 ### Tutores
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/api/v1/tutores` | Listar tutores | JWT |
+| GET | `/api/v1/tutores` | Listar tutores (busca por nome/CPF) | JWT |
 | GET | `/api/v1/tutores/{id}` | Buscar por ID | JWT |
 | GET | `/api/v1/tutores/{id}/pets` | Pets do tutor | JWT |
-| POST | `/api/v1/tutores` | Criar tutor | JWT |
+| POST | `/api/v1/tutores` | Criar tutor + invite de onboarding (UUID, 7 dias) | JWT |
 | PUT | `/api/v1/tutores/{id}` | Atualizar tutor | JWT |
+
+> **POST /tutores** retorna `TutorComInviteResponseDto` com o token do invite e canal (WHATSAPP \| EMAIL \| SMS).
 
 ### Pets
 | Método | Rota | Descrição | Auth |
@@ -119,16 +150,16 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 | POST | `/api/v1/pets` | Cadastrar pet | JWT |
 | PUT | `/api/v1/pets/{id}` | Atualizar pet | JWT |
 | DELETE | `/api/v1/pets/{id}` | Soft delete | JWT |
-| POST | `/api/v1/pets/{id}/tutores` | Vincular tutor adicional | JWT |
-| GET | `/api/v1/pets/{id}/timeline` | Timeline de eventos | JWT |
+| POST | `/api/v1/pets/{id}/tutores` | Vincular tutor adicional (N:N) | JWT |
+| GET | `/api/v1/pets/{id}/timeline` | Timeline cronológica de eventos | JWT |
 | GET | `/api/v1/pets/{id}/proximas-vacinas` | Próximas doses agendadas | JWT |
 
 ### Eventos Clínicos
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/api/v1/eventos-clinicos` | Listar eventos (filtros: petId, tipo, datas) | JWT |
+| GET | `/api/v1/eventos-clinicos` | Listar eventos (filtros: petId, tipo, datas, veterinárioId) | JWT |
 | GET | `/api/v1/eventos-clinicos/{id}` | Buscar por ID | JWT |
-| POST | `/api/v1/eventos-clinicos/vacinas` | Registrar vacina | JWT |
+| POST | `/api/v1/eventos-clinicos/vacinas` | Registrar vacina (EventoClinico + Vacina atômico) | JWT |
 | POST | `/api/v1/eventos-clinicos/prescricoes` | Registrar prescrição | JWT |
 | POST | `/api/v1/eventos-clinicos/exames` | Registrar exame | JWT |
 | POST | `/api/v1/eventos-clinicos/consultas` | Registrar consulta clínica | JWT |
@@ -136,7 +167,11 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 ### Agenda
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/api/v1/agenda?dataInicio=&dataFim=&veterinarioId=` | Agenda do intervalo (read-only de AGENDAMENTO — Java) | JWT |
+| GET | `/api/v1/agenda?dataInicio=&dataFim=&veterinarioId=` | Agenda do intervalo (máx. 31 dias, leitura de AGENDAMENTO Java) | JWT |
+| PATCH | `/api/v1/agendamentos/{id}/status` | Atualizar status com controle de concorrência otimista (NrVersion) | JWT |
+
+> **PATCH /agendamentos/{id}/status** aceita `{ "dsStatus": "REALIZADO|CANCELADO", "nrVersion": N }`.  
+> Retorna **409** se `nrVersion` desatualizado — atualize e reenvie.
 
 ### Luna (IA de triagem)
 | Método | Rota | Descrição | Auth |
@@ -154,7 +189,7 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
 | GET | `/api/v1/notificacoes` | Listar notificações da clínica | JWT |
-| PATCH | `/api/v1/notificacoes/{id}/marcar-lida` | Marcar notificação como lida | JWT |
+| PATCH | `/api/v1/notificacoes/{id}/marcar-lida` | Marcar como lida | JWT |
 
 ### IoT
 | Método | Rota | Descrição | Auth |
@@ -168,14 +203,21 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 ### Medicamentos
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/api/v1/medicamentos?busca=&page=&pageSize=` | Listar medicamentos paginados (padrão page=1, pageSize=20, max 100) | JWT |
+| GET | `/api/v1/medicamentos?busca=&page=&pageSize=` | Listar medicamentos paginados | JWT |
 | GET | `/api/v1/medicamentos/{id}` | Buscar por ID | JWT |
 | POST | `/api/v1/medicamentos` | Cadastrar medicamento | JWT |
+
+### Métricas (SLO)
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET | `/metrics` | Métricas operacionais para SLO tracking | Público |
 
 ### Health
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
 | GET | `/health` | Health check da API | Público |
+
+---
 
 ## Variáveis de ambiente
 
@@ -190,10 +232,7 @@ A API conecta ao Oracle externo da FIAP (`oracle.fiap.com.br`). Nenhum banco loc
 
 ## Deploy
 
-Consulte [`docs/azure-deploy.md`](docs/azure-deploy.md) para o passo a passo completo de deploy no Azure.
-
-URL de produção: `https://kura-api-fiap.azurewebsites.net`  
-Swagger em produção: `https://kura-api-fiap.azurewebsites.net/swagger`
+Consulte [`docs/deploy/README.md`](docs/deploy/README.md) para o passo a passo completo de provisionamento de VM Linux na Azure e deploy via Docker.
 
 ## Equipe — Clyvo Vet
 
