@@ -25,4 +25,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 EXPOSE 8080
+
+# Run as non-root for security and FIAP DevOps rubric 2.2
+RUN groupadd -r kura && useradd -r -g kura kura
+RUN chown -R kura:kura /app
+USER kura
+
 ENTRYPOINT ["dotnet", "Kura.Api.dll"]
