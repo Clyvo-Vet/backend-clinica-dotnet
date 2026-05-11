@@ -19,5 +19,9 @@ public sealed class TutorCreateValidator : AbstractValidator<TutorCreateDto>
         RuleFor(x => x.DsEmail)
             .NotEmpty()
             .MaximumLength(150);
+
+        RuleFor(x => x.DsCanalConvite)
+            .Must(c => c is "WHATSAPP" or "EMAIL" or "SMS")
+            .WithMessage("'DsCanalConvite' deve ser WHATSAPP, EMAIL ou SMS.");
     }
 }

@@ -8,6 +8,6 @@ public interface ITutorService
     Task<IEnumerable<TutorResponseDto>> SearchAsync(string? busca);
     Task<TutorResponseDto> GetByIdAsync(long id);
     Task<IEnumerable<PetResponseDto>> GetPetsAsync(long id);
-    Task<TutorResponseDto> CreateAsync(TutorCreateDto dto);
+    Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto);
     Task<TutorResponseDto> UpdateAsync(long id, TutorUpdateDto dto);
 }

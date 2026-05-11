@@ -80,6 +80,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAgendamentoRepository, AgendamentoRepository>();
         services.AddScoped<IAgendamentoReadRepository, AgendaReadRepository>();
         services.AddScoped<ITriagemLunaRepository, TriagemLunaRepository>();
+        services.AddScoped<IInviteTutorRepository, InviteTutorRepository>();
 
         return services;
     }

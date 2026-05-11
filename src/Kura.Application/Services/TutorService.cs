@@ -13,6 +13,7 @@ public sealed class TutorService : ITutorService
     private readonly ITutorPetRepository _tutorPetRepository;
     private readonly IRepository<Especie> _especieRepository;
     private readonly IRepository<Raca> _racaRepository;
+    private readonly IInviteTutorRepository _inviteRepository;
     private readonly IUnitOfWork _uow;
 
     public TutorService(
@@ -20,12 +21,14 @@ public sealed class TutorService : ITutorService
         ITutorPetRepository tutorPetRepository,
         IRepository<Especie> especieRepository,
         IRepository<Raca> racaRepository,
+        IInviteTutorRepository inviteRepository,
         IUnitOfWork uow)
     {
         _repository = repository;
         _tutorPetRepository = tutorPetRepository;
         _especieRepository = especieRepository;
         _racaRepository = racaRepository;
+        _inviteRepository = inviteRepository;
         _uow = uow;
     }
 
@@ -77,7 +80,7 @@ public sealed class TutorService : ITutorService
         return result;
     }
 
-    public async Task<TutorResponseDto> CreateAsync(TutorCreateDto dto)
+    public async Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto)
     {
         var tutor = new Tutor
         {
@@ -87,8 +90,18 @@ public sealed class TutorService : ITutorService
             NrTelefone = dto.NrTelefone
         };
         await _repository.AddAsync(tutor);
+
+        var invite = new InviteTutor
+        {
+            Tutor = tutor,
+            NrToken = Guid.NewGuid(),
+            DtExpiracao = tutor.DtCriacao.AddDays(7),
+            DsCanal = dto.DsCanalConvite,
+        };
+        await _inviteRepository.AddAsync(invite);
+
         await _uow.CommitAsync();
-        return ToResponse(tutor);
+        return ToComInviteResponse(tutor, invite);
     }
 
     public async Task<TutorResponseDto> UpdateAsync(long id, TutorUpdateDto dto)
@@ -114,5 +127,23 @@ public sealed class TutorService : ITutorService
         DsEmail = t.DsEmail,
         NrTelefone = t.NrTelefone,
         StAtiva = t.StAtiva
+    };
+
+    private static TutorComInviteResponseDto ToComInviteResponse(Tutor t, InviteTutor i) => new()
+    {
+        Id = t.Id,
+        NmTutor = t.NmTutor,
+        NrCpf = t.NrCpf,
+        DsEmail = t.DsEmail,
+        NrTelefone = t.NrTelefone,
+        StAtiva = t.StAtiva,
+        Invite = new InviteTutorResponseDto
+        {
+            Id = i.Id,
+            NrToken = i.NrToken,
+            DtExpiracao = i.DtExpiracao,
+            DsCanal = i.DsCanal,
+            StUtilizado = i.StUtilizado
+        }
     };
 }

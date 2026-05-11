@@ -7,4 +7,5 @@ public class Tutor : EntidadeBase
     public string DsEmail { get; set; } = string.Empty;
     public string NrTelefone { get; set; } = string.Empty;
     public ICollection<TutorPet> TutorPets { get; set; } = [];
+    public ICollection<InviteTutor> Invites { get; set; } = [];
 }

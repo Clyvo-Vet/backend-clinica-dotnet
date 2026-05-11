@@ -42,7 +42,7 @@ public class TutoresController : ControllerBase
     }
 
     [HttpPost]
-    [ProducesResponseType(typeof(TutorResponseDto), 201)]
+    [ProducesResponseType(typeof(TutorComInviteResponseDto), 201)]
     [ProducesResponseType(400)]
     public async Task<IActionResult> Create([FromBody] TutorCreateDto dto)
     {
