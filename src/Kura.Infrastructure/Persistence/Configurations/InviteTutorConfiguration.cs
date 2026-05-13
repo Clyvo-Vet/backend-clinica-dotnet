@@ -13,7 +13,7 @@ public class InviteTutorConfiguration : IEntityTypeConfiguration<InviteTutor>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID_INVITE_TUTOR")
+            .HasColumnName("ID_INVITE")
             .HasDefaultValueSql("SEQ_INVITE_TUTOR.NEXTVAL");
 
         builder.Property(e => e.IdTutor)
