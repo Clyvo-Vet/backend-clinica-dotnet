@@ -67,8 +67,7 @@ public sealed class AuthService : IAuthService
             DsEmail = dto.DsEmail,
             DsEmailAcesso = dto.DsEmailAcesso,
             DsSenhaHash = senhaHash,
-            DsSenha = string.Empty,
-            StAtiva = 'S',
+            StAtiva = true,
             DtCriacao = DateTime.UtcNow
         };
 

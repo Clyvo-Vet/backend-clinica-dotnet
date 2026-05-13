@@ -36,7 +36,7 @@ public class DashboardServiceTests
         _alertaMock.Setup(r => r.GetAllAsync())
             .ReturnsAsync(new List<AlertaTemperatura>
             {
-                new() { Id = 1, StResolvido = 'N', DsTipoAlerta = "T", VlLimite = 8, DsMensagem = "M", IdLeituraTemperatura = 1 }
+                new() { Id = 1, StResolvido = false, DsTipoAlerta = "T", VlLimite = 8, DsMensagem = "M", IdLeituraTemperatura = 1 }
             });
         _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(It.IsAny<DateTime>(), 3))
             .ReturnsAsync(new List<Agendamento>());
@@ -54,7 +54,7 @@ public class DashboardServiceTests
         _alertaMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AlertaTemperatura, bool>>>()))
             .ReturnsAsync(new List<AlertaTemperatura>
             {
-                new() { Id = 1, StResolvido = 'N', DsTipoAlerta = "ACIMA_LIMITE", VlLimite = 8, DsMensagem = "Temp alta", IdLeituraTemperatura = 1, DtCriacao = DateTime.UtcNow }
+                new() { Id = 1, StResolvido = false, DsTipoAlerta = "ACIMA_LIMITE", VlLimite = 8, DsMensagem = "Temp alta", IdLeituraTemperatura = 1, DtCriacao = DateTime.UtcNow }
             });
         _vacinaMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Vacina, bool>>>()))
             .ReturnsAsync(new List<Vacina>

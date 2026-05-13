@@ -13,7 +13,7 @@ public class VacinaConfiguration : IEntityTypeConfiguration<Vacina>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_VACINA")
             .HasDefaultValueSql("SEQ_VACINA.NEXTVAL");
 
         builder.Property(e => e.IdEventoClinico)
@@ -38,11 +38,6 @@ public class VacinaConfiguration : IEntityTypeConfiguration<Vacina>
         builder.Property(e => e.DtProximaDose)
             .HasColumnName("DT_PROXIMA_DOSE");
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -50,11 +45,12 @@ public class VacinaConfiguration : IEntityTypeConfiguration<Vacina>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
+        // VACINA table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.EventoClinico)
             .WithMany()
             .HasForeignKey(e => e.IdEventoClinico)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

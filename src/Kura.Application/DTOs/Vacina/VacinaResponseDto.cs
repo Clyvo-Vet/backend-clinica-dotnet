@@ -11,5 +11,5 @@ public sealed class VacinaResponseDto
     public string NrLote { get; init; } = string.Empty;
     public string DsFabricante { get; init; } = string.Empty;
     public DateTime? DtProximaDose { get; init; }
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

@@ -12,5 +12,5 @@ public sealed class ConsultaResponseDto
     public string? DsExameFisico { get; init; }
     public string? DsDiagnostico { get; init; }
     public string DsObservacao { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

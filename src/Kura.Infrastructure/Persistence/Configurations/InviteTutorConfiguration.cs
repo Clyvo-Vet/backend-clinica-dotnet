@@ -36,11 +36,10 @@ public class InviteTutorConfiguration : IEntityTypeConfiguration<InviteTutor>
 
         builder.Property(e => e.StUtilizado)
             .HasColumnName("ST_UTILIZADO")
-            .HasColumnType("CHAR(1)")
             .IsRequired();
 
         builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
+            .HasColumnName("ST_ATIVO")
             .HasColumnType("CHAR(1)")
             .IsRequired();
 
@@ -56,6 +55,6 @@ public class InviteTutorConfiguration : IEntityTypeConfiguration<InviteTutor>
             .HasForeignKey(e => e.IdTutor)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        builder.HasQueryFilter(e => e.StAtiva);
     }
 }

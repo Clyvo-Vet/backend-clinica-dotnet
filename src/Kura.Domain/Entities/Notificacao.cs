@@ -7,7 +7,7 @@ public class Notificacao : EntidadeBase
     public long? IdVeterinario { get; set; }
     public string DsTitulo { get; set; } = string.Empty;
     public string DsMensagem { get; set; } = string.Empty;
-    public char StLida { get; set; } = 'N';
+    public bool StLida { get; set; } = false;
     public DateTime? DtLeitura { get; set; }
     public Tutor? Tutor { get; set; }
     public Veterinario? Veterinario { get; set; }

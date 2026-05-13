@@ -13,8 +13,8 @@ public class LeituraTemperaturaConfiguration : IEntityTypeConfiguration<LeituraT
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
-            .HasDefaultValueSql("SEQ_LEITURA_TEMPERATURA.NEXTVAL");
+            .HasColumnName("ID_LEITURA")
+            .HasDefaultValueSql("SEQ_LEITURA_TEMP.NEXTVAL");
 
         builder.Property(e => e.IdDispositivoIot)
             .HasColumnName("ID_DISPOSITIVO_IOT")
@@ -33,11 +33,6 @@ public class LeituraTemperaturaConfiguration : IEntityTypeConfiguration<LeituraT
             .HasColumnName("DT_LEITURA")
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -45,11 +40,12 @@ public class LeituraTemperaturaConfiguration : IEntityTypeConfiguration<LeituraT
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
+        // LEITURA_TEMPERATURA table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.DispositivoIot)
             .WithMany(d => d.Leituras)
             .HasForeignKey(e => e.IdDispositivoIot)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

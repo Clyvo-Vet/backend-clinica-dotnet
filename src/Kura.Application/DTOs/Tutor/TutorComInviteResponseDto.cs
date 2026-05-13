@@ -7,6 +7,6 @@ public sealed class TutorComInviteResponseDto
     public string NrCpf { get; init; } = string.Empty;
     public string DsEmail { get; init; } = string.Empty;
     public string NrTelefone { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
     public InviteTutorResponseDto Invite { get; init; } = null!;
 }

@@ -34,7 +34,7 @@ public class PetServiceTests
         TutorId = 20L, IdEspecie = 1L, IdRaca = 1L,
         IdVeterinarioResp = 5L, NmPet = "Rex",
         DtNascimento = new DateTime(2022, 1, 1),
-        SgSexo = 'M', SgPorte = 'M', StPrincipal = 'S'
+        SgSexo = 'M', SgPorte = 'M', StPrincipal = true
     };
 
     private void SetupTutor(long id) =>
@@ -66,7 +66,7 @@ public class PetServiceTests
             TutorId = 99L, IdEspecie = 1L, IdRaca = 1L,
             IdVeterinarioResp = 5L, NmPet = "Rex",
             DtNascimento = new DateTime(2022, 1, 1),
-            SgSexo = 'M', SgPorte = 'M', StPrincipal = 'S'
+            SgSexo = 'M', SgPorte = 'M', StPrincipal = true
         };
 
         var act = async () => await _sut.CreateAsync(dto);
@@ -86,7 +86,7 @@ public class PetServiceTests
 
         await _sut.AdicionarTutorAsync(1L, new AdicionarTutorPetDto { IdTutor = 30L });
 
-        criado!.StPrincipal.Should().Be('N');
+        criado!.StPrincipal.Should().Be(false);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 

@@ -13,7 +13,7 @@ public class PrescricaoConfiguration : IEntityTypeConfiguration<Prescricao>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_PRESCRICAO")
             .HasDefaultValueSql("SEQ_PRESCRICAO.NEXTVAL");
 
         builder.Property(e => e.IdEventoClinico)
@@ -33,17 +33,15 @@ public class PrescricaoConfiguration : IEntityTypeConfiguration<Prescricao>
             .HasColumnName("NR_DURACAO_DIAS")
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
 
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
+
+        // PRESCRICAO table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
 
         builder.HasOne(e => e.EventoClinico)
             .WithMany()
@@ -54,7 +52,5 @@ public class PrescricaoConfiguration : IEntityTypeConfiguration<Prescricao>
             .WithMany()
             .HasForeignKey(e => e.IdMedicamento)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

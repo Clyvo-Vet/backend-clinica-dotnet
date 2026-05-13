@@ -44,7 +44,7 @@ public class Repository<T> : IRepository<T> where T : EntidadeBase
 
     public void SoftDelete(T entity)
     {
-        entity.StAtiva = 'N';
+        entity.StAtiva = false;
         entity.DtAtualizacao = DateTime.UtcNow;
         _dbSet.Update(entity);
     }

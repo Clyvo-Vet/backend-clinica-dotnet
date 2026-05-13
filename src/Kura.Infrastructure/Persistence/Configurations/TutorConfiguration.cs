@@ -13,7 +13,7 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_TUTOR")
             .HasDefaultValueSql("SEQ_TUTOR.NEXTVAL");
 
         builder.Property(e => e.NmTutor)
@@ -37,7 +37,7 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
             .IsRequired();
 
         builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
+            .HasColumnName("ST_ATIVO")
             .HasColumnType("CHAR(1)")
             .IsRequired();
 
@@ -50,6 +50,6 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
 
         builder.HasIndex(e => e.NrCpf).IsUnique();
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        builder.HasQueryFilter(e => e.StAtiva);
     }
 }

@@ -17,7 +17,7 @@ public class NotificacaoConfiguration : IEntityTypeConfiguration<Notificacao>
             .IsRequired();
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_NOTIFICACAO")
             .HasDefaultValueSql("SEQ_NOTIFICACAO.NEXTVAL");
 
         builder.Property(e => e.IdTutor)
@@ -38,16 +38,10 @@ public class NotificacaoConfiguration : IEntityTypeConfiguration<Notificacao>
 
         builder.Property(e => e.StLida)
             .HasColumnName("ST_LIDA")
-            .HasColumnType("CHAR(1)")
             .IsRequired();
 
         builder.Property(e => e.DtLeitura)
             .HasColumnName("DT_LEITURA");
-
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
 
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
@@ -61,10 +55,12 @@ public class NotificacaoConfiguration : IEntityTypeConfiguration<Notificacao>
             .HasForeignKey(e => e.IdTutor)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // NOTIFICACAO table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.Veterinario)
             .WithMany()
             .HasForeignKey(e => e.IdVeterinario)
             .OnDelete(DeleteBehavior.Restrict);
-
     }
 }

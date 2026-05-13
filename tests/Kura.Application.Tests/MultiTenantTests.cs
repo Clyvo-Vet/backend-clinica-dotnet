@@ -49,7 +49,7 @@ public class MultiTenantTests
             SgSexo = 'M',
             SgPorte = 'G',
             DsVinculo = "Dono",
-            StPrincipal = 'S'
+            StPrincipal = true
         });
 
         petCriado.Should().NotBeNull();

@@ -33,7 +33,7 @@ public sealed class LeituraTemperaturaService : ILeituraTemperaturaService
         var dispositivo = await _dispositivoRepository.GetByIdAsync(dto.IdDispositivoIot)
             ?? throw new EntidadeNaoEncontradaException("DispositivoIot", dto.IdDispositivoIot);
 
-        if (dispositivo.StAtiva != 'S')
+        if (!dispositivo.StAtiva)
             throw new RegraDeNegocioException("Dispositivo IoT inativo.");
 
         var leitura = new LeituraTemperatura
@@ -53,7 +53,7 @@ public sealed class LeituraTemperaturaService : ILeituraTemperaturaService
                 DsTipoAlerta = "ACIMA_LIMITE",
                 VlLimite = TempMax,
                 DsMensagem = $"Temperatura {dto.VlTemperatura:F1}°C acima do limite máximo de {TempMax:F1}°C.",
-                StResolvido = 'N'
+                StResolvido = false
             });
         }
         else if (dto.VlTemperatura < TempMin)
@@ -64,7 +64,7 @@ public sealed class LeituraTemperaturaService : ILeituraTemperaturaService
                 DsTipoAlerta = "ABAIXO_LIMITE",
                 VlLimite = TempMin,
                 DsMensagem = $"Temperatura {dto.VlTemperatura:F1}°C abaixo do limite mínimo de {TempMin:F1}°C.",
-                StResolvido = 'N'
+                StResolvido = false
             });
         }
 

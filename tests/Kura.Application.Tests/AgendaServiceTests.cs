@@ -48,7 +48,7 @@ public class AgendaServiceTests
                 DsTipoConsulta = "Consulta",
                 DsStatus = "CONFIRMADO",
                 NrVersion = 0,
-                StAtiva = 'S',
+                StAtiva = true,
                 Pet = new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' },
                 Tutor = new Tutor { Id = 3, NmTutor = "João" },
                 Veterinario = new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" }
@@ -116,7 +116,7 @@ public class AgendaServiceTests
         IdClinica = 1,
         DsStatus = dsStatus,
         NrVersion = version,
-        StAtiva = 'S'
+        StAtiva = true
     };
 
     [Fact]

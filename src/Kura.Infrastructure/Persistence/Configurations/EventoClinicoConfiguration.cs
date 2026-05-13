@@ -17,7 +17,7 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
             .IsRequired();
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_EVENTO")
             .HasDefaultValueSql("SEQ_EVENTO_CLINICO.NEXTVAL");
 
         builder.Property(e => e.IdPet)
@@ -41,11 +41,6 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
             .HasMaxLength(1000)
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -63,10 +58,12 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
             .HasForeignKey(e => e.IdVeterinario)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // EVENTO_CLINICO table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.TipoEvento)
             .WithMany()
             .HasForeignKey(e => e.IdTipoEvento)
             .OnDelete(DeleteBehavior.Restrict);
-
     }
 }

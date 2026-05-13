@@ -13,7 +13,7 @@ public class VeterinarioConfiguration : IEntityTypeConfiguration<Veterinario>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_VETERINARIO")
             .HasDefaultValueSql("SEQ_VETERINARIO.NEXTVAL");
 
         builder.Property(e => e.IdClinica)
@@ -41,7 +41,7 @@ public class VeterinarioConfiguration : IEntityTypeConfiguration<Veterinario>
             .IsRequired();
 
         builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
+            .HasColumnName("ST_ATIVO")
             .HasColumnType("CHAR(1)")
             .IsRequired();
 

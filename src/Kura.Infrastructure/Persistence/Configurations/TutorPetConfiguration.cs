@@ -27,7 +27,6 @@ public class TutorPetConfiguration : IEntityTypeConfiguration<TutorPet>
 
         builder.Property(e => e.StPrincipal)
             .HasColumnName("ST_PRINCIPAL")
-            .HasColumnType("CHAR(1)")
             .IsRequired();
 
         builder.Property(e => e.DtVinculo)

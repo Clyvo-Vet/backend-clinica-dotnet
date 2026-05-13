@@ -24,7 +24,7 @@ public class LeituraTemperaturaServiceTests
             _dispositivoRepoMock.Object, _uowMock.Object);
     }
 
-    private void SetupDispositivo(long id, char stAtiva = 'S')
+    private void SetupDispositivo(long id, bool stAtiva = true)
     {
         _dispositivoRepoMock.Setup(r => r.GetByIdAsync(id))
             .ReturnsAsync(new DispositivoIot
@@ -50,7 +50,7 @@ public class LeituraTemperaturaServiceTests
     [Fact]
     public async Task RegistrarLeituraAsync_DispositivoInativo_LancaRegraDeNegocio()
     {
-        SetupDispositivo(1L, 'N');
+        SetupDispositivo(1L, false);
 
         var act = async () => await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {

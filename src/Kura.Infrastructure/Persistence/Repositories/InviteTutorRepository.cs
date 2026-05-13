@@ -12,5 +12,5 @@ public class InviteTutorRepository : Repository<InviteTutor>, IInviteTutorReposi
         => _dbSet.FirstOrDefaultAsync(i => i.NrToken == token);
 
     public Task<bool> ExisteInviteAtivoAsync(long idTutor)
-        => _dbSet.AnyAsync(i => i.IdTutor == idTutor && i.StUtilizado == 'N');
+        => _dbSet.AnyAsync(i => i.IdTutor == idTutor && !i.StUtilizado);
 }

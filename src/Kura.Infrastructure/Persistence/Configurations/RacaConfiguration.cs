@@ -13,7 +13,7 @@ public class RacaConfiguration : IEntityTypeConfiguration<Raca>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_RACA")
             .HasDefaultValueSql("SEQ_RACA.NEXTVAL");
 
         builder.Property(e => e.IdEspecie)
@@ -25,11 +25,6 @@ public class RacaConfiguration : IEntityTypeConfiguration<Raca>
             .HasMaxLength(200)
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -37,11 +32,12 @@ public class RacaConfiguration : IEntityTypeConfiguration<Raca>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
+        // RACA table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.Especie)
             .WithMany(es => es.Racas)
             .HasForeignKey(e => e.IdEspecie)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

@@ -35,7 +35,7 @@ public sealed class AlertaTemperaturaService : IAlertaTemperaturaService
     {
         var alertas = await _alertaRepository.GetAllAsync();
         if (apenasNaoResolvidos == true)
-            alertas = alertas.Where(a => a.StResolvido == 'N');
+            alertas = alertas.Where(a => !a.StResolvido);
         return alertas.Select(ToResponse);
     }
 
@@ -44,7 +44,7 @@ public sealed class AlertaTemperaturaService : IAlertaTemperaturaService
         var alerta = await _alertaRepository.GetByIdAsync(id)
             ?? throw new EntidadeNaoEncontradaException("AlertaTemperatura", id);
 
-        alerta.StResolvido = 'S';
+        alerta.StResolvido = true;
         alerta.DtAtualizacao = DateTime.UtcNow;
 
         _alertaRepository.Update(alerta);

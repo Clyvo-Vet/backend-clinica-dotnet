@@ -25,9 +25,9 @@ public class LunaServiceTests
     {
         var triagens = new List<TriagemLuna>
         {
-            new() { Id = 1, IdClinica = 1, DsNivelUrgencia = "URGENTE", StEncaminhadoVet = true, DtTriagem = Inicio.AddDays(1), StAtiva = 'S', DsDescricao = "desc" },
-            new() { Id = 2, IdClinica = 1, DsNivelUrgencia = "URGENTE", StEncaminhadoVet = true, DtTriagem = Inicio.AddDays(2), StAtiva = 'S', DsDescricao = "desc" },
-            new() { Id = 3, IdClinica = 1, DsNivelUrgencia = "LEVE", StEncaminhadoVet = false, DtTriagem = Inicio.AddDays(3), StAtiva = 'S', DsDescricao = "desc" },
+            new() { Id = 1, IdClinica = 1, DsNivelUrgencia = "URGENTE", StEncaminhadoVet = true, DtTriagem = Inicio.AddDays(1), StAtiva = true, DsDescricao = "desc" },
+            new() { Id = 2, IdClinica = 1, DsNivelUrgencia = "URGENTE", StEncaminhadoVet = true, DtTriagem = Inicio.AddDays(2), StAtiva = true, DsDescricao = "desc" },
+            new() { Id = 3, IdClinica = 1, DsNivelUrgencia = "LEVE", StEncaminhadoVet = false, DtTriagem = Inicio.AddDays(3), StAtiva = true, DsDescricao = "desc" },
         };
 
         _repoMock.Setup(r => r.GetByIntervaloAsync(Inicio, Fim))

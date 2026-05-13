@@ -7,5 +7,5 @@ public sealed class AlertaTemperaturaResponseDto
     public string DsTipoAlerta { get; init; } = string.Empty;
     public decimal VlLimite { get; init; }
     public string DsMensagem { get; init; } = string.Empty;
-    public char StResolvido { get; init; }
+    public bool StResolvido { get; init; }
 }

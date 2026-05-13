@@ -10,6 +10,6 @@ public sealed class PetCreateDto
     public char SgSexo { get; init; }
     public char SgPorte { get; init; }
     public long TutorId { get; init; }
-    public char StPrincipal { get; init; } = 'S';
+    public bool StPrincipal { get; init; } = true;
     public string DsVinculo { get; init; } = "PROPRIETARIO";
 }

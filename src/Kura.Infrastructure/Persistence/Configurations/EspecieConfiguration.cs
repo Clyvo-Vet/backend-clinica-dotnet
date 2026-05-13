@@ -13,17 +13,12 @@ public class EspecieConfiguration : IEntityTypeConfiguration<Especie>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_ESPECIE")
             .HasDefaultValueSql("SEQ_ESPECIE.NEXTVAL");
 
         builder.Property(e => e.NmEspecie)
             .HasColumnName("NM_ESPECIE")
             .HasMaxLength(200)
-            .IsRequired();
-
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
             .IsRequired();
 
         builder.Property(e => e.DtCriacao)
@@ -33,6 +28,7 @@ public class EspecieConfiguration : IEntityTypeConfiguration<Especie>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        // ESPECIE table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
     }
 }

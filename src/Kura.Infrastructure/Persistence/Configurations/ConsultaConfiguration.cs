@@ -61,6 +61,6 @@ public class ConsultaConfiguration : IEntityTypeConfiguration<Consulta>
             .HasForeignKey(e => e.IdEventoClinico)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        builder.HasQueryFilter(e => e.StAtiva);
     }
 }

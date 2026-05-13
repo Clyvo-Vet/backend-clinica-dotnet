@@ -9,5 +9,5 @@ public sealed class EventoClinicoResponseDto
     public string NmTipoEvento { get; init; } = string.Empty;
     public DateTime DtEvento { get; init; }
     public string DsObservacao { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

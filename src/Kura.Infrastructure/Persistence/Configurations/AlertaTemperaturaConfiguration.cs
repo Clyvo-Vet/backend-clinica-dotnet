@@ -13,8 +13,8 @@ public class AlertaTemperaturaConfiguration : IEntityTypeConfiguration<AlertaTem
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
-            .HasDefaultValueSql("SEQ_ALERTA_TEMPERATURA.NEXTVAL");
+            .HasColumnName("ID_ALERTA")
+            .HasDefaultValueSql("SEQ_ALERTA_TEMP.NEXTVAL");
 
         builder.Property(e => e.IdLeituraTemperatura)
             .HasColumnName("ID_LEITURA_TEMPERATURA")
@@ -37,12 +37,6 @@ public class AlertaTemperaturaConfiguration : IEntityTypeConfiguration<AlertaTem
 
         builder.Property(e => e.StResolvido)
             .HasColumnName("ST_RESOLVIDO")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
             .IsRequired();
 
         builder.Property(e => e.DtCriacao)
@@ -52,11 +46,12 @@ public class AlertaTemperaturaConfiguration : IEntityTypeConfiguration<AlertaTem
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
+        // ALERTA_TEMPERATURA table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.LeituraTemperatura)
             .WithMany()
             .HasForeignKey(e => e.IdLeituraTemperatura)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

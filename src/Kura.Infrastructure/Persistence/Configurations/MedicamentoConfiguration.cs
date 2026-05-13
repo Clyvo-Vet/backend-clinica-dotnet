@@ -13,7 +13,7 @@ public class MedicamentoConfiguration : IEntityTypeConfiguration<Medicamento>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_MEDICAMENTO")
             .HasDefaultValueSql("SEQ_MEDICAMENTO.NEXTVAL");
 
         builder.Property(e => e.NmMedicamento)
@@ -31,11 +31,6 @@ public class MedicamentoConfiguration : IEntityTypeConfiguration<Medicamento>
             .HasMaxLength(500)
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -43,6 +38,7 @@ public class MedicamentoConfiguration : IEntityTypeConfiguration<Medicamento>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        // MEDICAMENTO table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
     }
 }

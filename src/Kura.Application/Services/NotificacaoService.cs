@@ -41,7 +41,7 @@ public sealed class NotificacaoService : INotificacaoService
     {
         var notificacoes = await _repository.FindAsync(n => n.IdClinica == idClinica);
         if (apenasNaoLidas == true)
-            notificacoes = notificacoes.Where(n => n.StLida == 'N');
+            notificacoes = notificacoes.Where(n => !n.StLida);
         return notificacoes.Select(ToResponse);
     }
 
@@ -65,10 +65,10 @@ public sealed class NotificacaoService : INotificacaoService
         if (notificacao.IdClinica != _clinicaContext.IdClinica)
             throw new EntidadeNaoEncontradaException("Notificacao", id);
 
-        if (notificacao.StLida == 'S')
+        if (notificacao.StLida)
             throw new RegraDeNegocioException("Notificação já foi lida.");
 
-        notificacao.StLida = 'S';
+        notificacao.StLida = true;
         notificacao.DtLeitura = DateTime.UtcNow;
         _repository.Update(notificacao);
         await _uow.CommitAsync();

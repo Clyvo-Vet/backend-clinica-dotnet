@@ -13,7 +13,7 @@ public class DispositivoIotConfiguration : IEntityTypeConfiguration<DispositivoI
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_DISPOSITIVO")
             .HasDefaultValueSql("SEQ_DISPOSITIVO_IOT.NEXTVAL");
 
         builder.Property(e => e.IdClinica)
@@ -35,11 +35,6 @@ public class DispositivoIotConfiguration : IEntityTypeConfiguration<DispositivoI
             .HasMaxLength(500)
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -49,10 +44,12 @@ public class DispositivoIotConfiguration : IEntityTypeConfiguration<DispositivoI
 
         builder.HasIndex(e => e.CdDispositivo).IsUnique();
 
+        // DISPOSITIVO_IOT table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.Clinica)
             .WithMany()
             .HasForeignKey(e => e.IdClinica)
             .OnDelete(DeleteBehavior.Restrict);
-
     }
 }

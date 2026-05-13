@@ -118,7 +118,7 @@ public sealed class PetService : IPetService
             IdTutor = dto.IdTutor,
             IdPet = idPet,
             DsVinculo = dto.DsVinculo,
-            StPrincipal = 'N'
+            StPrincipal = false
         };
 
         await _tutorPetRepository.AddAsync(tutorPet);

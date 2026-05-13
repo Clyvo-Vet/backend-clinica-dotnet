@@ -47,7 +47,7 @@ public class AuthServiceTests
     public async Task LoginAsync_WrongPassword_ThrowsRegraDeNegocio()
     {
         var hash = BCrypt.Net.BCrypt.HashPassword("correct");
-        var clinica = new Clinica { Id = 1, DsEmailAcesso = "a@a.com", DsSenhaHash = hash, StAtiva = 'S' };
+        var clinica = new Clinica { Id = 1, DsEmailAcesso = "a@a.com", DsSenhaHash = hash, StAtiva = true };
 
         _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
             .ReturnsAsync(new[] { clinica });
@@ -62,7 +62,7 @@ public class AuthServiceTests
     public async Task LoginAsync_ValidCredentials_ReturnsToken()
     {
         var hash = BCrypt.Net.BCrypt.HashPassword("secret");
-        var clinica = new Clinica { Id = 5, DsEmailAcesso = "vet@clinic.com", DsSenhaHash = hash, StAtiva = 'S' };
+        var clinica = new Clinica { Id = 5, DsEmailAcesso = "vet@clinic.com", DsSenhaHash = hash, StAtiva = true };
 
         _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
             .ReturnsAsync(new[] { clinica });

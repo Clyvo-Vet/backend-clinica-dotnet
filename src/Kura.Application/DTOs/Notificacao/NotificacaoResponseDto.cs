@@ -8,8 +8,8 @@ public sealed class NotificacaoResponseDto
     public long? IdVeterinario { get; init; }
     public string DsTitulo { get; init; } = string.Empty;
     public string DsMensagem { get; init; } = string.Empty;
-    public char StLida { get; init; }
+    public bool StLida { get; init; }
     public DateTime? DtLeitura { get; init; }
     public DateTime DtCriacao { get; init; }
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

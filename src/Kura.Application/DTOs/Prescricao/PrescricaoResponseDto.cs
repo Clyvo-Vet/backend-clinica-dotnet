@@ -11,5 +11,5 @@ public sealed class PrescricaoResponseDto
     public long IdMedicamento { get; init; }
     public string DsPosologia { get; init; } = string.Empty;
     public int NrDuracaoDias { get; init; }
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

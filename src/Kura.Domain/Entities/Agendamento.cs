@@ -15,7 +15,7 @@ public class Agendamento
     public string StStatus { get; set; } = string.Empty;      // keep for Dashboard
     public string DsStatus { get; set; } = string.Empty;
     public string DsOrigem { get; set; } = string.Empty;
-    public char StAtiva { get; set; } = 'S';
+    public bool StAtiva { get; set; } = true;
     public long NrVersion { get; set; }
 
     public Pet? Pet { get; set; }

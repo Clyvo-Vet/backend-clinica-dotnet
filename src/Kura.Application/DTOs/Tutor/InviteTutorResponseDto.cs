@@ -6,5 +6,5 @@ public sealed class InviteTutorResponseDto
     public Guid NrToken { get; init; }
     public DateTime DtExpiracao { get; init; }
     public string DsCanal { get; init; } = string.Empty;
-    public char StUtilizado { get; init; }
+    public bool StUtilizado { get; init; }
 }

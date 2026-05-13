@@ -10,5 +10,5 @@ public interface IRepository<T> where T : EntidadeBase
     Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate);
     Task AddAsync(T entity);
     void Update(T entity);
-    void SoftDelete(T entity); // sets StAtiva = 'N', never removes from database
+    void SoftDelete(T entity); // sets StAtiva = false, never removes from database
 }

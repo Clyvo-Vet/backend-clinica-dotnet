@@ -59,11 +59,6 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
             .HasColumnName("DS_ORIGEM")
             .HasMaxLength(100);
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.NrVersion)
             .HasColumnName("NR_VERSION")
             .IsConcurrencyToken();
@@ -76,10 +71,11 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
             .WithMany()
             .HasForeignKey(e => e.IdTutor);
 
+        // AGENDAMENTO table (Java domain) has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.Veterinario)
             .WithMany()
             .HasForeignKey(e => e.IdVeterinario);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

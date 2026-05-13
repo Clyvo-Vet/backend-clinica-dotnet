@@ -6,5 +6,5 @@ public sealed class RacaResponseDto
     public long IdEspecie { get; init; }
     public string NmEspecie { get; init; } = string.Empty;
     public string NmRaca { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

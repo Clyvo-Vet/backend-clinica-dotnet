@@ -28,8 +28,8 @@ public class NotificacaoServiceTests
         var clinicaId = 10L;
         var lista = new List<Notificacao>
         {
-            new() { Id = 1, IdClinica = clinicaId, DsTitulo = "A", DsMensagem = "msg", StLida = 'N', StAtiva = 'S' },
-            new() { Id = 2, IdClinica = clinicaId, DsTitulo = "B", DsMensagem = "msg", StLida = 'S', StAtiva = 'S' }
+            new() { Id = 1, IdClinica = clinicaId, DsTitulo = "A", DsMensagem = "msg", StLida = false, StAtiva = true },
+            new() { Id = 2, IdClinica = clinicaId, DsTitulo = "B", DsMensagem = "msg", StLida = true, StAtiva = true }
         };
         _repoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Notificacao, bool>>>()))
             .ReturnsAsync(lista);
@@ -45,8 +45,8 @@ public class NotificacaoServiceTests
         var clinicaId = 10L;
         var lista = new List<Notificacao>
         {
-            new() { Id = 1, IdClinica = clinicaId, DsTitulo = "A", DsMensagem = "msg", StLida = 'N', StAtiva = 'S' },
-            new() { Id = 2, IdClinica = clinicaId, DsTitulo = "B", DsMensagem = "msg", StLida = 'S', StAtiva = 'S' }
+            new() { Id = 1, IdClinica = clinicaId, DsTitulo = "A", DsMensagem = "msg", StLida = false, StAtiva = true },
+            new() { Id = 2, IdClinica = clinicaId, DsTitulo = "B", DsMensagem = "msg", StLida = true, StAtiva = true }
         };
         _repoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Notificacao, bool>>>()))
             .ReturnsAsync(lista);
@@ -54,7 +54,7 @@ public class NotificacaoServiceTests
         var result = await _sut.GetAllByClinicaAsync(clinicaId, true);
 
         result.Should().HaveCount(1);
-        result.First().StLida.Should().Be('N');
+        result.First().StLida.Should().Be(false);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class NotificacaoServiceTests
     [Fact]
     public async Task MarcarLidaAsync_NotificacaoJaLida_LancaRegraDeNegocio()
     {
-        var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = 'S', StAtiva = 'S' };
+        var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = true, StAtiva = true };
         _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(notificacao);
 
         var act = async () => await _sut.MarcarLidaAsync(1L);
@@ -82,12 +82,12 @@ public class NotificacaoServiceTests
     [Fact]
     public async Task MarcarLidaAsync_CaminhoFeliz_MarcaStLidaS()
     {
-        var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = 'N', StAtiva = 'S' };
+        var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = false, StAtiva = true };
         _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(notificacao);
 
         await _sut.MarcarLidaAsync(1L);
 
-        notificacao.StLida.Should().Be('S');
+        notificacao.StLida.Should().Be(true);
         notificacao.DtLeitura.Should().NotBeNull();
         _repoMock.Verify(r => r.Update(notificacao), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);

@@ -17,7 +17,7 @@ public class PetConfiguration : IEntityTypeConfiguration<Pet>
             .IsRequired();
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_PET")
             .HasDefaultValueSql("SEQ_PET.NEXTVAL");
 
         builder.Property(e => e.IdEspecie)
@@ -51,7 +51,7 @@ public class PetConfiguration : IEntityTypeConfiguration<Pet>
             .IsRequired();
 
         builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
+            .HasColumnName("ST_ATIVO")
             .HasColumnType("CHAR(1)")
             .IsRequired();
 

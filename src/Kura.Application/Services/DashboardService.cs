@@ -35,7 +35,7 @@ public sealed class DashboardService : IDashboardService
         var retornosPendentes = todosEventos.Count(e => e.DtEvento.Date > hoje);
 
         var alertas = await _alertaRepository.GetAllAsync();
-        var alertasAtivos = alertas.Count(a => a.StResolvido == 'N');
+        var alertasAtivos = alertas.Count(a => !a.StResolvido);
 
         var ultimosPets = todosEventos
             .OrderByDescending(e => e.DtEvento)
@@ -72,7 +72,7 @@ public sealed class DashboardService : IDashboardService
 
     public async Task<IEnumerable<object>> GetAlertasAsync()
     {
-        var alertasTemp = await _alertaRepository.FindAsync(a => a.StResolvido == 'N');
+        var alertasTemp = await _alertaRepository.FindAsync(a => !a.StResolvido);
 
         var hoje = DateTime.UtcNow.Date;
         var limite30Dias = hoje.AddDays(30);

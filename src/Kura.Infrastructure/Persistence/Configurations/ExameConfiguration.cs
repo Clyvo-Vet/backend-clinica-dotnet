@@ -13,7 +13,7 @@ public class ExameConfiguration : IEntityTypeConfiguration<Exame>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_EXAME")
             .HasDefaultValueSql("SEQ_EXAME.NEXTVAL");
 
         builder.Property(e => e.IdEventoClinico)
@@ -34,11 +34,6 @@ public class ExameConfiguration : IEntityTypeConfiguration<Exame>
             .HasColumnName("DT_REALIZACAO")
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -46,11 +41,12 @@ public class ExameConfiguration : IEntityTypeConfiguration<Exame>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
+        // EXAME table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.EventoClinico)
             .WithMany()
             .HasForeignKey(e => e.IdEventoClinico)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
     }
 }

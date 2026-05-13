@@ -6,6 +6,6 @@ public class InviteTutor : EntidadeBase
     public Guid NrToken { get; set; }
     public DateTime DtExpiracao { get; set; }
     public string DsCanal { get; set; } = "WHATSAPP";
-    public char StUtilizado { get; set; } = 'N';
+    public bool StUtilizado { get; set; } = false;
     public Tutor Tutor { get; set; } = null!;
 }

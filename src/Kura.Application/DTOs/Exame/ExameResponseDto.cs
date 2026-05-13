@@ -11,5 +11,5 @@ public sealed class ExameResponseDto
     public string NmExame { get; init; } = string.Empty;
     public string DsResultado { get; init; } = string.Empty;
     public DateTime DtRealizacao { get; init; }
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

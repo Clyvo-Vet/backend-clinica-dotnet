@@ -14,7 +14,7 @@ public sealed class PetResponseDto
     public DateTime DtNascimento { get; init; }
     public char SgSexo { get; init; }
     public char SgPorte { get; init; }
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
     public IReadOnlyList<TutorVinculoDto> Tutores { get; init; } = [];
 }
 
@@ -23,5 +23,5 @@ public sealed class TutorVinculoDto
     public long IdTutor { get; init; }
     public string NmTutor { get; init; } = string.Empty;
     public string DsVinculo { get; init; } = string.Empty;
-    public char StPrincipal { get; init; }
+    public bool StPrincipal { get; init; }
 }

@@ -13,7 +13,7 @@ public class TipoEventoConfiguration : IEntityTypeConfiguration<TipoEvento>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID")
+            .HasColumnName("ID_TIPO_EVENTO")
             .HasDefaultValueSql("SEQ_TIPO_EVENTO.NEXTVAL");
 
         builder.Property(e => e.CdTipo)
@@ -26,11 +26,6 @@ public class TipoEventoConfiguration : IEntityTypeConfiguration<TipoEvento>
             .HasMaxLength(200)
             .IsRequired();
 
-        builder.Property(e => e.StAtiva)
-            .HasColumnName("ST_ATIVA")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
-
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();
@@ -38,8 +33,9 @@ public class TipoEventoConfiguration : IEntityTypeConfiguration<TipoEvento>
         builder.Property(e => e.DtAtualizacao)
             .HasColumnName("DT_ATUALIZACAO");
 
-        builder.HasIndex(e => e.CdTipo).IsUnique();
+        // TIPO_EVENTO table has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
 
-        builder.HasQueryFilter(e => e.StAtiva == 'S');
+        builder.HasIndex(e => e.CdTipo).IsUnique();
     }
 }

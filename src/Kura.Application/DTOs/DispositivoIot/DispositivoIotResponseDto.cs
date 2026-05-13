@@ -7,5 +7,5 @@ public sealed class DispositivoIotResponseDto
     public string CdDispositivo { get; init; } = string.Empty;
     public string DsDescricao { get; init; } = string.Empty;
     public string DsLocalizacao { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

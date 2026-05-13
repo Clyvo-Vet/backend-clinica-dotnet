@@ -8,5 +8,5 @@ public sealed class VeterinarioResponseDto
     public string NrCrmv { get; init; } = string.Empty;
     public string DsEmail { get; init; } = string.Empty;
     public string NrTelefone { get; init; } = string.Empty;
-    public char StAtiva { get; init; }
+    public bool StAtiva { get; init; }
 }

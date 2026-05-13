@@ -6,6 +6,6 @@ public class AlertaTemperatura : EntidadeBase
     public string DsTipoAlerta { get; set; } = string.Empty;
     public decimal VlLimite { get; set; }
     public string DsMensagem { get; set; } = string.Empty;
-    public char StResolvido { get; set; } = 'N';
+    public bool StResolvido { get; set; } = false;
     public LeituraTemperatura LeituraTemperatura { get; set; } = null!;
 }
