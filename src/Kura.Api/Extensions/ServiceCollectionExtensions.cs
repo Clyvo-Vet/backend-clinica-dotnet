@@ -60,7 +60,9 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<KuraDbContext>((sp, options) =>
         {
-            options.UseOracle(connectionString);
+            options.UseOracle(
+                connectionString,
+                oracle => oracle.UseOracleSQLCompatibility(OracleSQLCompatibility.DatabaseVersion19));
             options.AddInterceptors(new ReadOnlyTablesInterceptor());
         });
 
