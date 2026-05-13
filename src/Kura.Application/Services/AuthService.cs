@@ -62,13 +62,17 @@ public sealed class AuthService : IAuthService
         {
             NmClinica = dto.NmClinica,
             NrCnpj = dto.NrCnpj,
+            NmRazaoSocial = dto.NmRazaoSocial,
             DsEndereco = dto.DsEndereco,
+            NmCidade = dto.NmCidade,
+            SgUf = dto.SgUf,
+            NrCep = dto.NrCep,
             NrTelefone = dto.NrTelefone,
             DsEmail = dto.DsEmail,
             DsEmailAcesso = dto.DsEmailAcesso,
             DsSenhaHash = senhaHash,
             StAtiva = true,
-            DtCriacao = DateTime.UtcNow
+            DtCadastro = DateTime.UtcNow
         };
 
         await _clinicaRepository.AddAsync(clinica);
