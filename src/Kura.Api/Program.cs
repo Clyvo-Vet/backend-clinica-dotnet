@@ -7,7 +7,6 @@ using FluentValidation.AspNetCore;
 using Microsoft.OpenApi;
 using Kura.Api.Middlewares;
 using Kura.Api.Extensions;
-using Kura.Infrastructure.Logging;
 using Kura.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +16,6 @@ builder.Host.UseSerilog((ctx, sp, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
     .Enrich.FromLogContext()
     .WriteTo.Console());
-    //.WriteTo.OracleLogErro(sp));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

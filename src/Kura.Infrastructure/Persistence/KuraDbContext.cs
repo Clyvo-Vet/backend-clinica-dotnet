@@ -2,6 +2,7 @@ namespace Kura.Infrastructure.Persistence;
 
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
+using Kura.Infrastructure.Persistence.Converters;
 using Kura.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +34,6 @@ public class KuraDbContext : DbContext
     public DbSet<DispositivoIot> DispositivosIot => Set<DispositivoIot>();
     public DbSet<LeituraTemperatura> LeiturasTemperatura => Set<LeituraTemperatura>();
     public DbSet<AlertaTemperatura> AlertasTemperatura => Set<AlertaTemperatura>();
-    public DbSet<LogErro> LogsErro => Set<LogErro>();
     public DbSet<TimelineItem> TimelineItems => Set<TimelineItem>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
@@ -50,23 +50,21 @@ public class KuraDbContext : DbContext
             .HasNoKey()
             .ToView("VW_TIMELINE_PET");
 
-        ApplyTenantFilters(modelBuilder);
-
-        // Conversão global de bool → int para compatibilidade com Oracle
-        // Oracle não aceita o literal FALSE — usa 0 e 1
+        // Conversão global bool → CHAR(1) 'S'/'N' (convenção schema Flyway v3)
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())
             {
                 if (property.ClrType == typeof(bool) || property.ClrType == typeof(bool?))
                 {
-                    property.SetProviderClrType(typeof(int));
-                    property.SetValueConverter(
-                        new Microsoft.EntityFrameworkCore.Storage.ValueConversion.BoolToZeroOneConverter<int>()
-                    );
+                    property.SetValueConverter(new BoolToSimNaoConverter());
+                    property.SetColumnType("CHAR(1)");
+                    property.SetMaxLength(1);
                 }
             }
         }
+
+        ApplyTenantFilters(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
     }
@@ -74,32 +72,32 @@ public class KuraDbContext : DbContext
     private void ApplyTenantFilters(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Veterinario>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
+            .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
 
         modelBuilder.Entity<Pet>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
+            .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
 
         modelBuilder.Entity<EventoClinico>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
-                (_clinicaContext.IdClinicaFiltro == null ||
-                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+            .HasQueryFilter(e =>
+                _clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro);
 
         modelBuilder.Entity<Notificacao>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
-                (_clinicaContext.IdClinicaFiltro == null ||
-                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+            .HasQueryFilter(e =>
+                _clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro);
 
         modelBuilder.Entity<DispositivoIot>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
-                (_clinicaContext.IdClinicaFiltro == null ||
-                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+            .HasQueryFilter(e =>
+                _clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro);
 
         modelBuilder.Entity<TriagemLuna>()
-            .HasQueryFilter(e => e.StAtiva == 'S' &&
+            .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
     }

@@ -1,10 +1,16 @@
+using Kura.Domain.Exceptions;
+using System.Text.Json;
+
 namespace Kura.Api.Middlewares;
 
-using Kura.Domain.Entities;
-using Kura.Domain.Exceptions;
-using Kura.Infrastructure.Persistence;
-using Microsoft.Extensions.DependencyInjection;
-
+/// <summary>
+/// Captura exceções não tratadas, registra via ILogger (observabilidade)
+/// e devolve resposta RFC 7807 ao cliente.
+///
+/// NOTA: este middleware NÃO escreve em LOG_ERRO — essa tabela é
+/// exclusiva do domínio PL/SQL (rubrica FIAP de Banco). Logs operacionais
+/// HTTP vivem em stdout/Serilog/observabilidade externa.
+/// </summary>
 public class ExceptionHandlerMiddleware
 {
     private readonly RequestDelegate _next;
@@ -26,56 +32,42 @@ public class ExceptionHandlerMiddleware
         }
         catch (Exception ex)
         {
-            var statusCode = ex switch
-            {
-                EntidadeNaoEncontradaException => StatusCodes.Status404NotFound,
-                RegraDeNegocioException => StatusCodes.Status422UnprocessableEntity,
-                ConflitoConcorrenciaException => StatusCodes.Status409Conflict,
-                _ => StatusCodes.Status500InternalServerError
-            };
-
-            _logger.LogError(ex, "Erro não tratado: {Message}", ex.Message);
-
-            try
-            {
-                using var scope = context.RequestServices.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
-
-                var logErro = new LogErro
-                {
-                    DsEndpoint = context.Request.Path,
-                    DsMetodo = context.Request.Method,
-                    DsMensagem = ex.Message.Length > 500
-                        ? ex.Message[..500]
-                        : ex.Message,
-                    DsStackTrace = ex.StackTrace,
-                    NrStatusCode = statusCode,
-                    DtOcorrencia = DateTime.UtcNow,
-                };
-
-                dbContext.LogsErro.Add(logErro);
-                await dbContext.SaveChangesAsync();
-            }
-            catch (Exception dbEx)
-            {
-                _logger.LogWarning(dbEx, "Falha ao persistir LogErro no banco de dados.");
-            }
-
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = statusCode;
-                context.Response.ContentType = "application/problem+json";
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    title = ex.Message,
-                    status = statusCode,
-                    type = ex.GetType().Name
-                });
-            }
-            else
-            {
-                _logger.LogWarning("Response already started, cannot write error response for {ExceptionType}", ex.GetType().Name);
-            }
+            await HandleExceptionAsync(context, ex);
         }
+    }
+
+    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+    {
+        var statusCode = ex switch
+        {
+            EntidadeNaoEncontradaException => StatusCodes.Status404NotFound,
+            RegraDeNegocioException => StatusCodes.Status422UnprocessableEntity,
+            ConflitoConcorrenciaException => StatusCodes.Status409Conflict,
+            UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+            _ => StatusCodes.Status500InternalServerError
+        };
+
+        _logger.Log(
+            statusCode >= 500 ? LogLevel.Error : LogLevel.Warning,
+            ex,
+            "Exception caught by middleware. Endpoint={Endpoint} Method={Method} Status={Status} ClinicaId={ClinicaId}",
+            context.Request.Path,
+            context.Request.Method,
+            statusCode,
+            context.User?.FindFirst("clinicaId")?.Value ?? "ANONYMOUS");
+
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new
+        {
+            type = ex.GetType().Name,
+            title = ex.Message,
+            status = statusCode,
+            traceId = context.TraceIdentifier
+        };
+
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(problem);
+        await context.Response.Body.WriteAsync(bytes);
     }
 }
