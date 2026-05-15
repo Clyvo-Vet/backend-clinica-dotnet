@@ -16,6 +16,10 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
             .HasColumnName("ID_TUTOR")
             .HasDefaultValueSql("SEQ_TUTOR.NEXTVAL");
 
+        builder.Property(e => e.IdClinica)
+            .HasColumnName("ID_CLINICA")
+            .IsRequired();
+
         builder.Property(e => e.NmTutor)
             .HasColumnName("NM_TUTOR")
             .HasMaxLength(200)

@@ -76,7 +76,10 @@ public class TutoresController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), 400)]
     public async Task<IActionResult> Create([FromBody] TutorCreateDto dto)
     {
-        var result = await _service.CreateAsync(dto);
+        if (!long.TryParse(User.FindFirst("clinicaId")?.Value, out var clinicaId))
+            return Unauthorized();
+
+        var result = await _service.CreateAsync(dto, clinicaId);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 

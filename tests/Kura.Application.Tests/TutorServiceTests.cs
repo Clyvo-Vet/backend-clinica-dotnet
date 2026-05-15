@@ -44,7 +44,7 @@ public class TutorServiceTests
     [Fact]
     public async Task CreateAsync_TutorEInviteCriadosNaMesmaTransacao_CommitUmaVez()
     {
-        var result = await _sut.CreateAsync(ValidDto());
+        var result = await _sut.CreateAsync(ValidDto(), 1L);
 
         _tutorRepoMock.Verify(r => r.AddAsync(It.IsAny<Tutor>()), Times.Once);
         _inviteRepoMock.Verify(r => r.AddAsync(It.IsAny<InviteTutor>()), Times.Once);
@@ -61,7 +61,7 @@ public class TutorServiceTests
             .Callback<InviteTutor>(i => capturado = i)
             .Returns(Task.CompletedTask);
 
-        await _sut.CreateAsync(ValidDto());
+        await _sut.CreateAsync(ValidDto(), 1L);
 
         capturado.Should().NotBeNull();
         capturado!.NrToken.Should().NotBe(Guid.Empty);
@@ -80,7 +80,7 @@ public class TutorServiceTests
             .Callback<Tutor>(t => tutorCapturado = t)
             .Returns(Task.CompletedTask);
 
-        await _sut.CreateAsync(ValidDto());
+        await _sut.CreateAsync(ValidDto(), 1L);
 
         capturado!.DtExpiracao.Should().BeCloseTo(tutorCapturado!.DtCriacao.AddDays(7), TimeSpan.FromSeconds(1));
     }
@@ -93,7 +93,7 @@ public class TutorServiceTests
             .Callback<InviteTutor>(i => capturado = i)
             .Returns(Task.CompletedTask);
 
-        await _sut.CreateAsync(ValidDto("WHATSAPP"));
+        await _sut.CreateAsync(ValidDto("WHATSAPP"), 1L);
 
         capturado!.DsCanal.Should().Be("WHATSAPP");
     }
@@ -104,7 +104,7 @@ public class TutorServiceTests
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>()))
             .ThrowsAsync(new InvalidOperationException("Falha simulada no invite"));
 
-        var act = async () => await _sut.CreateAsync(ValidDto());
+        var act = async () => await _sut.CreateAsync(ValidDto(), 1L);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);

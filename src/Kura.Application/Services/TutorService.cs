@@ -80,10 +80,11 @@ public sealed class TutorService : ITutorService
         return result;
     }
 
-    public async Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto)
+    public async Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto, long clinicaId)
     {
         var tutor = new Tutor
         {
+            IdClinica = clinicaId,
             NmTutor = dto.NmTutor,
             NrCpf = dto.NrCpf,
             DsEmail = dto.DsEmail,
