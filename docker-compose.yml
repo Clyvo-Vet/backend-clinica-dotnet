@@ -2,9 +2,7 @@ version: '3.9'
 
 services:
   kura-api:
-    build:
-      context: .
-      dockerfile: src/Kura.Api/Dockerfile
+    build: .
     container_name: kura_api
     ports:
       - "8080:8080"
