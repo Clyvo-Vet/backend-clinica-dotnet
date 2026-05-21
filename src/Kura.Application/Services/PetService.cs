@@ -52,8 +52,8 @@ public sealed class PetService : IPetService
 
     public async Task<PetResponseDto> CreateAsync(PetCreateDto dto)
     {
-        _ = await _tutorRepository.GetByIdAsync(dto.TutorId)
-            ?? throw new EntidadeNaoEncontradaException("Tutor", dto.TutorId);
+        _ = await _tutorRepository.GetByIdAsync(dto.IdTutor)
+            ?? throw new EntidadeNaoEncontradaException("Tutor", dto.IdTutor);
 
         var pet = new Pet
         {
@@ -70,7 +70,7 @@ public sealed class PetService : IPetService
         // TutorPet via navigation property — EF Core insere Pet primeiro (FK ordering)
         var tutorPet = new TutorPet
         {
-            IdTutor = dto.TutorId,
+            IdTutor = dto.IdTutor,
             Pet = pet,
             DsVinculo = dto.DsVinculo,
             StPrincipal = dto.StPrincipal

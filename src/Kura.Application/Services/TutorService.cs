@@ -88,7 +88,10 @@ public sealed class TutorService : ITutorService
             NmTutor = dto.NmTutor,
             NrCpf = dto.NrCpf,
             DsEmail = dto.DsEmail,
-            NrTelefone = dto.NrTelefone
+            NrTelefone = dto.NrTelefone,
+            StAvisoPrivacidade = "S",
+            DtAvisoPrivacidade = DateTime.UtcNow,
+            DsVersaoAviso = "v1.0"
         };
         await _repository.AddAsync(tutor);
 

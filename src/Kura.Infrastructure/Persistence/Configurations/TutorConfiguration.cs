@@ -40,6 +40,19 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(e => e.StAvisoPrivacidade)
+            .HasColumnName("ST_AVISO_PRIVACIDADE")
+            .HasColumnType("CHAR(1)")
+            .HasMaxLength(1)
+            .IsRequired();
+
+        builder.Property(e => e.DtAvisoPrivacidade)
+            .HasColumnName("DT_AVISO_PRIVACIDADE");
+
+        builder.Property(e => e.DsVersaoAviso)
+            .HasColumnName("DS_VERSAO_AVISO")
+            .HasMaxLength(20);
+
         builder.Property(e => e.StAtiva)
             .HasColumnName("ST_ATIVO")
             .HasColumnType("CHAR(1)")
