@@ -41,19 +41,15 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
 
         builder.Property(e => e.DsServico)
             .HasColumnName("DS_SERVICO")
-            .HasMaxLength(500);
+            .HasMaxLength(200);
 
         builder.Property(e => e.DsTipoConsulta)
-            .HasColumnName("DS_TIPO_CONSULTA")
-            .HasMaxLength(200);
+            .HasColumnName("DS_TIPO")
+            .HasMaxLength(30);
 
         builder.Property(e => e.StStatus)
             .HasColumnName("ST_STATUS")
             .HasMaxLength(50);
-
-        builder.Property(e => e.DsStatus)
-            .HasColumnName("DS_STATUS")
-            .HasMaxLength(200);
 
         builder.Property(e => e.DsOrigem)
             .HasColumnName("DS_ORIGEM")
@@ -63,6 +59,30 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
             .HasColumnName("NR_VERSION")
             .IsConcurrencyToken();
 
+        // Flyway V5 columns
+        builder.Property(e => e.DsObservacoes)
+            .HasColumnName("DS_OBSERVACOES")
+            .HasMaxLength(1000);
+
+        builder.Property(e => e.DtCriacao)
+            .HasColumnName("DT_CRIACAO");
+
+        builder.Property(e => e.DtConfirmacao)
+            .HasColumnName("DT_CONFIRMACAO");
+
+        builder.Property(e => e.DtCancelamento)
+            .HasColumnName("DT_CANCELAMENTO");
+
+        builder.Property(e => e.DsMotivoCancel)
+            .HasColumnName("DS_MOTIVO_CANCEL")
+            .HasMaxLength(500);
+
+        builder.Property(e => e.IdEventoGerado)
+            .HasColumnName("ID_EVENTO_GERADO");
+
+        // AGENDAMENTO table (Java domain) has no ST_ATIVA column
+        builder.Ignore(e => e.StAtiva);
+
         builder.HasOne(e => e.Pet)
             .WithMany()
             .HasForeignKey(e => e.IdPet);
@@ -70,9 +90,6 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
         builder.HasOne(e => e.Tutor)
             .WithMany()
             .HasForeignKey(e => e.IdTutor);
-
-        // AGENDAMENTO table (Java domain) has no ST_ATIVA column
-        builder.Ignore(e => e.StAtiva);
 
         builder.HasOne(e => e.Veterinario)
             .WithMany()

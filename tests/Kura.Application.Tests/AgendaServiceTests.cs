@@ -46,10 +46,10 @@ public class AgendaServiceTests
                 DtAgendamento = Inicio.AddHours(9),
                 NrDuracaoMinutos = 30,
                 DsTipoConsulta = "Consulta",
-                DsStatus = "CONFIRMADO",
+                StStatus = "CONFIRMADO",
                 NrVersion = 0,
                 StAtiva = true,
-                Pet = new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' },
+                Pet = new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1 },
                 Tutor = new Tutor { Id = 3, NmTutor = "João" },
                 Veterinario = new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" }
             }
@@ -110,11 +110,11 @@ public class AgendaServiceTests
 
     // ---------- AtualizarStatus tests ----------
 
-    private static Agendamento AgendamentoAtivo(string dsStatus = "CONFIRMADO", long version = 2) => new()
+    private static Agendamento AgendamentoAtivo(string stStatus = "CONFIRMADO", long version = 2) => new()
     {
         Id = 10,
         IdClinica = 1,
-        DsStatus = dsStatus,
+        StStatus = stStatus,
         NrVersion = version,
         StAtiva = true
     };
@@ -162,7 +162,7 @@ public class AgendaServiceTests
     [Fact]
     public async Task AtualizarStatusAsync_StatusFinal_LancaRegraDeNegocio()
     {
-        var agendamento = AgendamentoAtivo("REALIZADO", version: 1);
+        var agendamento = AgendamentoAtivo(stStatus: "REALIZADO", version: 1);
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "CANCELADO", NrVersion = 1 };

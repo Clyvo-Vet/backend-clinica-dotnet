@@ -53,14 +53,14 @@ public sealed class AgendaService : IAgendaService
         var agendamento = await _agendamentoRepository.GetByIdAsync(id, _clinicaContext.IdClinica)
             ?? throw new EntidadeNaoEncontradaException("Agendamento", id);
 
-        if (StatusFinais.Contains(agendamento.DsStatus))
+        if (StatusFinais.Contains(agendamento.StStatus))
             throw new RegraDeNegocioException(
-                $"Agendamento {id} já está em estado final ({agendamento.DsStatus}) e não pode ser alterado.");
+                $"Agendamento {id} já está em estado final ({agendamento.StStatus}) e não pode ser alterado.");
 
         if (dto.NrVersion != agendamento.NrVersion)
             throw new ConflitoConcorrenciaException("Agendamento", id);
 
-        agendamento.DsStatus = dto.DsStatus;
+        agendamento.StStatus = dto.DsStatus;
         agendamento.NrVersion = dto.NrVersion + 1;
 
         _agendamentoRepository.Update(agendamento);
@@ -78,7 +78,7 @@ public sealed class AgendaService : IAgendaService
         IdVeterinario = a.IdVeterinario ?? 0,
         NmVeterinario = a.Veterinario?.NmVeterinario ?? string.Empty,
         DsTipoConsulta = a.DsTipoConsulta,
-        DsStatus = a.DsStatus,
+        DsStatus = a.StStatus,
         NrVersion = a.NrVersion
     };
 }

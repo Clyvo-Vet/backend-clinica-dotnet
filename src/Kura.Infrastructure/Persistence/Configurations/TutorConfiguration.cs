@@ -36,7 +36,7 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
             .IsRequired();
 
         builder.Property(e => e.NrTelefone)
-            .HasColumnName("NR_TELEFONE")
+            .HasColumnName("DS_TELEFONE")
             .HasMaxLength(20)
             .IsRequired();
 
@@ -46,7 +46,7 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
             .IsRequired();
 
         builder.Property(e => e.DtCriacao)
-            .HasColumnName("DT_CRIACAO")
+            .HasColumnName("DT_CADASTRO")
             .IsRequired();
 
         builder.Property(e => e.DtAtualizacao)

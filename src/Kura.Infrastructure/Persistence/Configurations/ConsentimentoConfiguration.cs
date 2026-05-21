@@ -30,12 +30,12 @@ public class ConsentimentoConfiguration : IEntityTypeConfiguration<Consentimento
             .IsRequired();
 
         builder.Property(e => e.NrVersaoTermo)
-            .HasColumnName("NR_VERSAO_TERMO")
+            .HasColumnName("DS_VERSAO_TERMO")
             .HasMaxLength(20)
             .IsRequired();
 
         builder.Property(e => e.DtConsentimento)
-            .HasColumnName("DT_CONSENTIMENTO")
+            .HasColumnName("DT_ACEITE")
             .IsRequired();
     }
 }

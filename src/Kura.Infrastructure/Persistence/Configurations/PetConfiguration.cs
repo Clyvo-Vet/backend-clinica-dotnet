@@ -25,30 +25,26 @@ public class PetConfiguration : IEntityTypeConfiguration<Pet>
             .IsRequired();
 
         builder.Property(e => e.IdRaca)
-            .HasColumnName("ID_RACA")
-            .IsRequired();
+            .HasColumnName("ID_RACA");
 
         builder.Property(e => e.IdVeterinarioResp)
             .HasColumnName("ID_VETERINARIO_RESP");
 
         builder.Property(e => e.NmPet)
             .HasColumnName("NM_PET")
-            .HasMaxLength(200)
+            .HasMaxLength(80)
             .IsRequired();
 
         builder.Property(e => e.DtNascimento)
-            .HasColumnName("DT_NASCIMENTO")
-            .IsRequired();
+            .HasColumnName("DT_NASCIMENTO");
 
         builder.Property(e => e.SgSexo)
             .HasColumnName("SG_SEXO")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
+            .HasColumnType("CHAR(1)");
 
         builder.Property(e => e.SgPorte)
             .HasColumnName("SG_PORTE")
-            .HasColumnType("CHAR(1)")
-            .IsRequired();
+            .HasColumnType("CHAR(1)");
 
         builder.Property(e => e.StAtiva)
             .HasColumnName("ST_ATIVO")

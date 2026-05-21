@@ -22,7 +22,7 @@ public class RacaConfiguration : IEntityTypeConfiguration<Raca>
 
         builder.Property(e => e.NmRaca)
             .HasColumnName("NM_RACA")
-            .HasMaxLength(200)
+            .HasMaxLength(80)
             .IsRequired();
 
         builder.Property(e => e.DtCriacao)

@@ -13,14 +13,14 @@ public class ContaTutorConfiguration : IEntityTypeConfiguration<ContaTutor>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.Id)
-            .HasColumnName("ID_CONTA_TUTOR");
+            .HasColumnName("ID_CONTA");
 
         builder.Property(e => e.IdTutor)
             .HasColumnName("ID_TUTOR")
             .IsRequired();
 
         builder.Property(e => e.DsEmail)
-            .HasColumnName("DS_EMAIL")
+            .HasColumnName("DS_EMAIL_LOGIN")
             .HasMaxLength(200)
             .IsRequired();
 
@@ -30,7 +30,7 @@ public class ContaTutorConfiguration : IEntityTypeConfiguration<ContaTutor>
             .IsRequired();
 
         builder.Property(e => e.DtCadastro)
-            .HasColumnName("DT_CADASTRO")
+            .HasColumnName("DT_CRIACAO")
             .IsRequired();
 
         builder.HasOne(e => e.Tutor)
