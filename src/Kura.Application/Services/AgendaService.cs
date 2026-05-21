@@ -53,7 +53,7 @@ public sealed class AgendaService : IAgendaService
         var agendamento = await _agendamentoRepository.GetByIdAsync(id, _clinicaContext.IdClinica)
             ?? throw new EntidadeNaoEncontradaException("Agendamento", id);
 
-        if (StatusFinais.Contains(agendamento.StStatus))
+        if (agendamento.StStatus is not null && StatusFinais.Contains(agendamento.StStatus))
             throw new RegraDeNegocioException(
                 $"Agendamento {id} já está em estado final ({agendamento.StStatus}) e não pode ser alterado.");
 
@@ -72,13 +72,13 @@ public sealed class AgendaService : IAgendaService
     {
         IdAgendamento = a.Id,
         DtAgendamento = a.DtAgendamento,
-        DuracaoMinutos = a.NrDuracaoMinutos,
+        DuracaoMinutos = a.NrDuracaoMinutos ?? 0,
         NmTutor = a.Tutor?.NmTutor ?? string.Empty,
         NmPet = a.Pet?.NmPet ?? string.Empty,
         IdVeterinario = a.IdVeterinario ?? 0,
         NmVeterinario = a.Veterinario?.NmVeterinario ?? string.Empty,
-        DsTipoConsulta = a.DsTipoConsulta,
-        DsStatus = a.StStatus,
+        DsTipoConsulta = a.DsTipoConsulta ?? string.Empty,
+        DsStatus = a.StStatus ?? string.Empty,
         NrVersion = a.NrVersion
     };
 }

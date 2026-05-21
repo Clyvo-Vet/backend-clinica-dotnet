@@ -43,7 +43,7 @@ public class MultiTenantTests
         {
             IdEspecie = 1,
             IdRaca = 1,
-            TutorId = 1,
+            IdTutor = 1,
             NmPet = "Rex",
             DtNascimento = DateTime.Today.AddYears(-2),
             SgSexo = 'M',

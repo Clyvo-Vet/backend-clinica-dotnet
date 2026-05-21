@@ -7,13 +7,13 @@ public class Agendamento
     public long? IdPet { get; set; }
     public long? IdTutor { get; set; }
     public long? IdVeterinario { get; set; }
-    public string NmPaciente { get; set; } = string.Empty;
+    public string? NmPaciente { get; set; }
     public DateTime DtAgendamento { get; set; }
-    public int NrDuracaoMinutos { get; set; }
-    public string DsServico { get; set; } = string.Empty;
-    public string DsTipoConsulta { get; set; } = string.Empty;
-    public string StStatus { get; set; } = string.Empty;
-    public string DsOrigem { get; set; } = string.Empty;
+    public int? NrDuracaoMinutos { get; set; }
+    public string? DsServico { get; set; }
+    public string? DsTipoConsulta { get; set; }
+    public string? StStatus { get; set; }
+    public string? DsOrigem { get; set; }
     public bool StAtiva { get; set; } = true;
     public long NrVersion { get; set; }
     // Flyway V5 columns

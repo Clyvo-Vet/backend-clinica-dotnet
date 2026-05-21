@@ -53,10 +53,10 @@ public sealed class DashboardService : IDashboardService
             .Select(a => new AgendamentoResumoDto
             {
                 Id = a.Id,
-                NmPaciente = a.NmPaciente,
+                NmPaciente = a.NmPaciente ?? string.Empty,
                 DtAgendamento = a.DtAgendamento,
-                DsServico = a.DsServico,
-                StStatus = a.StStatus
+                DsServico = a.DsServico ?? string.Empty,
+                StStatus = a.StStatus ?? string.Empty
             })
             .ToList();
 

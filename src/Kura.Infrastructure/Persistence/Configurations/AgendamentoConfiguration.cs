@@ -30,30 +30,36 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
 
         builder.Property(e => e.NmPaciente)
             .HasColumnName("NM_PACIENTE")
-            .HasMaxLength(200);
+            .HasMaxLength(200)
+            .IsRequired(false);
 
         builder.Property(e => e.DtAgendamento)
             .HasColumnName("DT_AGENDAMENTO")
             .IsRequired();
 
         builder.Property(e => e.NrDuracaoMinutos)
-            .HasColumnName("NR_DURACAO_MINUTOS");
+            .HasColumnName("NR_DURACAO_MINUTOS")
+            .IsRequired(false);
 
         builder.Property(e => e.DsServico)
             .HasColumnName("DS_SERVICO")
-            .HasMaxLength(200);
+            .HasMaxLength(200)
+            .IsRequired(false);
 
         builder.Property(e => e.DsTipoConsulta)
             .HasColumnName("DS_TIPO")
-            .HasMaxLength(30);
+            .HasMaxLength(30)
+            .IsRequired(false);
 
         builder.Property(e => e.StStatus)
             .HasColumnName("ST_STATUS")
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .IsRequired(false);
 
         builder.Property(e => e.DsOrigem)
             .HasColumnName("DS_ORIGEM")
-            .HasMaxLength(100);
+            .HasMaxLength(100)
+            .IsRequired(false);
 
         builder.Property(e => e.NrVersion)
             .HasColumnName("NR_VERSION")
@@ -62,20 +68,25 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
         // Flyway V5 columns
         builder.Property(e => e.DsObservacoes)
             .HasColumnName("DS_OBSERVACOES")
-            .HasMaxLength(1000);
+            .HasMaxLength(1000)
+            .IsRequired(false);
 
         builder.Property(e => e.DtCriacao)
-            .HasColumnName("DT_CRIACAO");
+            .HasColumnName("DT_CRIACAO")
+            .IsRequired(false);
 
         builder.Property(e => e.DtConfirmacao)
-            .HasColumnName("DT_CONFIRMACAO");
+            .HasColumnName("DT_CONFIRMACAO")
+            .IsRequired(false);
 
         builder.Property(e => e.DtCancelamento)
-            .HasColumnName("DT_CANCELAMENTO");
+            .HasColumnName("DT_CANCELAMENTO")
+            .IsRequired(false);
 
         builder.Property(e => e.DsMotivoCancel)
             .HasColumnName("DS_MOTIVO_CANCEL")
-            .HasMaxLength(500);
+            .HasMaxLength(500)
+            .IsRequired(false);
 
         builder.Property(e => e.IdEventoGerado)
             .HasColumnName("ID_EVENTO_GERADO");
