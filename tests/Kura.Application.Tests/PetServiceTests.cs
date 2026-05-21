@@ -31,7 +31,7 @@ public class PetServiceTests
 
     private PetCreateDto ValidCreateDto() => new()
     {
-        TutorId = 20L, IdEspecie = 1L, IdRaca = 1L,
+        IdTutor = 20L, IdEspecie = 1L, IdRaca = 1L,
         IdVeterinarioResp = 5L, NmPet = "Rex",
         DtNascimento = new DateTime(2022, 1, 1),
         SgSexo = 'M', SgPorte = 'M', StPrincipal = true
@@ -63,7 +63,7 @@ public class PetServiceTests
         _tutorRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Tutor?)null);
         var dto = new PetCreateDto
         {
-            TutorId = 99L, IdEspecie = 1L, IdRaca = 1L,
+            IdTutor = 99L, IdEspecie = 1L, IdRaca = 1L,
             IdVeterinarioResp = 5L, NmPet = "Rex",
             DtNascimento = new DateTime(2022, 1, 1),
             SgSexo = 'M', SgPorte = 'M', StPrincipal = true
