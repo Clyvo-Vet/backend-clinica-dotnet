@@ -9,10 +9,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=User Id=RM562999;Password=081105;Data Source=oracle.fiap.com.br:1521/orcl
-      - Jwt__Key=kura-api-secret-key-fiap-2026-clyvovet
+      - ConnectionStrings__DefaultConnection=User Id=RM562999;Password=${ORACLE_PASSWORD};Data Source=oracle.fiap.com.br:1521/orcl
+      - Jwt__Key=${JWT_KEY}
       - Jwt__Issuer=kura-api
       - Jwt__Audience=kura-client
-      - IoT__ApiKey=kura-iot-device-key-2026
-      - Luna__ApiKey=kura-luna-integration-key-2026
+      - IoT__ApiKey=${IOT_API_KEY}
+      - Luna__ApiKey=${LUNA_API_KEY}
     restart: on-failure

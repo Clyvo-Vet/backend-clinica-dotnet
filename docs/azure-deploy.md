@@ -59,8 +59,8 @@ az webapp config appsettings set \
   --resource-group rg-kura-api \
   --name kura-api-fiap \
   --settings \
-    ConnectionStrings__OracleConnection="User Id=RM562999;Password=081105;Data Source=oracle.fiap.com.br:1521/orcl" \
-    Jwt__Key="kura-api-secret-key-fiap-2026-clyvovet" \
+    ConnectionStrings__OracleConnection="User Id=RM562999;Password=<YOUR_ORACLE_PASSWORD>;Data Source=oracle.fiap.com.br:1521/orcl" \
+    Jwt__Key="<YOUR_JWT_SECRET_MIN_32_CHARS>" \
     Jwt__Issuer="kura-api" \
     Jwt__Audience="kura-client" \
     IoT__ApiKey="kura-iot-device-key-2026"

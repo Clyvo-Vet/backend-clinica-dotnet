@@ -483,6 +483,7 @@ $RECYCLE.BIN/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Secrets — connection strings and JWT keys must never be committed
 **/appsettings.Development.json
