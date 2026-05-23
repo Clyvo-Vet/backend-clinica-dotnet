@@ -26,9 +26,16 @@ WORKDIR /app
 COPY --from=build /app/publish .
 EXPOSE 8080
 
+# curl is required for the Docker health check — aspnet:10.0 (Debian slim) ships without it
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Run as non-root for security and FIAP DevOps rubric 2.2
 RUN groupadd -r kura && useradd -r -g kura kura
 RUN chown -R kura:kura /app
 USER kura
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 --start-period=60s \
+    CMD curl -sf http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["dotnet", "Kura.Api.dll"]
