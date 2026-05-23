@@ -8,6 +8,7 @@ using Microsoft.OpenApi;
 using Kura.Api.Middlewares;
 using Kura.Api.Extensions;
 using Kura.Infrastructure.Persistence;
+using Oracle.ManagedDataAccess.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -73,18 +74,39 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Validação de migrations pendentes — apenas aviso, NÃO aplica nada (schema é responsabilidade do Flyway)
+// Retry com backoff exponencial para aguardar o serviço XEPDB1 registrar-se no listener Oracle
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
-    var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-    if (pendingMigrations.Any())
+
+    const int maxAttempts = 10;
+    int[] retriableErrors = [12514, 1109, 12541, 17002];
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++)
     {
-        app.Logger.LogWarning(
-            "Existem {Count} migrations pendentes no EF Core. " +
-            "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
-            "Migrations pendentes: {Migrations}",
-            pendingMigrations.Count(),
-            string.Join(", ", pendingMigrations));
+        try
+        {
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                app.Logger.LogWarning(
+                    "Existem {Count} migrations pendentes no EF Core. " +
+                    "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
+                    "Migrations pendentes: {Migrations}",
+                    pendingMigrations.Count(),
+                    string.Join(", ", pendingMigrations));
+            }
+            break;
+        }
+        catch (OracleException ex) when (retriableErrors.Contains(ex.Number) && attempt < maxAttempts)
+        {
+            var delaySecs = Math.Min(Math.Pow(2, attempt - 1), 60);
+            app.Logger.LogWarning(
+                "Oracle não disponível (ORA-{ErrorCode}) — tentativa {Attempt}/{MaxAttempts}. " +
+                "Aguardando {Delay}s antes de nova tentativa...",
+                ex.Number, attempt, maxAttempts, delaySecs);
+            await Task.Delay(TimeSpan.FromSeconds(delaySecs));
+        }
     }
 }
 
