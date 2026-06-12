@@ -10,4 +10,5 @@ public interface ITutorService
     Task<IEnumerable<PetResponseDto>> GetPetsAsync(long id);
     Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto, long clinicaId);
     Task<TutorResponseDto> UpdateAsync(long id, TutorUpdateDto dto);
+    Task SoftDeleteAsync(long id);
 }

@@ -79,6 +79,20 @@ public sealed class MedicamentoService : IMedicamentoService
         return ToResponse(medicamento);
     }
 
+    public async Task<MedicamentoResponseDto> UpdateAsync(long id, MedicamentoUpdateDto dto)
+    {
+        var medicamento = await _repository.GetByIdAsync(id)
+            ?? throw new EntidadeNaoEncontradaException("Medicamento", id);
+
+        medicamento.NmMedicamento = dto.NmMedicamento;
+        medicamento.DsPrincipioAtivo = dto.DsPrincipioAtivo;
+        medicamento.DsApresentacao = dto.DsApresentacao;
+
+        _repository.Update(medicamento);
+        await _uow.CommitAsync();
+        return ToResponse(medicamento);
+    }
+
     public async Task SoftDeleteAsync(long id)
     {
         var medicamento = await _repository.GetByIdAsync(id)

@@ -3,6 +3,7 @@ namespace Kura.Application.Tests;
 using FluentAssertions;
 using Moq;
 using Kura.Application.DTOs.Tutor;
+using Kura.Domain.Exceptions;
 using Kura.Application.Services;
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
@@ -107,6 +108,29 @@ public class TutorServiceTests
         var act = async () => await _sut.CreateAsync(ValidDto(), 1L);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task SoftDeleteAsync_TutorExiste_ChamaSoftDeleteECommit()
+    {
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(42L))
+            .ReturnsAsync(new Tutor { Id = 42L, NmTutor = "Maria" });
+
+        await _sut.SoftDeleteAsync(42L);
+
+        _tutorRepoMock.Verify(r => r.SoftDelete(It.IsAny<Tutor>()), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SoftDeleteAsync_TutorNaoEncontrado_LancaEntidadeNaoEncontrada()
+    {
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Tutor?)null);
+
+        var act = async () => await _sut.SoftDeleteAsync(99L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
 }

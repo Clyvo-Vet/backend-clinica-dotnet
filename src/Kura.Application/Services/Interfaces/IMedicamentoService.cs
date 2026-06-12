@@ -9,5 +9,6 @@ public interface IMedicamentoService
     Task<IEnumerable<MedicamentoResponseDto>> SearchAsync(string? busca);
     Task<MedicamentoResponseDto> GetByIdAsync(long id);
     Task<MedicamentoResponseDto> CreateAsync(MedicamentoCreateDto dto);
+    Task<MedicamentoResponseDto> UpdateAsync(long id, MedicamentoUpdateDto dto);
     Task SoftDeleteAsync(long id);
 }

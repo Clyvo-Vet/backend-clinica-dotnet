@@ -2,8 +2,10 @@ namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Moq;
+using Kura.Application.DTOs.Medicamento;
 using Kura.Application.Services;
 using Kura.Domain.Entities;
+using Kura.Domain.Exceptions;
 using Kura.Domain.Interfaces;
 
 public class MedicamentoServiceTests
@@ -83,5 +85,57 @@ public class MedicamentoServiceTests
 
         result.Page.Should().Be(1);
         result.Items.Should().HaveCount(10);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MedicamentoExiste_AtualizaCamposECommit()
+    {
+        var medicamento = new Medicamento { Id = 1L, NmMedicamento = "Velho", DsPrincipioAtivo = "Velho", DsApresentacao = "Velho" };
+        _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(medicamento);
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        var dto = new MedicamentoUpdateDto { NmMedicamento = "Novo", DsPrincipioAtivo = "NovoPrincipio", DsApresentacao = "Liquido" };
+        var result = await _sut.UpdateAsync(1L, dto);
+
+        result.NmMedicamento.Should().Be("Novo");
+        result.DsPrincipioAtivo.Should().Be("NovoPrincipio");
+        result.DsApresentacao.Should().Be("Liquido");
+        _repoMock.Verify(r => r.Update(It.IsAny<Medicamento>()), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MedicamentoNaoEncontrado_LancaEntidadeNaoEncontrada()
+    {
+        _repoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Medicamento?)null);
+
+        var act = async () => await _sut.UpdateAsync(99L, new MedicamentoUpdateDto());
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task SoftDeleteAsync_MedicamentoExiste_ChamaSoftDelete()
+    {
+        _repoMock.Setup(r => r.GetByIdAsync(1L))
+            .ReturnsAsync(new Medicamento { Id = 1L, NmMedicamento = "Amoxicilina" });
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        await _sut.SoftDeleteAsync(1L);
+
+        _repoMock.Verify(r => r.SoftDelete(It.IsAny<Medicamento>()), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SoftDeleteAsync_MedicamentoNaoEncontrado_LancaEntidadeNaoEncontrada()
+    {
+        _repoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Medicamento?)null);
+
+        var act = async () => await _sut.SoftDeleteAsync(99L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
 }

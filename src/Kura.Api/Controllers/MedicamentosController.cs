@@ -68,4 +68,39 @@ public class MedicamentosController : ControllerBase
         var result = await _service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
+
+    /// <summary>
+    /// Atualiza os dados de um medicamento no catálogo.
+    /// </summary>
+    /// <param name="id">Identificador do medicamento.</param>
+    /// <param name="dto">Dados atualizados do medicamento.</param>
+    /// <returns>Medicamento com dados atualizados.</returns>
+    /// <response code="200">Medicamento atualizado.</response>
+    /// <response code="400">Dados inválidos.</response>
+    /// <response code="404">Medicamento não encontrado.</response>
+    [HttpPut("{id:long}")]
+    [ProducesResponseType(typeof(MedicamentoResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 400)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> Update(long id, [FromBody] MedicamentoUpdateDto dto)
+    {
+        var result = await _service.UpdateAsync(id, dto);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Inativa um medicamento do catálogo (soft delete).
+    /// </summary>
+    /// <param name="id">Identificador do medicamento.</param>
+    /// <returns>Sem conteúdo.</returns>
+    /// <response code="204">Medicamento inativado.</response>
+    /// <response code="404">Medicamento não encontrado.</response>
+    [HttpDelete("{id:long}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> Delete(long id)
+    {
+        await _service.SoftDeleteAsync(id);
+        return NoContent();
+    }
 }

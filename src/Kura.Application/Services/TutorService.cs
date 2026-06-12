@@ -123,6 +123,14 @@ public sealed class TutorService : ITutorService
         return ToResponse(tutor);
     }
 
+    public async Task SoftDeleteAsync(long id)
+    {
+        var tutor = await _repository.GetByIdAsync(id)
+            ?? throw new EntidadeNaoEncontradaException("Tutor", id);
+        _repository.SoftDelete(tutor);
+        await _uow.CommitAsync();
+    }
+
     private static TutorResponseDto ToResponse(Tutor t) => new()
     {
         Id = t.Id,

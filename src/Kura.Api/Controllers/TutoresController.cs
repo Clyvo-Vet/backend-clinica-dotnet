@@ -101,4 +101,20 @@ public class TutoresController : ControllerBase
         var result = await _service.UpdateAsync(id, dto);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Inativa um tutor (soft delete).
+    /// </summary>
+    /// <param name="id">Identificador do tutor.</param>
+    /// <returns>Sem conteúdo.</returns>
+    /// <response code="204">Tutor inativado.</response>
+    /// <response code="404">Tutor não encontrado.</response>
+    [HttpDelete("{id:long}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> Delete(long id)
+    {
+        await _service.SoftDeleteAsync(id);
+        return NoContent();
+    }
 }
