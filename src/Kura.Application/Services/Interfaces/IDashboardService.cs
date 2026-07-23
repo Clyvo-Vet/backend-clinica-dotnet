@@ -6,5 +6,5 @@ public interface IDashboardService
 {
     Task<DashboardHojeDto> GetHojeAsync();
     Task<IEnumerable<object>> GetAlertasAsync();
-    Task<DashboardHojeDto> GetRecentesAsync();
+    Task<IEnumerable<AgendamentoResumoDto>> GetRecentesAsync();
 }

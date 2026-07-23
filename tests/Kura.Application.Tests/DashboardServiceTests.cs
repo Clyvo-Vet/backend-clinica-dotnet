@@ -66,4 +66,34 @@ public class DashboardServiceTests
 
         result.Should().HaveCount(2);
     }
+
+    [Fact]
+    public async Task GetRecentesAsync_RetornaAgendamentosPassadosMapeados_NaoOResumoDeHoje()
+    {
+        var referencia = new DateTime(2026, 7, 20, 10, 0, 0, DateTimeKind.Utc);
+        _agendamentoMock.Setup(r => r.GetRecentesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<Agendamento>
+            {
+                new()
+                {
+                    Id = 42,
+                    NmPaciente = "Rex",
+                    DtAgendamento = referencia.AddDays(-1),
+                    DsServico = "Consulta de rotina",
+                    StStatus = "REALIZADO"
+                }
+            });
+
+        var result = (await _sut.GetRecentesAsync()).ToList();
+
+        result.Should().HaveCount(1);
+        result[0].Id.Should().Be(42);
+        result[0].NmPaciente.Should().Be("Rex");
+        result[0].DsServico.Should().Be("Consulta de rotina");
+        result[0].StStatus.Should().Be("REALIZADO");
+        result[0].DtAgendamento.Should().Be(referencia.AddDays(-1));
+
+        _agendamentoMock.Verify(r => r.GetRecentesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+        _agendamentoMock.Verify(r => r.GetProximosDoDiaAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+    }
 }

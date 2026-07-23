@@ -50,14 +50,7 @@ public sealed class DashboardService : IDashboardService
             .ToList();
 
         var proximosAgendamentos = (await _agendamentoRepository.GetProximosDoDiaAsync(DateTime.UtcNow, 3))
-            .Select(a => new AgendamentoResumoDto
-            {
-                Id = a.Id,
-                NmPaciente = a.NmPaciente ?? string.Empty,
-                DtAgendamento = a.DtAgendamento,
-                DsServico = a.DsServico ?? string.Empty,
-                StStatus = a.StStatus ?? string.Empty
-            })
+            .Select(MapParaResumo)
             .ToList();
 
         return new DashboardHojeDto
@@ -102,5 +95,20 @@ public sealed class DashboardService : IDashboardService
         return resultado;
     }
 
-    public async Task<DashboardHojeDto> GetRecentesAsync() => await GetHojeAsync();
+    private const int LimiteAgendamentosRecentes = 10;
+
+    public async Task<IEnumerable<AgendamentoResumoDto>> GetRecentesAsync()
+    {
+        var recentes = await _agendamentoRepository.GetRecentesAsync(DateTime.UtcNow, LimiteAgendamentosRecentes);
+        return recentes.Select(MapParaResumo).ToList();
+    }
+
+    private static AgendamentoResumoDto MapParaResumo(Agendamento a) => new()
+    {
+        Id = a.Id,
+        NmPaciente = a.NmPaciente ?? string.Empty,
+        DtAgendamento = a.DtAgendamento,
+        DsServico = a.DsServico ?? string.Empty,
+        StStatus = a.StStatus ?? string.Empty
+    };
 }

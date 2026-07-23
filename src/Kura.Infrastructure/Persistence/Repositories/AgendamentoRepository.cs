@@ -22,6 +22,15 @@ public class AgendamentoRepository : IAgendamentoRepository
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<Agendamento>> GetRecentesAsync(DateTime referencia, int limite)
+    {
+        return await _context.Agendamentos
+            .Where(a => a.DtAgendamento < referencia)
+            .OrderByDescending(a => a.DtAgendamento)
+            .Take(limite)
+            .ToListAsync();
+    }
+
     public Task<Agendamento?> GetByIdAsync(long id, long idClinica)
         => _context.Agendamentos
             .FirstOrDefaultAsync(a => a.Id == id && a.IdClinica == idClinica);
