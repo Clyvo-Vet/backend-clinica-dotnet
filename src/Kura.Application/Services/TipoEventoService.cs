@@ -28,6 +28,14 @@ public sealed class TipoEventoService : ITipoEventoService
         return ToResponse(tipoEvento);
     }
 
+    public async Task<long> GetIdByCdTipoAsync(string cdTipo)
+    {
+        var tiposEvento = await _repository.FindAsync(t => t.CdTipo == cdTipo);
+        var tipoEvento = tiposEvento.FirstOrDefault()
+            ?? throw new EntidadeNaoEncontradaException("TipoEvento", cdTipo);
+        return tipoEvento.Id;
+    }
+
     private static TipoEventoResponseDto ToResponse(TipoEvento t) => new()
     {
         Id = t.Id,

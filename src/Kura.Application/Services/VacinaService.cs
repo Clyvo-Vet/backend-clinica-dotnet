@@ -8,26 +8,29 @@ using Kura.Domain.Interfaces;
 
 public sealed class VacinaService : IVacinaService
 {
-    private const long IdTipoEventoVacina = 1L;
+    private const string CdTipoVacina = "VACINA";
 
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Vacina> _vacinaRepository;
     private readonly IUnitOfWork _uow;
     private readonly IClinicaContext _clinicaContext;
     private readonly IPetRepository _petRepository;
+    private readonly ITipoEventoService _tipoEventoService;
 
     public VacinaService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Vacina> vacinaRepository,
         IUnitOfWork uow,
         IClinicaContext clinicaContext,
-        IPetRepository petRepository)
+        IPetRepository petRepository,
+        ITipoEventoService tipoEventoService)
     {
         _eventoRepository = eventoRepository;
         _vacinaRepository = vacinaRepository;
         _uow = uow;
         _clinicaContext = clinicaContext;
         _petRepository = petRepository;
+        _tipoEventoService = tipoEventoService;
     }
 
     public async Task<VacinaResponseDto> CreateAsync(VacinaCreateDto dto)
@@ -38,12 +41,14 @@ public sealed class VacinaService : IVacinaService
         if (dto.DtProximaDose.HasValue && dto.DtProximaDose.Value < dto.DtEvento)
             throw new RegraDeNegocioException("DtProximaDose não pode ser anterior à data de aplicação.");
 
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoVacina);
+
         var evento = new EventoClinico
         {
             IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
-            IdTipoEvento = IdTipoEventoVacina,
+            IdTipoEvento = idTipoEvento,
             DtEvento = dto.DtEvento,
             DsObservacao = dto.DsObservacao
         };
@@ -78,7 +83,8 @@ public sealed class VacinaService : IVacinaService
 
     public async Task<IEnumerable<VacinaResponseDto>> GetByPetAsync(long idPet)
     {
-        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, IdTipoEventoVacina, null, null, null);
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoVacina);
+        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, idTipoEvento, null, null, null);
         var result = new List<VacinaResponseDto>();
         foreach (var evento in eventos)
         {
@@ -93,7 +99,8 @@ public sealed class VacinaService : IVacinaService
     public async Task<IEnumerable<VacinaResponseDto>> GetProximasVacinasAsync(long idPet)
     {
         var hoje = DateTime.UtcNow.Date;
-        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, IdTipoEventoVacina, null, null, null);
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoVacina);
+        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, idTipoEvento, null, null, null);
         var result = new List<VacinaResponseDto>();
         foreach (var evento in eventos)
         {

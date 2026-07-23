@@ -8,33 +8,38 @@ using Kura.Domain.Interfaces;
 
 public sealed class PrescricaoService : IPrescricaoService
 {
-    private const long IdTipoEventoPrescricao = 2L;
+    private const string CdTipoPrescricao = "PRESCRICAO";
 
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Prescricao> _prescricaoRepository;
     private readonly IUnitOfWork _uow;
     private readonly IClinicaContext _clinicaContext;
+    private readonly ITipoEventoService _tipoEventoService;
 
     public PrescricaoService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Prescricao> prescricaoRepository,
         IUnitOfWork uow,
-        IClinicaContext clinicaContext)
+        IClinicaContext clinicaContext,
+        ITipoEventoService tipoEventoService)
     {
         _eventoRepository = eventoRepository;
         _prescricaoRepository = prescricaoRepository;
         _uow = uow;
         _clinicaContext = clinicaContext;
+        _tipoEventoService = tipoEventoService;
     }
 
     public async Task<PrescricaoResponseDto> CreateAsync(PrescricaoCreateDto dto)
     {
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoPrescricao);
+
         var evento = new EventoClinico
         {
             IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
-            IdTipoEvento = IdTipoEventoPrescricao,
+            IdTipoEvento = idTipoEvento,
             DtEvento = dto.DtEvento,
             DsObservacao = dto.DsObservacao
         };
@@ -68,7 +73,8 @@ public sealed class PrescricaoService : IPrescricaoService
 
     public async Task<IEnumerable<PrescricaoResponseDto>> GetByPetAsync(long idPet)
     {
-        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, IdTipoEventoPrescricao, null, null, null);
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoPrescricao);
+        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, idTipoEvento, null, null, null);
         var result = new List<PrescricaoResponseDto>();
         foreach (var evento in eventos)
         {

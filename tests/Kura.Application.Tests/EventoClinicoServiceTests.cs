@@ -4,6 +4,7 @@ using FluentAssertions;
 using Moq;
 using Kura.Application.DTOs.Vacina;
 using Kura.Application.Services;
+using Kura.Application.Services.Interfaces;
 using Kura.Domain.Entities;
 using Kura.Domain.Exceptions;
 using Kura.Domain.Interfaces;
@@ -15,14 +16,17 @@ public class EventoClinicoServiceTests
     private readonly Mock<IUnitOfWork> _uowMock = new();
     private readonly Mock<IClinicaContext> _clinicaMock = new();
     private readonly Mock<IPetRepository> _petRepoMock = new();
+    private readonly Mock<ITipoEventoService> _tipoEventoServiceMock = new();
     private readonly VacinaService _sut;
 
     public EventoClinicoServiceTests()
     {
         _clinicaMock.Setup(c => c.IdClinica).Returns(1L);
+        _tipoEventoServiceMock.Setup(t => t.GetIdByCdTipoAsync("VACINA")).ReturnsAsync(3L);
         _sut = new VacinaService(
             _eventoRepoMock.Object, _vacinaRepoMock.Object,
-            _uowMock.Object, _clinicaMock.Object, _petRepoMock.Object);
+            _uowMock.Object, _clinicaMock.Object, _petRepoMock.Object,
+            _tipoEventoServiceMock.Object);
     }
 
     private VacinaCreateDto ValidDto() => new()

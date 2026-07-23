@@ -8,33 +8,38 @@ using Kura.Domain.Interfaces;
 
 public sealed class ExameService : IExameService
 {
-    private const long IdTipoEventoExame = 3L;
+    private const string CdTipoExame = "EXAME";
 
     private readonly IEventoClinicoRepository _eventoRepository;
     private readonly IRepository<Exame> _exameRepository;
     private readonly IUnitOfWork _uow;
     private readonly IClinicaContext _clinicaContext;
+    private readonly ITipoEventoService _tipoEventoService;
 
     public ExameService(
         IEventoClinicoRepository eventoRepository,
         IRepository<Exame> exameRepository,
         IUnitOfWork uow,
-        IClinicaContext clinicaContext)
+        IClinicaContext clinicaContext,
+        ITipoEventoService tipoEventoService)
     {
         _eventoRepository = eventoRepository;
         _exameRepository = exameRepository;
         _uow = uow;
         _clinicaContext = clinicaContext;
+        _tipoEventoService = tipoEventoService;
     }
 
     public async Task<ExameResponseDto> CreateAsync(ExameCreateDto dto)
     {
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoExame);
+
         var evento = new EventoClinico
         {
             IdClinica = _clinicaContext.IdClinica,
             IdPet = dto.IdPet,
             IdVeterinario = dto.IdVeterinario,
-            IdTipoEvento = IdTipoEventoExame,
+            IdTipoEvento = idTipoEvento,
             DtEvento = dto.DtEvento,
             DsObservacao = dto.DsObservacao
         };
@@ -68,7 +73,8 @@ public sealed class ExameService : IExameService
 
     public async Task<IEnumerable<ExameResponseDto>> GetByPetAsync(long idPet)
     {
-        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, IdTipoEventoExame, null, null, null);
+        var idTipoEvento = await _tipoEventoService.GetIdByCdTipoAsync(CdTipoExame);
+        var eventos = await _eventoRepository.GetByFiltersAsync(idPet, idTipoEvento, null, null, null);
         var result = new List<ExameResponseDto>();
         foreach (var evento in eventos)
         {
