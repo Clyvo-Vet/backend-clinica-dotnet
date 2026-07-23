@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using FluentAssertions;
 using Kura.Application.DTOs.Auth;
 using Kura.Application.Services;
@@ -12,6 +13,7 @@ namespace Kura.Application.Tests;
 public class AuthServiceTests
 {
     private readonly Mock<IClinicaRepository> _repoMock = new();
+    private readonly Mock<IVeterinarioRepository> _vetRepoMock = new();
     private readonly Mock<IUnitOfWork> _uowMock = new();
     private readonly IConfiguration _config;
     private readonly AuthService _sut;
@@ -26,8 +28,12 @@ public class AuthServiceTests
             ["Jwt:ExpiryHours"] = "8"
         };
         _config = new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
-        _sut = new AuthService(_repoMock.Object, _uowMock.Object, _config);
+        _sut = new AuthService(_repoMock.Object, _vetRepoMock.Object, _uowMock.Object, _config);
     }
+
+    private static string GetClaim(string jwt, string claimType) =>
+        new JwtSecurityTokenHandler().ReadJwtToken(jwt).Claims
+            .FirstOrDefault(c => c.Type == claimType)?.Value ?? string.Empty;
 
     // ── Login ────────────────────────────────────────────────────────────────
 
@@ -63,14 +69,59 @@ public class AuthServiceTests
     {
         var hash = BCrypt.Net.BCrypt.HashPassword("secret");
         var clinica = new Clinica { Id = 5, DsEmailAcesso = "vet@clinic.com", DsSenhaHash = hash, StAtiva = true };
+        var veterinario = new Veterinario { Id = 42, IdClinica = 5, NmVeterinario = "Dr. Ana", NrCrmv = "SP-123", DsEmail = "vet@clinic.com", NrTelefone = "11999999999" };
 
         _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
             .ReturnsAsync(new[] { clinica });
+        _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(5))
+            .ReturnsAsync(new[] { veterinario });
 
         var result = await _sut.LoginAsync(new LoginDto { DsEmail = "vet@clinic.com", DsSenha = "secret" });
 
         result.AccessToken.Should().NotBeNullOrWhiteSpace();
         result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        result.Usuario.Should().NotBeNull();
+        result.Usuario.Id.Should().Be(42);
+        result.Usuario.NmVeterinario.Should().Be("Dr. Ana");
+        result.Usuario.NrCrmv.Should().Be("SP-123");
+
+        GetClaim(result.AccessToken, "veterinarioId").Should().Be("42");
+    }
+
+    [Fact]
+    public async Task LoginAsync_ClinicaSemVeterinario_LancaRegraDeNegocioException()
+    {
+        var hash = BCrypt.Net.BCrypt.HashPassword("secret");
+        var clinica = new Clinica { Id = 7, DsEmailAcesso = "semvet@clinic.com", DsSenhaHash = hash, StAtiva = true };
+
+        _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
+            .ReturnsAsync(new[] { clinica });
+        _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(7))
+            .ReturnsAsync(Enumerable.Empty<Veterinario>());
+
+        var act = () => _sut.LoginAsync(new LoginDto { DsEmail = "semvet@clinic.com", DsSenha = "secret" });
+
+        await act.Should().ThrowAsync<RegraDeNegocioException>()
+            .WithMessage("Clínica sem veterinário responsável cadastrado.");
+    }
+
+    [Fact]
+    public async Task LoginAsync_SemVetComEmailIgual_UsaPrimeiroVeterinarioOrdenadoPorId()
+    {
+        var hash = BCrypt.Net.BCrypt.HashPassword("secret");
+        var clinica = new Clinica { Id = 9, DsEmailAcesso = "acesso@clinic.com", DsSenhaHash = hash, StAtiva = true };
+        var vetOutro = new Veterinario { Id = 20, IdClinica = 9, NmVeterinario = "Dr. Outro", NrCrmv = "1", DsEmail = "outro@clinic.com" };
+        var vetPrimeiro = new Veterinario { Id = 10, IdClinica = 9, NmVeterinario = "Dr. Primeiro", NrCrmv = "2", DsEmail = "primeiro@clinic.com" };
+
+        _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
+            .ReturnsAsync(new[] { clinica });
+        _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(9))
+            .ReturnsAsync(new[] { vetOutro, vetPrimeiro });
+
+        var result = await _sut.LoginAsync(new LoginDto { DsEmail = "acesso@clinic.com", DsSenha = "secret" });
+
+        result.Usuario.Id.Should().Be(10);
+        GetClaim(result.AccessToken, "veterinarioId").Should().Be("10");
     }
 
     // ── RegisterClinica ──────────────────────────────────────────────────────
@@ -81,6 +132,7 @@ public class AuthServiceTests
         _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
         _repoMock.Setup(r => r.ExisteComEmailAcessoAsync(It.IsAny<string>())).ReturnsAsync(false);
         _repoMock.Setup(r => r.AddAsync(It.IsAny<Clinica>())).Returns(Task.CompletedTask);
+        _vetRepoMock.Setup(r => r.AddAsync(It.IsAny<Veterinario>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
 
         var dto = new RegisterClinicaDto
@@ -91,7 +143,9 @@ public class AuthServiceTests
             NrTelefone = "(11) 99999-9999",
             DsEmail = "contato@teste.com",
             DsEmailAcesso = "admin@teste.com",
-            DsSenha = "Senha@2026"
+            DsSenha = "Senha@2026",
+            NmVeterinarioAdmin = "Dr. Admin",
+            NrCRMV = "SP-000111"
         };
 
         var result = await _sut.RegisterClinicaAsync(dto);
@@ -99,6 +153,54 @@ public class AuthServiceTests
         result.Should().NotBeNull();
         result.NmClinica.Should().Be("Clínica Teste");
         result.DsEmailAcesso.Should().Be("admin@teste.com");
+    }
+
+    [Fact]
+    public async Task RegisterClinicaAsync_ValidDto_CriaVeterinarioERetornaTokenEUsuario()
+    {
+        Veterinario? veterinarioSalvo = null;
+
+        _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
+        _repoMock.Setup(r => r.ExisteComEmailAcessoAsync(It.IsAny<string>())).ReturnsAsync(false);
+        _repoMock.Setup(r => r.AddAsync(It.IsAny<Clinica>()))
+            .Callback<Clinica>(c => c.Id = 100)
+            .Returns(Task.CompletedTask);
+        _vetRepoMock.Setup(r => r.AddAsync(It.IsAny<Veterinario>()))
+            .Callback<Veterinario>(v => { v.Id = 200; veterinarioSalvo = v; })
+            .Returns(Task.CompletedTask);
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        var dto = new RegisterClinicaDto
+        {
+            NmClinica = "Clínica Teste",
+            NrCnpj = "12.345.678/0001-99",
+            DsEndereco = "Rua A, 1",
+            NrTelefone = "(11) 99999-9999",
+            DsEmail = "contato@teste.com",
+            DsEmailAcesso = "admin@teste.com",
+            DsSenha = "Senha@2026",
+            NmVeterinarioAdmin = "Dr. Admin",
+            NrCRMV = "SP-000111"
+        };
+
+        var result = await _sut.RegisterClinicaAsync(dto);
+
+        veterinarioSalvo.Should().NotBeNull();
+        veterinarioSalvo!.IdClinica.Should().Be(100);
+        veterinarioSalvo.NmVeterinario.Should().Be("Dr. Admin");
+        veterinarioSalvo.NrCrmv.Should().Be("SP-000111");
+        veterinarioSalvo.DsEmail.Should().Be("admin@teste.com");
+        veterinarioSalvo.NrTelefone.Should().Be("(11) 99999-9999");
+
+        result.IdVeterinarioAdmin.Should().Be(200);
+        result.AccessToken.Should().NotBeNullOrWhiteSpace();
+        result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        result.Usuario.Should().NotBeNull();
+        result.Usuario.Id.Should().Be(200);
+        result.Usuario.NmVeterinario.Should().Be("Dr. Admin");
+        result.Usuario.NrCrmv.Should().Be("SP-000111");
+
+        GetClaim(result.AccessToken, "veterinarioId").Should().Be("200");
     }
 
     [Fact]
@@ -159,6 +261,7 @@ public class AuthServiceTests
         _repoMock.Setup(r => r.AddAsync(It.IsAny<Clinica>()))
             .Callback<Clinica>(c => clinicaSalva = c)
             .Returns(Task.CompletedTask);
+        _vetRepoMock.Setup(r => r.AddAsync(It.IsAny<Veterinario>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
 
         var dto = new RegisterClinicaDto

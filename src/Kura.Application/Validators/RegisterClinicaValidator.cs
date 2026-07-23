@@ -48,5 +48,13 @@ public sealed class RegisterClinicaValidator : AbstractValidator<RegisterClinica
         RuleFor(x => x.DsSenha)
             .NotEmpty().WithMessage("Senha é obrigatória.")
             .MinimumLength(8).WithMessage("Senha deve ter no mínimo 8 caracteres.");
+
+        RuleFor(x => x.NmVeterinarioAdmin)
+            .NotEmpty().WithMessage("Nome do veterinário administrador é obrigatório.")
+            .MaximumLength(200);
+
+        RuleFor(x => x.NrCRMV)
+            .NotEmpty().WithMessage("CRMV é obrigatório.")
+            .MaximumLength(20);
     }
 }

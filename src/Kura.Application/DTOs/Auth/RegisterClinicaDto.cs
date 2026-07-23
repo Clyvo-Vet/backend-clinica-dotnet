@@ -13,4 +13,6 @@ public sealed class RegisterClinicaDto
     public string DsEmail { get; set; } = string.Empty;
     public string DsEmailAcesso { get; set; } = string.Empty;
     public string DsSenha { get; set; } = string.Empty;
+    public string NmVeterinarioAdmin { get; set; } = string.Empty;
+    public string NrCRMV { get; set; } = string.Empty;
 }

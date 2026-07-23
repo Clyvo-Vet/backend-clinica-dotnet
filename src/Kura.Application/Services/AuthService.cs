@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Kura.Application.DTOs.Auth;
+using Kura.Application.DTOs.Veterinario;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Entities;
 using Kura.Domain.Exceptions;
@@ -14,15 +15,18 @@ using Microsoft.IdentityModel.Tokens;
 public sealed class AuthService : IAuthService
 {
     private readonly IClinicaRepository _clinicaRepository;
+    private readonly IVeterinarioRepository _veterinarioRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
 
     public AuthService(
         IClinicaRepository clinicaRepository,
+        IVeterinarioRepository veterinarioRepository,
         IUnitOfWork unitOfWork,
         IConfiguration configuration)
     {
         _clinicaRepository = clinicaRepository;
+        _veterinarioRepository = veterinarioRepository;
         _unitOfWork = unitOfWork;
         _configuration = configuration;
     }
@@ -36,15 +40,21 @@ public sealed class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(dto.DsSenha, clinica.DsSenhaHash))
             throw new RegraDeNegocioException("Email ou senha inválidos.");
 
+        var veterinarios = await _veterinarioRepository.GetAllByClinicaIdAsync(clinica.Id);
+        var veterinario = veterinarios.FirstOrDefault(v => v.DsEmail == clinica.DsEmailAcesso)
+            ?? veterinarios.OrderBy(v => v.Id).FirstOrDefault()
+            ?? throw new RegraDeNegocioException("Clínica sem veterinário responsável cadastrado.");
+
         var expiresAt = DateTime.UtcNow.AddHours(
             _configuration.GetValue<int>("Jwt:ExpiryHours", 8));
 
-        var token = GenerateToken(clinica, expiresAt);
+        var token = GenerateToken(clinica, veterinario.Id, expiresAt);
 
         return new TokenResponseDto
         {
             AccessToken = token,
-            ExpiresAt = expiresAt
+            ExpiresAt = expiresAt,
+            Usuario = ToVeterinarioResponse(veterinario)
         };
     }
 
@@ -78,16 +88,37 @@ public sealed class AuthService : IAuthService
         await _clinicaRepository.AddAsync(clinica);
         await _unitOfWork.CommitAsync();
 
+        var veterinario = new Veterinario
+        {
+            IdClinica = clinica.Id,
+            NmVeterinario = dto.NmVeterinarioAdmin,
+            NrCrmv = dto.NrCRMV,
+            DsEmail = dto.DsEmailAcesso,
+            NrTelefone = dto.NrTelefone ?? string.Empty
+        };
+
+        await _veterinarioRepository.AddAsync(veterinario);
+        await _unitOfWork.CommitAsync();
+
+        var expiresAt = DateTime.UtcNow.AddHours(
+            _configuration.GetValue<int>("Jwt:ExpiryHours", 8));
+
+        var token = GenerateToken(clinica, veterinario.Id, expiresAt);
+
         return new RegisterClinicaResponseDto
         {
             IdClinica = clinica.Id,
             NmClinica = clinica.NmClinica,
             DsEmailAcesso = clinica.DsEmailAcesso,
-            DtCriacao = clinica.DtCriacao
+            DtCriacao = clinica.DtCriacao,
+            IdVeterinarioAdmin = veterinario.Id,
+            AccessToken = token,
+            ExpiresAt = expiresAt,
+            Usuario = ToVeterinarioResponse(veterinario)
         };
     }
 
-    private string GenerateToken(Clinica clinica, DateTime expiresAt)
+    private string GenerateToken(Clinica clinica, long veterinarioId, DateTime expiresAt)
     {
         var key = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
@@ -96,7 +127,7 @@ public sealed class AuthService : IAuthService
         var claims = new[]
         {
             new Claim("clinicaId", clinica.Id.ToString()),
-            new Claim("veterinarioId", string.Empty),
+            new Claim("veterinarioId", veterinarioId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, clinica.DsEmailAcesso)
         };
 
@@ -110,4 +141,15 @@ public sealed class AuthService : IAuthService
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    private static VeterinarioResponseDto ToVeterinarioResponse(Veterinario v) => new()
+    {
+        Id = v.Id,
+        IdClinica = v.IdClinica,
+        NmVeterinario = v.NmVeterinario,
+        NrCrmv = v.NrCrmv,
+        DsEmail = v.DsEmail,
+        NrTelefone = v.NrTelefone,
+        StAtiva = v.StAtiva
+    };
 }
