@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAgendaService, AgendaService>();
         services.AddScoped<ILunaService, LunaService>();
+        services.AddScoped<ITeleconsultaService, TeleconsultaService>();
 
         return services;
     }
@@ -83,6 +84,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAgendamentoReadRepository, AgendaReadRepository>();
         services.AddScoped<ITriagemLunaRepository, TriagemLunaRepository>();
         services.AddScoped<IInviteTutorRepository, InviteTutorRepository>();
+        services.AddScoped<IConsentimentoRepository, ConsentimentoRepository>();
+
+        services.AddHttpClient<IDailyService, DailyService>((sp, http) =>
+        {
+            var apiKey = configuration["Daily:ApiKey"]
+                ?? throw new InvalidOperationException("Daily:ApiKey not configured.");
+            http.BaseAddress = new Uri("https://api.daily.co/v1/");
+            http.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        });
 
         return services;
     }

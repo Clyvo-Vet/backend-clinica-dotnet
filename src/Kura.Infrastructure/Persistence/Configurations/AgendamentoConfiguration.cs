@@ -91,6 +91,29 @@ public class AgendamentoConfiguration : IEntityTypeConfiguration<Agendamento>
         builder.Property(e => e.IdEventoGerado)
             .HasColumnName("ID_EVENTO_GERADO");
 
+        // Flyway V10 columns — teleconsulta (Daily.co)
+        builder.Property(e => e.DsSalaUrl)
+            .HasColumnName("DS_SALA_URL")
+            .HasMaxLength(512)
+            .IsRequired(false);
+
+        builder.Property(e => e.DsProvedorVideo)
+            .HasColumnName("DS_PROVEDOR_VIDEO")
+            .HasMaxLength(30)
+            .IsRequired(false);
+
+        builder.Property(e => e.StTeleconsulta)
+            .HasColumnName("ST_TELECONSULTA")
+            .IsRequired();
+
+        builder.Property(e => e.DtInicioSessao)
+            .HasColumnName("DT_INICIO_SESSAO")
+            .IsRequired(false);
+
+        builder.Property(e => e.DtFimSessao)
+            .HasColumnName("DT_FIM_SESSAO")
+            .IsRequired(false);
+
         // AGENDAMENTO table (Java domain) has no ST_ATIVA column
         builder.Ignore(e => e.StAtiva);
 

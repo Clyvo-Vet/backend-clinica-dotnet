@@ -15,4 +15,5 @@ services:
       - Jwt__Audience=kura-client
       - IoT__ApiKey=${IOT_API_KEY}
       - Luna__ApiKey=${LUNA_API_KEY}
+      - Daily__ApiKey=${DAILY_API_KEY}
     restart: on-failure

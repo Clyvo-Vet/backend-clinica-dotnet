@@ -23,6 +23,12 @@ public class Agendamento
     public DateTime? DtCancelamento { get; set; }
     public string? DsMotivoCancel { get; set; }
     public long? IdEventoGerado { get; set; }
+    // Flyway V10 columns — teleconsulta (Daily.co)
+    public string? DsSalaUrl { get; set; }
+    public string? DsProvedorVideo { get; set; }
+    public bool StTeleconsulta { get; set; }
+    public DateTime? DtInicioSessao { get; set; }
+    public DateTime? DtFimSessao { get; set; }
 
     public Pet? Pet { get; set; }
     public Tutor? Tutor { get; set; }
