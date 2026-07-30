@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAgendaService, AgendaService>();
         services.AddScoped<ILunaService, LunaService>();
         services.AddScoped<ITeleconsultaService, TeleconsultaService>();
+        services.AddScoped<ISoapDraftService, SoapDraftService>();
 
         return services;
     }
@@ -93,6 +94,16 @@ public static class ServiceCollectionExtensions
             http.BaseAddress = new Uri("https://api.daily.co/v1/");
             http.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        });
+
+        services.AddHttpClient<ILunaTranscricaoService, LunaTranscricaoService>((sp, http) =>
+        {
+            var baseUrl = configuration["Luna:BaseUrl"]
+                ?? throw new InvalidOperationException("Luna:BaseUrl not configured.");
+            var apiKey = configuration["Luna:InboundApiKey"]
+                ?? throw new InvalidOperationException("Luna:InboundApiKey not configured.");
+            http.BaseAddress = new Uri(baseUrl);
+            http.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         });
 
         return services;

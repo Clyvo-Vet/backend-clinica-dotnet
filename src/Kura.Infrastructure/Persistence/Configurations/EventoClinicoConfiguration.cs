@@ -41,6 +41,35 @@ public class EventoClinicoConfiguration : IEntityTypeConfiguration<EventoClinico
             .HasMaxLength(1000)
             .IsRequired();
 
+        builder.Property(e => e.DsTranscricao)
+            .HasColumnName("DS_TRANSCRICAO")
+            .HasColumnType("CLOB")
+            .IsRequired(false);
+
+        builder.Property(e => e.DsSoapS)
+            .HasColumnName("DS_SOAP_S")
+            .HasColumnType("CLOB")
+            .IsRequired(false);
+
+        builder.Property(e => e.DsSoapO)
+            .HasColumnName("DS_SOAP_O")
+            .HasColumnType("CLOB")
+            .IsRequired(false);
+
+        builder.Property(e => e.DsSoapA)
+            .HasColumnName("DS_SOAP_A")
+            .HasColumnType("CLOB")
+            .IsRequired(false);
+
+        builder.Property(e => e.DsSoapP)
+            .HasColumnName("DS_SOAP_P")
+            .HasColumnType("CLOB")
+            .IsRequired(false);
+
+        builder.Property(e => e.StSoapConfirmado)
+            .HasColumnName("ST_SOAP_CONFIRMADO")
+            .IsRequired();
+
         builder.Property(e => e.DtCriacao)
             .HasColumnName("DT_CRIACAO")
             .IsRequired();

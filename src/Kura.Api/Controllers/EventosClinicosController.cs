@@ -3,6 +3,7 @@ namespace Kura.Api.Controllers;
 using Kura.Application.DTOs.EventoClinico;
 using Kura.Application.DTOs.Exame;
 using Kura.Application.DTOs.Prescricao;
+using Kura.Application.DTOs.Transcricao;
 using Kura.Application.DTOs.Vacina;
 using Kura.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -22,19 +23,22 @@ public class EventosClinicosController : ControllerBase
     private readonly IPrescricaoService _prescricaoService;
     private readonly IExameService _exameService;
     private readonly IConsultaService _consultaService;
+    private readonly ISoapDraftService _soapDraftService;
 
     public EventosClinicosController(
         IEventoClinicoService eventoService,
         IVacinaService vacinaService,
         IPrescricaoService prescricaoService,
         IExameService exameService,
-        IConsultaService consultaService)
+        IConsultaService consultaService,
+        ISoapDraftService soapDraftService)
     {
         _eventoService = eventoService;
         _vacinaService = vacinaService;
         _prescricaoService = prescricaoService;
         _exameService = exameService;
         _consultaService = consultaService;
+        _soapDraftService = soapDraftService;
     }
 
     /// <summary>
@@ -146,5 +150,43 @@ public class EventosClinicosController : ControllerBase
     {
         var result = await _consultaService.CriarConsultaAsync(dto);
         return CreatedAtAction(nameof(CriarConsulta), new { id = result.IdConsulta }, result);
+    }
+
+    /// <summary>
+    /// Envia o áudio da consulta para transcrição (Whisper via Luna) e gera um draft SOAP.
+    /// O resultado é salvo como rascunho não confirmado (ST_SOAP_CONFIRMADO='N') — o vet
+    /// sempre revisa e confirma explicitamente via <see cref="ConfirmarSoap"/> antes de finalizar.
+    /// Se a Luna estiver indisponível, transcrição/SOAP retornam nulos para edição manual.
+    /// </summary>
+    /// <param name="id">Identificador do evento clínico.</param>
+    /// <param name="audio">Arquivo de áudio (mp3/m4a/wav).</param>
+    /// <response code="200">Draft salvo (com ou sem sugestão da Luna).</response>
+    /// <response code="404">Evento clínico não encontrado.</response>
+    [HttpPost("{id:long}/transcricao")]
+    [ProducesResponseType(typeof(EventoClinicoSoapResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> EnviarTranscricao(long id, IFormFile audio)
+    {
+        await using var stream = audio.OpenReadStream();
+        var result = await _soapDraftService.EnviarTranscricaoAsync(
+            id, stream, audio.FileName, audio.ContentType);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Confirmação explícita do vet do texto SOAP (revisado/editado). Só então
+    /// ST_SOAP_CONFIRMADO vira 'S' — nunca acontece automaticamente.
+    /// </summary>
+    /// <param name="id">Identificador do evento clínico.</param>
+    /// <param name="dto">Texto SOAP final revisado pelo vet.</param>
+    /// <response code="200">SOAP confirmado com sucesso.</response>
+    /// <response code="404">Evento clínico não encontrado.</response>
+    [HttpPut("{id:long}/soap")]
+    [ProducesResponseType(typeof(EventoClinicoSoapResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> ConfirmarSoap(long id, [FromBody] SoapConfirmarDto dto)
+    {
+        var result = await _soapDraftService.ConfirmarSoapAsync(id, dto);
+        return Ok(result);
     }
 }
