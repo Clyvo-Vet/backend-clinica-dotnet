@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore KuraApi.slnx
+
+      - name: Build
+        run: dotnet build KuraApi.slnx --no-restore --configuration Release
+
+      # Testes usam EF InMemory/Moq — sem Oracle, Twilio ou OpenAI. Nenhum secret necessário.
+      - name: Test
+        run: dotnet test KuraApi.slnx --no-build --configuration Release --verbosity normal
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Só valida que a imagem compila — sem push (sem credenciais de registry no CI).
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: kura-clinica:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
