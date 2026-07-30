@@ -1,5 +1,6 @@
 namespace Kura.Api.Controllers;
 
+using Kura.Application.DTOs.Documento;
 using Kura.Application.DTOs.EventoClinico;
 using Kura.Application.DTOs.Exame;
 using Kura.Application.DTOs.Prescricao;
@@ -24,6 +25,7 @@ public class EventosClinicosController : ControllerBase
     private readonly IExameService _exameService;
     private readonly IConsultaService _consultaService;
     private readonly ISoapDraftService _soapDraftService;
+    private readonly IReceituarioPdfService _receituarioPdfService;
 
     public EventosClinicosController(
         IEventoClinicoService eventoService,
@@ -31,7 +33,8 @@ public class EventosClinicosController : ControllerBase
         IPrescricaoService prescricaoService,
         IExameService exameService,
         IConsultaService consultaService,
-        ISoapDraftService soapDraftService)
+        ISoapDraftService soapDraftService,
+        IReceituarioPdfService receituarioPdfService)
     {
         _eventoService = eventoService;
         _vacinaService = vacinaService;
@@ -39,6 +42,7 @@ public class EventosClinicosController : ControllerBase
         _exameService = exameService;
         _consultaService = consultaService;
         _soapDraftService = soapDraftService;
+        _receituarioPdfService = receituarioPdfService;
     }
 
     /// <summary>
@@ -187,6 +191,22 @@ public class EventosClinicosController : ControllerBase
     public async Task<IActionResult> ConfirmarSoap(long id, [FromBody] SoapConfirmarDto dto)
     {
         var result = await _soapDraftService.ConfirmarSoapAsync(id, dto);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Gera o PDF do receituário da prescrição (CRMV, pet, medicamento/posologia/duração
+    /// e data), salva o arquivo em storage e persiste um Documento (path, nunca BLOB).
+    /// </summary>
+    /// <param name="id">Identificador do evento clínico (prescrição).</param>
+    /// <response code="200">Receituário gerado com sucesso.</response>
+    /// <response code="404">Evento clínico ou prescrição não encontrados.</response>
+    [HttpPost("{id:long}/receituario")]
+    [ProducesResponseType(typeof(DocumentoResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> GerarReceituario(long id)
+    {
+        var result = await _receituarioPdfService.GerarReceituarioAsync(id);
         return Ok(result);
     }
 }

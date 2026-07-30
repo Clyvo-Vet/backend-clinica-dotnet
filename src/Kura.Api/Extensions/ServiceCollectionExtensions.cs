@@ -48,6 +48,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILunaService, LunaService>();
         services.AddScoped<ITeleconsultaService, TeleconsultaService>();
         services.AddScoped<ISoapDraftService, SoapDraftService>();
+        services.AddScoped<IReceituarioPdfService, ReceituarioPdfService>();
 
         return services;
     }

@@ -10,6 +10,11 @@ using Kura.Api.Extensions;
 using Kura.Infrastructure.Persistence;
 using Oracle.ManagedDataAccess.Client;
 
+// QuestPDF (geração de receituário, TASK-15): licença Community — gratuita para
+// organizações com receita anual < US$1M (não é mais MIT puro desde 2023.12,
+// mas segue free-first e sem custo para este projeto acadêmico).
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Serilog — 3-arg overload so the built IServiceProvider is available for the Oracle sink
