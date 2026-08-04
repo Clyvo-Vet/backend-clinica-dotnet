@@ -8,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Kura.Application.Tests/Kura.Application.Tests.csproj" />
     <Project Path="tests/Kura.Domain.Tests/Kura.Domain.Tests.csproj" />
+    <Project Path="tests/Kura.Infrastructure.Tests/Kura.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>
