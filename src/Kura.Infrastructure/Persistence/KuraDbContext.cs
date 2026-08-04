@@ -100,5 +100,15 @@ public class KuraDbContext : DbContext
             .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        // TASK-21: Tutor tinha apenas HasQueryFilter(StAtiva) em TutorConfiguration — sem
+        // filtro de tenant, vazamento cross-clinica de PII (CPF, e-mail, telefone).
+        // Consolidado aqui (removido de TutorConfiguration) porque duas chamadas
+        // HasQueryFilter() para a mesma entidade NÃO se combinam com AND no EF Core 10:
+        // a última registrada no pipeline de OnModelCreating substitui inteiramente a anterior.
+        modelBuilder.Entity<Tutor>()
+            .HasQueryFilter(e => e.StAtiva &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
     }
 }

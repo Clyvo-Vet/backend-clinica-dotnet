@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="FluentAssertions" Version="8.9.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.7" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -23,6 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kura.Application\Kura.Application.csproj" />
     <ProjectReference Include="..\..\src\Kura.Domain\Kura.Domain.csproj" />
+    <!-- TASK-21: testes de regressão cross-tenant precisam do KuraDbContext real
+         (HasQueryFilter consolidado) em vez de mocks de repositório, para provar
+         isolamento de tenant de ponta a ponta (não apenas que o parâmetro certo foi passado). -->
+    <ProjectReference Include="..\..\src\Kura.Infrastructure\Kura.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

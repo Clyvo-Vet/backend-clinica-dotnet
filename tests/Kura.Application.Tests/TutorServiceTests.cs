@@ -16,6 +16,7 @@ public class TutorServiceTests
     private readonly Mock<IRepository<Raca>> _racaRepoMock = new();
     private readonly Mock<IInviteTutorRepository> _inviteRepoMock = new();
     private readonly Mock<IUnitOfWork> _uowMock = new();
+    private readonly Mock<IClinicaContext> _clinicaContextMock = new();
     private readonly TutorService _sut;
 
     public TutorServiceTests()
@@ -23,6 +24,7 @@ public class TutorServiceTests
         _tutorRepoMock.Setup(r => r.AddAsync(It.IsAny<Tutor>())).Returns(Task.CompletedTask);
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+        _clinicaContextMock.Setup(c => c.IdClinica).Returns(1L);
 
         _sut = new TutorService(
             _tutorRepoMock.Object,
@@ -30,7 +32,8 @@ public class TutorServiceTests
             _especieRepoMock.Object,
             _racaRepoMock.Object,
             _inviteRepoMock.Object,
-            _uowMock.Object);
+            _uowMock.Object,
+            _clinicaContextMock.Object);
     }
 
     private static TutorCreateDto ValidDto(string canal = "WHATSAPP") => new()

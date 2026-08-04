@@ -10,11 +10,19 @@ public class TutorRepository : Repository<Tutor>, ITutorRepository
     {
     }
 
-    public async Task<IEnumerable<Tutor>> SearchAsync(string busca)
+    public async Task<IEnumerable<Tutor>> SearchAsync(string? busca, long idClinica)
     {
-        var lower = busca.ToLower();
-        return await _dbSet
-            .Where(t => t.NmTutor.ToLower().Contains(lower) || t.NrCpf.Contains(busca))
-            .ToListAsync();
+        var query = _dbSet.Where(t => t.IdClinica == idClinica);
+
+        if (!string.IsNullOrWhiteSpace(busca))
+        {
+            var lower = busca.ToLower();
+            query = query.Where(t => t.NmTutor.ToLower().Contains(lower) || t.NrCpf.Contains(busca));
+        }
+
+        return await query.ToListAsync();
     }
+
+    public Task<Tutor?> GetByIdAsync(long id, long idClinica)
+        => _dbSet.FirstOrDefaultAsync(t => t.Id == id && t.IdClinica == idClinica);
 }

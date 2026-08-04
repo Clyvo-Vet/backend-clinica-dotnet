@@ -15,6 +15,7 @@ public sealed class TutorService : ITutorService
     private readonly IRepository<Raca> _racaRepository;
     private readonly IInviteTutorRepository _inviteRepository;
     private readonly IUnitOfWork _uow;
+    private readonly IClinicaContext _clinicaContext;
 
     public TutorService(
         ITutorRepository repository,
@@ -22,7 +23,8 @@ public sealed class TutorService : ITutorService
         IRepository<Especie> especieRepository,
         IRepository<Raca> racaRepository,
         IInviteTutorRepository inviteRepository,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IClinicaContext clinicaContext)
     {
         _repository = repository;
         _tutorPetRepository = tutorPetRepository;
@@ -30,29 +32,27 @@ public sealed class TutorService : ITutorService
         _racaRepository = racaRepository;
         _inviteRepository = inviteRepository;
         _uow = uow;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<IEnumerable<TutorResponseDto>> SearchAsync(string? busca)
     {
-        IEnumerable<Tutor> tutores;
-        if (string.IsNullOrWhiteSpace(busca))
-            tutores = await _repository.GetAllAsync();
-        else
-            tutores = await _repository.SearchAsync(busca);
-
+        // TASK-21: idClinica passado explicitamente — defesa em profundidade além do
+        // HasQueryFilter global do KuraDbContext (mesmo padrão de AgendaService/PetService).
+        var tutores = await _repository.SearchAsync(busca, _clinicaContext.IdClinica);
         return tutores.Select(ToResponse);
     }
 
     public async Task<TutorResponseDto> GetByIdAsync(long id)
     {
-        var tutor = await _repository.GetByIdAsync(id)
+        var tutor = await _repository.GetByIdAsync(id, _clinicaContext.IdClinica)
             ?? throw new EntidadeNaoEncontradaException("Tutor", id);
         return ToResponse(tutor);
     }
 
     public async Task<IEnumerable<PetResponseDto>> GetPetsAsync(long id)
     {
-        _ = await _repository.GetByIdAsync(id)
+        _ = await _repository.GetByIdAsync(id, _clinicaContext.IdClinica)
             ?? throw new EntidadeNaoEncontradaException("Tutor", id);
 
         var vinculos = await _tutorPetRepository.GetByTutorIdAsync(id);

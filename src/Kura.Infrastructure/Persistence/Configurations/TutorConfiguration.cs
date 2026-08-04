@@ -67,6 +67,8 @@ public class TutorConfiguration : IEntityTypeConfiguration<Tutor>
 
         builder.HasIndex(e => e.NrCpf).IsUnique();
 
-        builder.HasQueryFilter(e => e.StAtiva);
+        // TASK-21: HasQueryFilter(StAtiva) consolidado em KuraDbContext.ApplyTenantFilters
+        // (também aplica filtro de tenant ID_CLINICA). Duas chamadas HasQueryFilter() para a
+        // mesma entidade não se combinam com AND no EF Core 10 — a segunda sobrescreveria esta.
     }
 }
