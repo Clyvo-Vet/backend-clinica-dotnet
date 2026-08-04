@@ -1,0 +1,220 @@
+namespace Kura.Application.Tests;
+
+using System.Linq.Expressions;
+using FluentAssertions;
+using Kura.Application.DTOs.Auth;
+using Kura.Application.Services;
+using Kura.Domain.Entities;
+using Kura.Domain.Interfaces;
+using Microsoft.Extensions.Configuration;
+
+/// <summary>
+/// TASK-30: <c>AuthService.RegisterClinicaAsync</c> fazia duas escritas
+/// sequenciais (Clinica, depois Veterinario). Se a segunda falhasse, a Clinica
+/// já gravada na primeira ficava órfã (sem veterinário) — e
+/// <c>LoginAsync</c> lança <c>RegraDeNegocioException</c> para clínica sem
+/// veterinário, tornando a conta permanentemente inutilizável, com o e-mail
+/// já "tomado" para um novo cadastro.
+///
+/// IMPORTANTE — o que este teste prova e o que NÃO prova:
+/// Os duplos abaixo (<see cref="FakeClinicaRepository"/>,
+/// <see cref="FakeVeterinarioRepository"/>, <see cref="FakeUnitOfWork"/>) são
+/// listas em memória com um snapshot manual de "linhas gravadas desde o
+/// início da transação", removidas em caso de rollback — isso imita o
+/// comportamento de uma transação relacional real, mas não é uma. O provider
+/// EF Core InMemory usado nos demais testes deste projeto (e em
+/// Kura.Infrastructure.Tests) não suporta transações relacionais de verdade:
+/// <c>Database.BeginTransactionAsync</c> lança <c>InvalidOperationException</c>
+/// nele, então não dá para exercitar o <c>UnitOfWork</c> real (que chama
+/// <c>_context.Database.BeginTransactionAsync()</c>) contra InMemory. Este
+/// teste prova a ORQUESTRAÇÃO do <c>AuthService</c> — que ele abre a
+/// transação, tenta as duas escritas e faz rollback explícito quando a
+/// segunda falha, sem deixar a primeira "vazar" logicamente. A garantia de
+/// atomicidade FÍSICA do banco (que um ROLLBACK real desfaz o INSERT no
+/// disco) só é exercida contra o Oracle real (produção / DevOps-Cloud).
+/// </summary>
+public class AuthServiceTransacaoTests
+{
+    private static IConfiguration BuildConfig()
+    {
+        var inMemory = new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "supersecretkey12345678901234567890123456789012",
+            ["Jwt:Issuer"] = "kura-api",
+            ["Jwt:Audience"] = "kura-client",
+            ["Jwt:ExpiryHours"] = "8"
+        };
+        return new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
+    }
+
+    private static RegisterClinicaDto BuildDto() => new()
+    {
+        NmClinica = "Clínica Teste",
+        NrCnpj = "12.345.678/0001-99",
+        DsEndereco = "Rua A, 1",
+        NrTelefone = "(11) 99999-9999",
+        DsEmail = "contato@teste.com",
+        DsEmailAcesso = "admin@teste.com",
+        DsSenha = "Senha@2026",
+        NmVeterinarioAdmin = "Dr. Admin",
+        NrCRMV = "SP-000111"
+    };
+
+    [Fact]
+    public async Task RegisterClinicaAsync_FalhaAoGravarVeterinario_NaoDeixaClinicaOrfaERetryFunciona()
+    {
+        var clinicaStore = new List<Clinica>();
+        var veterinarioStore = new List<Veterinario>();
+
+        var clinicaRepo = new FakeClinicaRepository(clinicaStore);
+        var veterinarioRepo = new FakeVeterinarioRepository(veterinarioStore) { DeveLancarNoProximoAdd = true };
+        var uow = new FakeUnitOfWork(clinicaStore, veterinarioStore);
+        var sut = new AuthService(clinicaRepo, veterinarioRepo, uow, BuildConfig());
+
+        var dto = BuildDto();
+
+        // 1) Falha simulada na criação do Veterinario.
+        var act = () => sut.RegisterClinicaAsync(dto);
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Critério de aceitação: nenhuma Clinica órfã persistida após a falha.
+        clinicaStore.Should().BeEmpty(
+            "o rollback da transação deve desfazer o INSERT da Clinica quando o Veterinario falha — " +
+            "sem isso, a clínica fica órfã e o e-mail fica permanentemente 'tomado'");
+        veterinarioStore.Should().BeEmpty();
+
+        // 2) Retry com o mesmo e-mail deve funcionar após o rollback.
+        var resultado = await sut.RegisterClinicaAsync(dto);
+
+        resultado.Should().NotBeNull();
+        resultado.DsEmailAcesso.Should().Be("admin@teste.com");
+        clinicaStore.Should().HaveCount(1);
+        veterinarioStore.Should().HaveCount(1);
+    }
+
+    // ── Fakes ────────────────────────────────────────────────────────────────
+    // Duplos "de verdade" (não Moq) para poder inspecionar o estado persistido
+    // após a falha, em vez de só verificar chamadas de método.
+
+    private sealed class FakeClinicaRepository : IClinicaRepository
+    {
+        private readonly List<Clinica> _store;
+
+        public FakeClinicaRepository(List<Clinica> store) => _store = store;
+
+        public Task<bool> ExisteComCnpjAsync(string cnpj) =>
+            Task.FromResult(_store.Any(c => c.NrCnpj == cnpj));
+
+        public Task<bool> ExisteComEmailAcessoAsync(string email) =>
+            Task.FromResult(_store.Any(c => c.DsEmailAcesso == email));
+
+        public Task<Clinica?> GetByIdAsync(long id) =>
+            Task.FromResult(_store.FirstOrDefault(c => c.Id == id));
+
+        public Task<IEnumerable<Clinica>> GetAllAsync() =>
+            Task.FromResult<IEnumerable<Clinica>>(_store.ToList());
+
+        public Task<IEnumerable<Clinica>> FindAsync(Expression<Func<Clinica, bool>> predicate) =>
+            Task.FromResult(_store.AsQueryable().Where(predicate).AsEnumerable());
+
+        public Task AddAsync(Clinica entity)
+        {
+            // Simula o INSERT físico com geração de PK via sequence: o registro
+            // passa a "existir" imediatamente (visível dentro da transação em
+            // aberto), só deixa de existir se houver ROLLBACK depois.
+            entity.Id = _store.Count + 1;
+            _store.Add(entity);
+            return Task.CompletedTask;
+        }
+
+        public void Update(Clinica entity) { }
+
+        public void SoftDelete(Clinica entity) => entity.StAtiva = false;
+    }
+
+    private sealed class FakeVeterinarioRepository : IVeterinarioRepository
+    {
+        private readonly List<Veterinario> _store;
+
+        public FakeVeterinarioRepository(List<Veterinario> store) => _store = store;
+
+        /// <summary>Quando true, a próxima chamada a AddAsync lança e se auto-reseta (simula falha pontual).</summary>
+        public bool DeveLancarNoProximoAdd { get; set; }
+
+        public Task<IEnumerable<Veterinario>> GetAllByClinicaIdAsync(long idClinica) =>
+            Task.FromResult(_store.Where(v => v.IdClinica == idClinica));
+
+        public Task<Veterinario?> GetByIdAsync(long id) =>
+            Task.FromResult(_store.FirstOrDefault(v => v.Id == id));
+
+        public Task<IEnumerable<Veterinario>> GetAllAsync() =>
+            Task.FromResult<IEnumerable<Veterinario>>(_store.ToList());
+
+        public Task<IEnumerable<Veterinario>> FindAsync(Expression<Func<Veterinario, bool>> predicate) =>
+            Task.FromResult(_store.AsQueryable().Where(predicate).AsEnumerable());
+
+        public Task AddAsync(Veterinario entity)
+        {
+            if (DeveLancarNoProximoAdd)
+            {
+                DeveLancarNoProximoAdd = false;
+                throw new InvalidOperationException(
+                    "Falha simulada ao gravar o veterinário (ex.: violação de constraint, timeout de conexão).");
+            }
+
+            entity.Id = _store.Count + 1;
+            _store.Add(entity);
+            return Task.CompletedTask;
+        }
+
+        public void Update(Veterinario entity) { }
+
+        public void SoftDelete(Veterinario entity) => entity.StAtiva = false;
+    }
+
+    /// <summary>
+    /// Imita begin/commit/rollback de transação sobre listas em memória
+    /// compartilhadas com os fakes de repositório: guarda o tamanho das
+    /// listas no início da transação e, em caso de rollback, trunca de volta
+    /// a esse tamanho — descartando tudo que foi "inserido" durante a
+    /// transação. Não é uma transação de banco real (ver docstring da classe
+    /// de teste).
+    /// </summary>
+    private sealed class FakeUnitOfWork : IUnitOfWork
+    {
+        private readonly List<Clinica> _clinicaStore;
+        private readonly List<Veterinario> _veterinarioStore;
+        private int _clinicaSnapshot;
+        private int _veterinarioSnapshot;
+
+        public FakeUnitOfWork(List<Clinica> clinicaStore, List<Veterinario> veterinarioStore)
+        {
+            _clinicaStore = clinicaStore;
+            _veterinarioStore = veterinarioStore;
+        }
+
+        public Task<int> CommitAsync() => Task.FromResult(1);
+
+        public Task BeginTransactionAsync()
+        {
+            _clinicaSnapshot = _clinicaStore.Count;
+            _veterinarioSnapshot = _veterinarioStore.Count;
+            return Task.CompletedTask;
+        }
+
+        public Task CommitTransactionAsync() => Task.CompletedTask;
+
+        public Task RollbackTransactionAsync()
+        {
+            if (_clinicaStore.Count > _clinicaSnapshot)
+                _clinicaStore.RemoveRange(_clinicaSnapshot, _clinicaStore.Count - _clinicaSnapshot);
+
+            if (_veterinarioStore.Count > _veterinarioSnapshot)
+                _veterinarioStore.RemoveRange(_veterinarioSnapshot, _veterinarioStore.Count - _veterinarioSnapshot);
+
+            return Task.CompletedTask;
+        }
+
+        public void Dispose() { }
+    }
+}

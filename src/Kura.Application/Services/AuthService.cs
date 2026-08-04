@@ -85,20 +85,39 @@ public sealed class AuthService : IAuthService
             DtCadastro = DateTime.UtcNow
         };
 
-        await _clinicaRepository.AddAsync(clinica);
-        await _unitOfWork.CommitAsync();
+        // TASK-30: Clinica e Veterinario precisam ser atômicas. Cada uma exige seu
+        // próprio SaveChangesAsync (o Id da Clinica só existe depois do primeiro
+        // commit, e o Veterinario depende dele) — por isso envolvemos as duas
+        // escritas numa transação explícita: se a segunda falhar, o rollback desfaz
+        // a primeira, evitando uma clínica órfã (sem veterinário) com o e-mail
+        // permanentemente "tomado".
+        Veterinario veterinario;
 
-        var veterinario = new Veterinario
+        await _unitOfWork.BeginTransactionAsync();
+        try
         {
-            IdClinica = clinica.Id,
-            NmVeterinario = dto.NmVeterinarioAdmin,
-            NrCrmv = dto.NrCRMV,
-            DsEmail = dto.DsEmailAcesso,
-            NrTelefone = dto.NrTelefone ?? string.Empty
-        };
+            await _clinicaRepository.AddAsync(clinica);
+            await _unitOfWork.CommitAsync();
 
-        await _veterinarioRepository.AddAsync(veterinario);
-        await _unitOfWork.CommitAsync();
+            veterinario = new Veterinario
+            {
+                IdClinica = clinica.Id,
+                NmVeterinario = dto.NmVeterinarioAdmin,
+                NrCrmv = dto.NrCRMV,
+                DsEmail = dto.DsEmailAcesso,
+                NrTelefone = dto.NrTelefone ?? string.Empty
+            };
+
+            await _veterinarioRepository.AddAsync(veterinario);
+            await _unitOfWork.CommitAsync();
+
+            await _unitOfWork.CommitTransactionAsync();
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
 
         var expiresAt = DateTime.UtcNow.AddHours(
             _configuration.GetValue<int>("Jwt:ExpiryHours", 8));
