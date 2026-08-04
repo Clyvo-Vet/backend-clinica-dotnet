@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    TASK-28: avaliação do NuGetAudit (KURA_BACKLOG_FIX.md, E-8).
+
+    O SDK do .NET aqui usado (10.0.203) já roda a auditoria de vulnerabilidades por
+    padrão durante o restore — foi assim que o NU1903 (Microsoft.OpenApi 2.4.1,
+    transitivo via Swashbuckle.AspNetCore) apareceu sem nenhuma configuração explícita
+    neste repositório. Fixamos os valores abaixo para não depender do default do SDK
+    instalado em cada máquina/CI (que já mudou de "direct" para "all" entre versões).
+
+    Decisão: manter em nível de *warning*, não erro. NuGetAuditLevel="low" garante que
+    qualquer vulnerabilidade (baixa, moderada, alta ou crítica) apareça no log de
+    restore/build — mas não adicionamos NU1901-NU1904 a <WarningsAsErrors> nem
+    setamos <TreatWarningsAsErrors> para essas advisories. Motivo: elas vêm de
+    pacotes de terceiros fora do nosso controle; travar o build (e portanto o CI)
+    toda vez que uma nova CVE for publicada — mesmo sem fix disponível ainda a
+    montante — trocaria uma vulnerabilidade real por indisponibilidade de entrega,
+    o que não é a troca certa para um projeto acadêmico free-first. Falhar em erro
+    faria sentido se/quando o time adotar um processo de triagem de advisories com
+    SLA — não é o caso hoje.
+  -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
+</Project>
