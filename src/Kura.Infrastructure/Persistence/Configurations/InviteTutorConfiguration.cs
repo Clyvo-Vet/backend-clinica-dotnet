@@ -20,9 +20,15 @@ public class InviteTutorConfiguration : IEntityTypeConfiguration<InviteTutor>
             .HasColumnName("ID_TUTOR")
             .IsRequired();
 
+        // TASK-33 (E-1): sem HasConversion, o EF grava o Guid no layout binário mixed-endian
+        // nativo (RAW/hex) na coluna NR_TOKEN — que o Flyway (autoridade de DDL) criou como
+        // VARCHAR2(36) e que o Java lê como string canônica hifenizada (InviteTutor.java:26-27,
+        // OnboardingService.java:68-70). A conversão explícita alinha a escrita .NET ao formato
+        // que o outro lado do sistema já espera.
         builder.Property(e => e.NrToken)
             .HasColumnName("NR_TOKEN")
             .HasMaxLength(36)
+            .HasConversion(g => g.ToString(), s => Guid.Parse(s))
             .IsRequired();
 
         builder.Property(e => e.DtExpiracao)
