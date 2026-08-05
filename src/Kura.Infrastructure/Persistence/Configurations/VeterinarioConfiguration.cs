@@ -35,10 +35,14 @@ public class VeterinarioConfiguration : IEntityTypeConfiguration<Veterinario>
             .HasMaxLength(150)
             .IsRequired();
 
+        // TASK-36: NR_TELEFONE é NULLABLE no schema físico (V1__initial_schema.sql,
+        // repo Java, autoridade de DDL). .IsRequired() aqui divergia da realidade —
+        // não impedia NULL no Oracle (que já aceitava a coluna vazia) e ainda fazia
+        // o provider EF lançar InvalidCastException ("ORA-50032: Column contains
+        // NULL data") ao ler de volta uma linha gravada sem telefone.
         builder.Property(e => e.NrTelefone)
             .HasColumnName("NR_TELEFONE")
-            .HasMaxLength(20)
-            .IsRequired();
+            .HasMaxLength(20);
 
         builder.Property(e => e.StAtiva)
             .HasColumnName("ST_ATIVO")

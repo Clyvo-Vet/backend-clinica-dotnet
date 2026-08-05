@@ -204,6 +204,45 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task RegisterClinicaAsync_SemTelefone_NaoAplicaFallbackParaStringVazia()
+    {
+        // TASK-36 (E-4): dto.NrTelefone ?? string.Empty foi removido — Oracle trata
+        // VARCHAR2 vazio como NULL na escrita de qualquer forma, então a "garantia"
+        // de string.Empty era falsa e mascarava um NULL real. O comportamento correto
+        // é propagar null e deixar a coluna (NULLABLE no schema físico) refletir isso.
+        Veterinario? veterinarioSalvo = null;
+
+        _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
+        _repoMock.Setup(r => r.ExisteComEmailAcessoAsync(It.IsAny<string>())).ReturnsAsync(false);
+        _repoMock.Setup(r => r.AddAsync(It.IsAny<Clinica>()))
+            .Callback<Clinica>(c => c.Id = 300)
+            .Returns(Task.CompletedTask);
+        _vetRepoMock.Setup(r => r.AddAsync(It.IsAny<Veterinario>()))
+            .Callback<Veterinario>(v => { v.Id = 301; veterinarioSalvo = v; })
+            .Returns(Task.CompletedTask);
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        var dto = new RegisterClinicaDto
+        {
+            NmClinica = "Clínica Sem Telefone",
+            NrCnpj = "12.345.678/0001-99",
+            DsEndereco = "Rua B, 2",
+            NrTelefone = null,
+            DsEmail = "contato@semtelefone.com",
+            DsEmailAcesso = "admin@semtelefone.com",
+            DsSenha = "Senha@2026",
+            NmVeterinarioAdmin = "Dr. Sem Telefone",
+            NrCRMV = "SP-000222"
+        };
+
+        var result = await _sut.RegisterClinicaAsync(dto);
+
+        veterinarioSalvo.Should().NotBeNull();
+        veterinarioSalvo!.NrTelefone.Should().BeNull("null é o valor correto para telefone não informado, não \"\"");
+        result.Usuario.NrTelefone.Should().BeNull("a resposta HTTP não deve mascarar o NULL como string vazia");
+    }
+
+    [Fact]
     public async Task RegisterClinicaAsync_CnpjDuplicado_LancaRegraDeNegocioException()
     {
         _repoMock.Setup(r => r.ExisteComCnpjAsync("12.345.678/0001-99")).ReturnsAsync(true);

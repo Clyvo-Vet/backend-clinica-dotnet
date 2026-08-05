@@ -11,6 +11,9 @@ public sealed class VeterinarioResponseDto
     [JsonPropertyName("nrCRMV")]
     public string NrCrmv { get; init; } = string.Empty;
     public string DsEmail { get; init; } = string.Empty;
-    public string NrTelefone { get; init; } = string.Empty;
+
+    // TASK-36: nullable — telefone não informado agora é refletido como null
+    // na resposta HTTP, não mascarado como "" (ver Kura.Domain.Entities.Veterinario).
+    public string? NrTelefone { get; init; }
     public bool StAtiva { get; init; }
 }

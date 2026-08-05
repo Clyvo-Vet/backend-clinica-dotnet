@@ -105,7 +105,11 @@ public sealed class AuthService : IAuthService
                 NmVeterinario = dto.NmVeterinarioAdmin,
                 NrCrmv = dto.NrCRMV,
                 DsEmail = dto.DsEmailAcesso,
-                NrTelefone = dto.NrTelefone ?? string.Empty
+                // TASK-36: sem fallback para string.Empty — Oracle trata VARCHAR2
+                // vazio como NULL na escrita de qualquer forma, então "" era uma
+                // garantia falsa. NULL é o valor correto para "telefone não
+                // informado" (a coluna física já é NULLABLE).
+                NrTelefone = dto.NrTelefone
             };
 
             await _veterinarioRepository.AddAsync(veterinario);
