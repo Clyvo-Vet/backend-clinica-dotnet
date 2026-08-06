@@ -11,6 +11,13 @@
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="FluentAssertions" Version="8.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.7" />
+    <!-- TASK-49: pin explícito. Sem isso, o NuGet resolve
+         Microsoft.EntityFrameworkCore.Relational para 10.0.0 (piso do range flutuante
+         "[10.0.0, 11.0.0)" declarado pelo Oracle.EntityFrameworkCore), enquanto o
+         Kura.Infrastructure.dll referenciado (via ProjectReference) foi compilado
+         contra 10.0.7, gerando conflito de versão de assembly (MSB3277) no build.
+         10.0.7 é a versão usada em produção (Kura.Infrastructure/Kura.Api). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.3" />
