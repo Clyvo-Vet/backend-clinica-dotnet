@@ -89,6 +89,47 @@ public sealed class ReceituarioPdfService : IReceituarioPdfService
         };
     }
 
+    public async Task<ArquivoBinarioDto> ObterArquivoReceituarioAsync(long idEventoClinico, long idDocumento)
+    {
+        // EventoClinico já está em KuraDbContext.ApplyTenantFilters — se o evento não
+        // existir OU pertencer a outra clínica, GetByIdAsync devolve null aqui. As duas
+        // situações resultam na mesma exceção/404, sem diferenciar "não existe" de "é de
+        // outra clínica" (evita vazar existência via resposta diferenciada — TASK-51).
+        _ = await _eventoRepository.GetByIdAsync(idEventoClinico)
+            ?? throw new EntidadeNaoEncontradaException("EventoClinico", idEventoClinico);
+
+        var documento = await _documentoRepository.GetByIdAsync(idDocumento);
+
+        // Documento não declara IdClinica própria (é filho de EventoClinico via FK, fora
+        // do ApplyTenantFilters por desenho — ver CLAUDE.md). O isolamento de tenant vem
+        // exclusivamente daqui: só aceitamos o documento se ele pertencer ao evento que
+        // acabou de passar pelo filtro de tenant acima.
+        if (documento is null || documento.IdEventoClinico != idEventoClinico)
+            throw new EntidadeNaoEncontradaException("Documento", idDocumento);
+
+        // Nunca aceitamos caminho vindo do cliente — DsCaminho vem só do banco. Ainda
+        // assim, defesa em profundidade contra path traversal: se o valor persistido
+        // (por bug ou adulteração) resolver para fora de Storage:BasePath, recusamos a
+        // servir o arquivo em vez de confiar cegamente no que está no banco.
+        var caminhoResolvido = Path.GetFullPath(documento.DsCaminho);
+        var baseResolvida = Path.GetFullPath(_storageBasePath) + Path.DirectorySeparatorChar;
+
+        if (!caminhoResolvido.StartsWith(baseResolvida, StringComparison.Ordinal))
+            throw new EntidadeNaoEncontradaException("Documento", idDocumento);
+
+        if (!File.Exists(caminhoResolvido))
+            throw new EntidadeNaoEncontradaException("Documento", idDocumento);
+
+        var bytes = await File.ReadAllBytesAsync(caminhoResolvido);
+
+        return new ArquivoBinarioDto
+        {
+            Conteudo = bytes,
+            NomeArquivo = documento.NmArquivo,
+            DsTipoMime = documento.DsTipoMime,
+        };
+    }
+
     private static byte[] MontarPdf(
         EventoClinico evento, Prescricao prescricao, Pet pet, Veterinario veterinario, Medicamento medicamento)
     {

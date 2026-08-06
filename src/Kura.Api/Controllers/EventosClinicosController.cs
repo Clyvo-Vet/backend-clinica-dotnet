@@ -209,4 +209,29 @@ public class EventosClinicosController : ControllerBase
         var result = await _receituarioPdfService.GerarReceituarioAsync(id);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Devolve os bytes do PDF de um receituário já gerado (TASK-51). O caminho físico
+    /// nunca vem do cliente — é resolvido a partir do <c>Documento</c> no banco, com o
+    /// isolamento de tenant garantido por carregar o evento clínico pai primeiro (que já
+    /// está em <c>KuraDbContext.ApplyTenantFilters</c>). Receituário de outra clínica ou
+    /// documento inexistente/fora do storage configurado devolvem 404 — nunca os bytes.
+    /// </summary>
+    /// <param name="id">Identificador do evento clínico (prescrição) dono do receituário.</param>
+    /// <param name="idDocumento">Identificador do Documento gerado por <see cref="GerarReceituario"/>.</param>
+    /// <response code="200">PDF do receituário.</response>
+    /// <response code="404">Evento clínico, documento, ou arquivo em disco não encontrados.</response>
+    [HttpGet("{id:long}/receituario/{idDocumento:long}/download")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    public async Task<IActionResult> BaixarReceituario(long id, long idDocumento)
+    {
+        var arquivo = await _receituarioPdfService.ObterArquivoReceituarioAsync(id, idDocumento);
+
+        // "inline" porque o consumidor esperado (app clínica) abre num viewer/compartilha
+        // o PDF — não é obrigado a forçar "Salvar como" do navegador (attachment).
+        Response.Headers.Append("Content-Disposition", $"inline; filename=\"{arquivo.NomeArquivo}\"");
+
+        return File(arquivo.Conteudo, arquivo.DsTipoMime);
+    }
 }

@@ -163,4 +163,163 @@ public class ReceituarioPdfServiceTests : IDisposable
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _documentoRepoMock.Verify(r => r.AddAsync(It.IsAny<Documento>()), Times.Never);
     }
+
+    // ---------- TASK-51: download dos bytes do PDF já gerado ----------
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_ComDocumentoValido_RetornaBytesDoArquivo()
+    {
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+
+        Directory.CreateDirectory(_storageDir);
+        var caminho = Path.Combine(_storageDir, "receituario-teste.pdf");
+        var bytesEsperados = new byte[] { 1, 2, 3, 4, 5 };
+        await File.WriteAllBytesAsync(caminho, bytesEsperados);
+
+        var documento = new Documento
+        {
+            Id = 55,
+            IdEventoClinico = 10,
+            NmArquivo = "receituario-teste.pdf",
+            DsTipoMime = "application/pdf",
+            DsCaminho = caminho,
+            NrTamanhoBytes = bytesEsperados.Length,
+        };
+        _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync(documento);
+
+        var resultado = await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+        resultado.Conteudo.Should().Equal(bytesEsperados);
+        resultado.NomeArquivo.Should().Be("receituario-teste.pdf");
+        resultado.DsTipoMime.Should().Be("application/pdf");
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_EventoInexistente_LancaEntidadeNaoEncontrada()
+    {
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((EventoClinico?)null);
+
+        var act = async () => await _sut.ObterArquivoReceituarioAsync(99L, 1L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_DocumentoInexistente_LancaEntidadeNaoEncontrada()
+    {
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+        _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync((Documento?)null);
+
+        var act = async () => await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_DocumentoDeOutroEvento_LancaEntidadeNaoEncontrada()
+    {
+        // Documento existe no banco, mas pertence a um EventoClinico diferente do
+        // informado na rota — não pode ser servido por esta chamada mesmo que o
+        // registro exista fisicamente (o id do evento na URL precisa bater com o dono
+        // real do documento).
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+
+        Directory.CreateDirectory(_storageDir);
+        var caminho = Path.Combine(_storageDir, "de-outro-evento.pdf");
+        await File.WriteAllBytesAsync(caminho, new byte[] { 1 });
+
+        var documentoDeOutroEvento = new Documento
+        {
+            Id = 55,
+            IdEventoClinico = 999,
+            NmArquivo = "de-outro-evento.pdf",
+            DsTipoMime = "application/pdf",
+            DsCaminho = caminho,
+        };
+        _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync(documentoDeOutroEvento);
+
+        var act = async () => await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_ArquivoAusenteNoDisco_LancaEntidadeNaoEncontrada()
+    {
+        // Documento existe no banco, mas o arquivo em disco sumiu (ex.: volume
+        // resetado) — precisa de um erro claro, não uma FileNotFoundException crua.
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+
+        var documento = new Documento
+        {
+            Id = 55,
+            IdEventoClinico = 10,
+            NmArquivo = "sumiu.pdf",
+            DsTipoMime = "application/pdf",
+            DsCaminho = Path.Combine(_storageDir, "sumiu.pdf"),
+        };
+        _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync(documento);
+
+        var act = async () => await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_CaminhoComTraversalRelativo_LancaEntidadeNaoEncontrada()
+    {
+        // Simula um DsCaminho corrompido/adulterado com segmentos ".." tentando escapar
+        // de Storage:BasePath — defesa em profundidade: nunca confiar cegamente no
+        // caminho persistido, mesmo vindo do próprio banco.
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+
+        var caminhoComTraversal = Path.Combine(_storageDir, "..", "..", "secreto.pdf");
+        var documento = new Documento
+        {
+            Id = 55,
+            IdEventoClinico = 10,
+            NmArquivo = "secreto.pdf",
+            DsTipoMime = "application/pdf",
+            DsCaminho = caminhoComTraversal,
+        };
+        _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync(documento);
+
+        var act = async () => await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    [Fact]
+    public async Task ObterArquivoReceituarioAsync_CaminhoAbsolutoForaDoBasePath_LancaEntidadeNaoEncontrada()
+    {
+        // Mesmo cenário do teste anterior, mas com um caminho absoluto totalmente fora
+        // de Storage:BasePath (ex.: registro corrompido apontando para outro diretório
+        // do sistema de arquivos).
+        _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
+
+        var caminhoForaDoBasePath = Path.Combine(
+            Path.GetTempPath(), "kura-fora-do-storage-" + Guid.NewGuid().ToString("N") + ".pdf");
+        await File.WriteAllBytesAsync(caminhoForaDoBasePath, new byte[] { 9, 9 });
+
+        try
+        {
+            var documento = new Documento
+            {
+                Id = 55,
+                IdEventoClinico = 10,
+                NmArquivo = "malicioso.pdf",
+                DsTipoMime = "application/pdf",
+                DsCaminho = caminhoForaDoBasePath,
+            };
+            _documentoRepoMock.Setup(r => r.GetByIdAsync(55L)).ReturnsAsync(documento);
+
+            var act = async () => await _sut.ObterArquivoReceituarioAsync(10L, 55L);
+
+            await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+        }
+        finally
+        {
+            File.Delete(caminhoForaDoBasePath);
+        }
+    }
 }
