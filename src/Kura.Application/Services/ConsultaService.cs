@@ -50,7 +50,7 @@ public sealed class ConsultaService : IConsultaService
             IdVeterinario = dto.IdVeterinario,
             IdTipoEvento = idTipoEvento,
             DtEvento = dto.DtConsulta,
-            DsObservacao = dto.DsObservacao ?? string.Empty
+            DsObservacao = dto.DsObservacao
         };
 
         // Navigation property — EF Core insere EventoClinico primeiro (FK ordering)

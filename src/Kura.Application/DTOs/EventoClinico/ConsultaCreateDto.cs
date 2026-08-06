@@ -9,5 +9,10 @@ public sealed class ConsultaCreateDto
     public string? DsAnamnese { get; init; }
     public string? DsExameFisico { get; init; }
     public string? DsDiagnostico { get; init; }
-    public string? DsObservacao { get; init; }
+
+    // TASK-47: coluna EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL no Oracle (Flyway V9).
+    // Antes desse campo era nullable e um payload sem DsObservacao vazava ORA-01400
+    // (banco trata '' como NULL) como 500 cru. Obrigatório aqui + validado em
+    // ConsultaCreateValidator para virar 400 antes de chegar ao banco.
+    public string DsObservacao { get; init; } = string.Empty;
 }
