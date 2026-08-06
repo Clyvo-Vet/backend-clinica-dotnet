@@ -24,6 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kura.Infrastructure\Kura.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Kura.Domain\Kura.Domain.csproj" />
+    <!-- TASK-45: referência ao Kura.Api só para exercitar MetricsController
+         diretamente (in-memory, sem WebApplicationFactory — o repo não tem esse
+         padrão hoje). -->
+    <ProjectReference Include="..\..\src\Kura.Api\Kura.Api.csproj" />
   </ItemGroup>
 
 </Project>
