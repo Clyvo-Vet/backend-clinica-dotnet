@@ -30,5 +30,14 @@ public sealed class VacinaCreateValidator : AbstractValidator<VacinaCreateDto>
         // é o coalesce em VacinaService.CreateAsync, não uma regra de negócio no validator.
         RuleFor(x => x.DsFabricante)
             .MaximumLength(200);
+
+        // EVENTO_CLINICO.DS_OBSERVACAO é VARCHAR2(1000) (EventoClinicoConfiguration.cs,
+        // HasMaxLength(1000)). Sem NotEmpty(): campo opcional desde a TASK-56, o coalesce
+        // em VacinaService satisfaz o NOT NULL do Oracle. Re-review escopado da revisão
+        // final do FIX_4 (achado 3): faltava a mesma regra que Consulta/Prescricao já
+        // tinham — sem ela, um dsObservacao > 1000 chars estourava ORA-12899 (500) em
+        // vez de 400.
+        RuleFor(x => x.DsObservacao)
+            .MaximumLength(1000);
     }
 }
