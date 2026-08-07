@@ -3,7 +3,6 @@ namespace Kura.Infrastructure.Persistence;
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
 using Kura.Infrastructure.Persistence.Converters;
-using Kura.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 
 public class KuraDbContext : DbContext
@@ -34,7 +33,6 @@ public class KuraDbContext : DbContext
     public DbSet<DispositivoIot> DispositivosIot => Set<DispositivoIot>();
     public DbSet<LeituraTemperatura> LeiturasTemperatura => Set<LeituraTemperatura>();
     public DbSet<AlertaTemperatura> AlertasTemperatura => Set<AlertaTemperatura>();
-    public DbSet<TimelineItem> TimelineItems => Set<TimelineItem>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
@@ -46,9 +44,12 @@ public class KuraDbContext : DbContext
         //modelBuilder.HasDefaultSchema("KURA");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(KuraDbContext).Assembly);
 
-        modelBuilder.Entity<TimelineItem>()
-            .HasNoKey()
-            .ToView("VW_TIMELINE_PET");
+        // TASK-63: mapeamento de VW_TIMELINE_PET (keyless entity TimelineItem) removido —
+        // TimelineRepository não consulta mais essa view (era a causa do ORA-00904; ver
+        // TimelineRepository.cs). Órfão confirmado por grep: nenhum outro código referenciava
+        // Kura.Infrastructure.Persistence.ReadModels.TimelineItem além deste mapeamento e do
+        // FromSqlRaw removido — TimelineItemDto (Application layer, contrato HTTP) é uma classe
+        // diferente e continua em uso normalmente.
 
         // Conversão global bool → CHAR(1) 'S'/'N' (convenção schema Flyway v3)
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

@@ -275,4 +275,81 @@ public class CrossTenantRegressionTests
 
         result.DsStatus.Should().Be("REALIZADO");
     }
+
+    // ---------- TASK-63: TimelineRepository — isolamento cross-tenant via EventoClinico ----------
+    //
+    // GetByPetIdAsync não recebe idClinica explícito (ao contrário de AgendaService/TutorService,
+    // que compensam manualmente) — o isolamento depende inteiramente do HasQueryFilter de
+    // EventoClinico em KuraDbContext.ApplyTenantFilters. Antes da TASK-63, a query original
+    // (FromSqlRaw contra VW_TIMELINE_PET) não tinha filtro de tenant nenhum: qualquer JWT
+    // autenticado veria a timeline de qualquer pet, de qualquer clínica. Prova aqui de que a
+    // reescrita via LINQ sobre EventoClinico herda a proteção automaticamente.
+
+    [Fact]
+    public async Task TimelineRepository_GetByPetIdAsync_EventoDeOutraClinica_NaoAparece()
+    {
+        var dbName = Guid.NewGuid().ToString();
+
+        // Mesmo ID_PET (1) reaproveitado por duas clínicas distintas de propósito — prova que o
+        // isolamento é por ID_CLINICA do evento clínico, não por coincidência de não existir o pet.
+        await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
+        {
+            seedCtx.Veterinarios.Add(new Veterinario { Id = 1, IdClinica = ClinicaB, NmVeterinario = "Dr. Outro", NrCrmv = "CRMV-B", DsEmail = "outro@b.com" });
+            seedCtx.Pets.Add(new Pet { Id = 1, IdClinica = ClinicaB, IdEspecie = 1, IdRaca = 1, NmPet = "Pet Clinica B", DtNascimento = new DateTime(2022, 1, 1), SgSexo = 'M', SgPorte = 'G' });
+            seedCtx.TiposEvento.Add(new TipoEvento { Id = 1, CdTipo = "CONSULTA", NmTipo = "Consulta" });
+            seedCtx.EventosClinicos.Add(new EventoClinico
+            {
+                Id = 1,
+                IdClinica = ClinicaB,
+                IdPet = 1,
+                IdVeterinario = 1,
+                IdTipoEvento = 1,
+                DtEvento = DateTime.UtcNow,
+                DsObservacao = "Evento sigiloso da Clínica B",
+            });
+            await seedCtx.SaveChangesAsync();
+        }
+
+        // JWT de um veterinário da Clínica A tentando ler a timeline do ID_PET=1 (que na
+        // Clínica B existe e tem evento) — antes da TASK-63 isto vazava o evento inteiro,
+        // incluindo DsObservacao (dado clínico sensível).
+        await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
+        var sut = new TimelineRepository(ctxClinicaA);
+
+        var resultado = await sut.GetByPetIdAsync(1L);
+
+        resultado.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TimelineRepository_GetByPetIdAsync_EventoDaMesmaClinica_RetornaNormalmente()
+    {
+        var dbName = Guid.NewGuid().ToString();
+
+        await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
+        {
+            seedCtx.Veterinarios.Add(new Veterinario { Id = 1, IdClinica = ClinicaA, NmVeterinario = "Dra. Ana", NrCrmv = "CRMV-A", DsEmail = "ana@a.com" });
+            seedCtx.Pets.Add(new Pet { Id = 1, IdClinica = ClinicaA, IdEspecie = 1, IdRaca = 1, NmPet = "Pet Clinica A", DtNascimento = new DateTime(2022, 1, 1), SgSexo = 'M', SgPorte = 'G' });
+            seedCtx.TiposEvento.Add(new TipoEvento { Id = 1, CdTipo = "CONSULTA", NmTipo = "Consulta" });
+            seedCtx.EventosClinicos.Add(new EventoClinico
+            {
+                Id = 1,
+                IdClinica = ClinicaA,
+                IdPet = 1,
+                IdVeterinario = 1,
+                IdTipoEvento = 1,
+                DtEvento = DateTime.UtcNow,
+                DsObservacao = "Evento normal da Clínica A",
+            });
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
+        var sut = new TimelineRepository(ctxClinicaA);
+
+        var resultado = (await sut.GetByPetIdAsync(1L)).ToList();
+
+        resultado.Should().ContainSingle();
+        resultado.Single().DsObservacao.Should().Be("Evento normal da Clínica A");
+    }
 }
