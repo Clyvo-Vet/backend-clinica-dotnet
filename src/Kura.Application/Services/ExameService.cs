@@ -41,7 +41,13 @@ public sealed class ExameService : IExameService
             IdVeterinario = dto.IdVeterinario,
             IdTipoEvento = idTipoEvento,
             DtEvento = dto.DtEvento,
-            DsObservacao = dto.DsObservacao
+            // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o
+            // Oracle trata VARCHAR2 vazio como NULL — sem este coalesce, um payload sem observação
+            // estoura ORA-01400 (500). Observação é opcional do ponto de vista clínico, então a
+            // restrição de armazenamento se resolve aqui, não no contrato com o cliente.
+            DsObservacao = string.IsNullOrWhiteSpace(dto.DsObservacao)
+                ? "Sem observações"
+                : dto.DsObservacao
         };
 
         // Navigation property — EF Core insere EventoClinico primeiro (FK ordering)

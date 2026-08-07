@@ -35,14 +35,15 @@ public class ConsultaServiceTests
             _tipoEventoServiceMock.Object);
     }
 
-    private static ConsultaCreateDto ValidDto() => new()
+    private static ConsultaCreateDto ValidDto(string dsObservacao = "") => new()
     {
         IdPet = 5,
         IdVeterinario = 10,
         DtConsulta = new DateTime(2026, 5, 6, 9, 0, 0),
         DsMotivo = "Check-up anual",
         DsAnamnese = "Paciente apresenta letargia",
-        DsDiagnostico = "Saudável"
+        DsDiagnostico = "Saudável",
+        DsObservacao = dsObservacao
     };
 
     [Fact]
@@ -152,5 +153,55 @@ public class ConsultaServiceTests
         await _sut.CriarConsultaAsync(ValidDto());
 
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CriarConsultaAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
+    {
+        // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
+        // trata VARCHAR2 vazio como NULL — o form SOAP do app (S/O/A/P) permite "Plano" vazio
+        // legitimamente, então quem satisfaz a restrição de armazenamento é o service, não um
+        // NotEmpty() no validator (reverte a TASK-47 nesse ponto, ver ConsultaCreateValidator).
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        _vetRepoMock.Setup(r => r.GetByIdAsync(10L))
+            .ReturnsAsync(new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" });
+
+        Consulta? consultaAdicionada = null;
+        _consultaRepoMock.Setup(r => r.AddAsync(It.IsAny<Consulta>()))
+            .Callback<Consulta>(c => consultaAdicionada = c)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: dsObservacaoBruta);
+
+        await _sut.CriarConsultaAsync(dto);
+
+        consultaAdicionada.Should().NotBeNull();
+        consultaAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
+    }
+
+    [Fact]
+    public async Task CriarConsultaAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
+    {
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        _vetRepoMock.Setup(r => r.GetByIdAsync(10L))
+            .ReturnsAsync(new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" });
+
+        Consulta? consultaAdicionada = null;
+        _consultaRepoMock.Setup(r => r.AddAsync(It.IsAny<Consulta>()))
+            .Callback<Consulta>(c => consultaAdicionada = c)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: "Plano: retorno em 15 dias");
+
+        await _sut.CriarConsultaAsync(dto);
+
+        consultaAdicionada.Should().NotBeNull();
+        consultaAdicionada!.EventoClinico.DsObservacao.Should().Be("Plano: retorno em 15 dias");
     }
 }

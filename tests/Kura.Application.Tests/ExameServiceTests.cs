@@ -36,14 +36,15 @@ public class ExameServiceTests
             _tipoEventoServiceMock.Object);
     }
 
-    private static ExameCreateDto ValidDto() => new()
+    private static ExameCreateDto ValidDto(string dsObservacao = "") => new()
     {
         IdPet = 5,
         IdVeterinario = 10,
         DtEvento = new DateTime(2026, 5, 6, 9, 0, 0),
         NmExame = "Hemograma completo",
         DsResultado = "Dentro dos padrões",
-        DtRealizacao = new DateTime(2026, 5, 6)
+        DtRealizacao = new DateTime(2026, 5, 6),
+        DsObservacao = dsObservacao
     };
 
     [Fact]
@@ -75,5 +76,43 @@ public class ExameServiceTests
             .WithMessage("*TipoEvento*EXAME*");
 
         _exameRepoMock.Verify(r => r.AddAsync(It.IsAny<Exame>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
+    {
+        // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
+        // trata VARCHAR2 vazio como NULL — sem o coalesce no service, o payload real do app
+        // (mobile-clinica-rn/src/app/(app)/receituario/[idPet].tsx) não manda dsObservacao e o
+        // INSERT estoura ORA-01400 (500).
+        Exame? exameAdicionado = null;
+        _exameRepoMock.Setup(r => r.AddAsync(It.IsAny<Exame>()))
+            .Callback<Exame>(e => exameAdicionado = e)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: dsObservacaoBruta);
+
+        await _sut.CreateAsync(dto);
+
+        exameAdicionado.Should().NotBeNull();
+        exameAdicionado!.EventoClinico.DsObservacao.Should().Be("Sem observações");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
+    {
+        Exame? exameAdicionado = null;
+        _exameRepoMock.Setup(r => r.AddAsync(It.IsAny<Exame>()))
+            .Callback<Exame>(e => exameAdicionado = e)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: "Coleta realizada em jejum");
+
+        await _sut.CreateAsync(dto);
+
+        exameAdicionado.Should().NotBeNull();
+        exameAdicionado!.EventoClinico.DsObservacao.Should().Be("Coleta realizada em jejum");
     }
 }

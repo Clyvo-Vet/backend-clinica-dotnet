@@ -20,11 +20,16 @@ public sealed class ConsultaCreateValidator : AbstractValidator<ConsultaCreateDt
             .NotEmpty()
             .MaximumLength(200);
 
-        // TASK-47: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL no Oracle — sem essa regra,
-        // um payload sem DsObservacao passava pelo model binding (default "") e só
-        // estourava ORA-01400 no INSERT, vazando 500 em vez de 400 de validação.
+        // TASK-56: reverte parcialmente a TASK-47, de propósito. A TASK-47 acertou o
+        // diagnóstico (500 vazando por ORA-01400 quando DsObservacao vinha vazio) mas
+        // errou o fix, transformando uma restrição de armazenamento (NOT NULL no Oracle)
+        // em regra de negócio (NotEmpty() aqui). O form SOAP do app
+        // (mobile-clinica-rn/.../consulta/[idPet].tsx) exige apenas um dos quatro campos
+        // S/O/A/P preenchido — um vet pode legitimamente deixar "Plano" (DsObservacao)
+        // vazio, e o cliente real não honra o NotEmpty(). Quem satisfaz o NOT NULL do
+        // Oracle agora é o coalesce em ConsultaService (sentinela "Sem observações"),
+        // onde a responsabilidade de persistência pertence.
         RuleFor(x => x.DsObservacao)
-            .NotEmpty()
             .MaximumLength(1000);
     }
 }

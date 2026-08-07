@@ -38,14 +38,15 @@ public class VacinaServiceTests
             _tipoEventoServiceMock.Object);
     }
 
-    private static VacinaCreateDto ValidDto() => new()
+    private static VacinaCreateDto ValidDto(string dsObservacao = "") => new()
     {
         IdPet = 5,
         IdVeterinario = 10,
         DtEvento = new DateTime(2026, 5, 6, 9, 0, 0),
         NmVacina = "V10",
         NrLote = "L123",
-        DsFabricante = "Zoetis"
+        DsFabricante = "Zoetis",
+        DsObservacao = dsObservacao
     };
 
     [Fact]
@@ -83,5 +84,48 @@ public class VacinaServiceTests
             .WithMessage("*TipoEvento*VACINA*");
 
         _vacinaRepoMock.Verify(r => r.AddAsync(It.IsAny<Vacina>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
+    {
+        // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
+        // trata VARCHAR2 vazio como NULL — sem o coalesce no service, um payload sem dsObservacao
+        // estoura ORA-01400 (500).
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        Vacina? vacinaAdicionada = null;
+        _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>()))
+            .Callback<Vacina>(v => vacinaAdicionada = v)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: dsObservacaoBruta);
+
+        await _sut.CreateAsync(dto);
+
+        vacinaAdicionada.Should().NotBeNull();
+        vacinaAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
+    {
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        Vacina? vacinaAdicionada = null;
+        _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>()))
+            .Callback<Vacina>(v => vacinaAdicionada = v)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: "Reação leve no local da aplicação");
+
+        await _sut.CreateAsync(dto);
+
+        vacinaAdicionada.Should().NotBeNull();
+        vacinaAdicionada!.EventoClinico.DsObservacao.Should().Be("Reação leve no local da aplicação");
     }
 }

@@ -36,14 +36,15 @@ public class PrescricaoServiceTests
             _tipoEventoServiceMock.Object);
     }
 
-    private static PrescricaoCreateDto ValidDto() => new()
+    private static PrescricaoCreateDto ValidDto(string dsObservacao = "") => new()
     {
         IdPet = 5,
         IdVeterinario = 10,
         DtEvento = new DateTime(2026, 5, 6, 9, 0, 0),
         IdMedicamento = 7,
         DsPosologia = "1 comprimido a cada 12h",
-        NrDuracaoDias = 10
+        NrDuracaoDias = 10,
+        DsObservacao = dsObservacao
     };
 
     [Fact]
@@ -75,5 +76,42 @@ public class PrescricaoServiceTests
             .WithMessage("*TipoEvento*PRESCRICAO*");
 
         _prescricaoRepoMock.Verify(r => r.AddAsync(It.IsAny<Prescricao>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
+    {
+        // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
+        // trata VARCHAR2 vazio como NULL — reproduzido ao vivo contra o compose real com o payload
+        // exato de receituario/[idPet].tsx:217-227 (sem dsObservacao) → HTTP 500 antes do fix.
+        Prescricao? prescricaoAdicionada = null;
+        _prescricaoRepoMock.Setup(r => r.AddAsync(It.IsAny<Prescricao>()))
+            .Callback<Prescricao>(p => prescricaoAdicionada = p)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: dsObservacaoBruta);
+
+        await _sut.CreateAsync(dto);
+
+        prescricaoAdicionada.Should().NotBeNull();
+        prescricaoAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
+    {
+        Prescricao? prescricaoAdicionada = null;
+        _prescricaoRepoMock.Setup(r => r.AddAsync(It.IsAny<Prescricao>()))
+            .Callback<Prescricao>(p => prescricaoAdicionada = p)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsObservacao: "Administrar após as refeições");
+
+        await _sut.CreateAsync(dto);
+
+        prescricaoAdicionada.Should().NotBeNull();
+        prescricaoAdicionada!.EventoClinico.DsObservacao.Should().Be("Administrar após as refeições");
     }
 }
