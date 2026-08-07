@@ -10,9 +10,12 @@ public sealed class ConsultaCreateDto
     public string? DsExameFisico { get; init; }
     public string? DsDiagnostico { get; init; }
 
-    // TASK-47: coluna EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL no Oracle (Flyway V9).
-    // Antes desse campo era nullable e um payload sem DsObservacao vazava ORA-01400
-    // (banco trata '' como NULL) como 500 cru. Obrigatório aqui + validado em
-    // ConsultaCreateValidator para virar 400 antes de chegar ao banco.
+    // TASK-47/TASK-56: coluna EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL no Oracle (Flyway V9).
+    // A TASK-47 tornou o campo obrigatório no contrato (NotEmpty() no validator), mas a
+    // TASK-56 reverteu isso de propósito: o form SOAP do app exige apenas um dos quatro
+    // campos S/O/A/P preenchido, então "Plano" (DsObservacao) vazio é um caso legítimo do
+    // cliente. Hoje o campo é opcional do ponto de vista do contrato — quem satisfaz o
+    // NOT NULL do Oracle é o coalesce em ConsultaService (sentinela "Sem observações");
+    // ConsultaCreateValidator só valida o tamanho máximo (MaximumLength(1000)).
     public string DsObservacao { get; init; } = string.Empty;
 }
