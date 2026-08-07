@@ -38,14 +38,14 @@ public class VacinaServiceTests
             _tipoEventoServiceMock.Object);
     }
 
-    private static VacinaCreateDto ValidDto(string dsObservacao = "") => new()
+    private static VacinaCreateDto ValidDto(string dsObservacao = "", string dsFabricante = "Zoetis") => new()
     {
         IdPet = 5,
         IdVeterinario = 10,
         DtEvento = new DateTime(2026, 5, 6, 9, 0, 0),
         NmVacina = "V10",
         NrLote = "L123",
-        DsFabricante = "Zoetis",
+        DsFabricante = dsFabricante,
         DsObservacao = dsObservacao
     };
 
@@ -127,5 +127,48 @@ public class VacinaServiceTests
 
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.EventoClinico.DsObservacao.Should().Be("Reação leve no local da aplicação");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsFabricanteVazioOuWhitespace_ColescaParaSentinela(string dsFabricanteBruto)
+    {
+        // TASK-60: VACINA.DS_FABRICANTE é NOT NULL (V9:170, migration imutável) e o Oracle trata
+        // VARCHAR2 vazio como NULL — VacinaCreateValidator só valida NmVacina/NrLote, nunca teve
+        // regra para DsFabricante, então um payload sem esse campo passava reto pro INSERT e
+        // estourava ORA-01400 (500). Mesmo padrão da TASK-56: coalesce no service, não NotEmpty()
+        // no validator.
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        Vacina? vacinaAdicionada = null;
+        _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>()))
+            .Callback<Vacina>(v => vacinaAdicionada = v)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(dsFabricante: dsFabricanteBruto);
+
+        await _sut.CreateAsync(dto);
+
+        vacinaAdicionada.Should().NotBeNull();
+        vacinaAdicionada!.DsFabricante.Should().Be("Fabricante não informado");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsFabricantePreenchido_NaoSobrescreveComSentinela()
+    {
+        _petRepoMock.Setup(r => r.GetByIdAsync(5L))
+            .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
+
+        Vacina? vacinaAdicionada = null;
+        _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>()))
+            .Callback<Vacina>(v => vacinaAdicionada = v)
+            .Returns(Task.CompletedTask);
+
+        await _sut.CreateAsync(ValidDto());
+
+        vacinaAdicionada.Should().NotBeNull();
+        vacinaAdicionada!.DsFabricante.Should().Be("Zoetis");
     }
 }

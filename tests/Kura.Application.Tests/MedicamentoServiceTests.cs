@@ -138,4 +138,53 @@ public class MedicamentoServiceTests
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsApresentacaoVaziaOuWhitespace_ColescaParaSentinela(string dsApresentacaoBruta)
+    {
+        // TASK-60: MEDICAMENTO.DS_APRESENTACAO é NOT NULL (V9:78, migration imutável) e o Oracle
+        // trata VARCHAR2 vazio como NULL — MedicamentoCreateValidator nunca teve regra para este
+        // campo (só NmMedicamento/DsPrincipioAtivo), então um payload sem dsApresentacao passava
+        // reto pro INSERT e estourava ORA-01400 (500). Mesmo padrão da TASK-56 (DS_OBSERVACAO):
+        // coalesce no service, não NotEmpty() no validator.
+        Medicamento? medicamentoAdicionado = null;
+        _repoMock.Setup(r => r.AddAsync(It.IsAny<Medicamento>()))
+            .Callback<Medicamento>(m => medicamentoAdicionado = m)
+            .Returns(Task.CompletedTask);
+
+        var dto = new MedicamentoCreateDto
+        {
+            NmMedicamento = "Amoxicilina",
+            DsPrincipioAtivo = "Amoxicilina Triidratada",
+            DsApresentacao = dsApresentacaoBruta
+        };
+
+        await _sut.CreateAsync(dto);
+
+        medicamentoAdicionado.Should().NotBeNull();
+        medicamentoAdicionado!.DsApresentacao.Should().Be("Apresentação não informada");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsApresentacaoPreenchida_NaoSobrescreveComSentinela()
+    {
+        Medicamento? medicamentoAdicionado = null;
+        _repoMock.Setup(r => r.AddAsync(It.IsAny<Medicamento>()))
+            .Callback<Medicamento>(m => medicamentoAdicionado = m)
+            .Returns(Task.CompletedTask);
+
+        var dto = new MedicamentoCreateDto
+        {
+            NmMedicamento = "Amoxicilina",
+            DsPrincipioAtivo = "Amoxicilina Triidratada",
+            DsApresentacao = "Comprimido 500mg"
+        };
+
+        await _sut.CreateAsync(dto);
+
+        medicamentoAdicionado.Should().NotBeNull();
+        medicamentoAdicionado!.DsApresentacao.Should().Be("Comprimido 500mg");
+    }
 }

@@ -36,12 +36,12 @@ public class TutorServiceTests
             _clinicaContextMock.Object);
     }
 
-    private static TutorCreateDto ValidDto(string canal = "WHATSAPP") => new()
+    private static TutorCreateDto ValidDto(string canal = "WHATSAPP", string nrTelefone = "11999999999") => new()
     {
         NmTutor = "Maria Silva",
         NrCpf = "12345678901",
         DsEmail = "maria@email.com",
-        NrTelefone = "11999999999",
+        NrTelefone = nrTelefone,
         DsCanalConvite = canal
     };
 
@@ -135,5 +135,89 @@ public class TutorServiceTests
 
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_NrTelefoneVazioOuWhitespace_ColescaParaSentinela(string nrTelefoneBruto)
+    {
+        // TASK-60: TUTOR.DS_TELEFONE é NOT NULL (V1:91, migration imutável) e o Oracle trata
+        // VARCHAR2 vazio como NULL — TutorCreateValidator só valida NmTutor/NrCpf/DsEmail, nunca
+        // teve regra para NrTelefone, então um payload sem esse campo passava reto pro INSERT e
+        // estourava ORA-01400 (500). Mesmo padrão da TASK-56: coalesce no service, não NotEmpty()
+        // no validator.
+        Tutor? tutorAdicionado = null;
+        _tutorRepoMock.Setup(r => r.AddAsync(It.IsAny<Tutor>()))
+            .Callback<Tutor>(t => tutorAdicionado = t)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(nrTelefone: nrTelefoneBruto);
+
+        await _sut.CreateAsync(dto, 1L);
+
+        tutorAdicionado.Should().NotBeNull();
+        tutorAdicionado!.NrTelefone.Should().Be("Não informado");
+    }
+
+    [Fact]
+    public async Task CreateAsync_NrTelefonePreenchido_NaoSobrescreveComSentinela()
+    {
+        Tutor? tutorAdicionado = null;
+        _tutorRepoMock.Setup(r => r.AddAsync(It.IsAny<Tutor>()))
+            .Callback<Tutor>(t => tutorAdicionado = t)
+            .Returns(Task.CompletedTask);
+
+        var dto = ValidDto(nrTelefone: "11988887777");
+
+        await _sut.CreateAsync(dto, 1L);
+
+        tutorAdicionado.Should().NotBeNull();
+        tutorAdicionado!.NrTelefone.Should().Be("11988887777");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task UpdateAsync_NrTelefoneVazioOuWhitespace_ColescaParaSentinela(string nrTelefoneBruto)
+    {
+        // Mesmo gap de TutorCreateDto — TutorUpdateValidator também nunca teve regra para
+        // NrTelefone (só NmTutor/NrCpf/DsEmail).
+        var tutorExistente = new Tutor { Id = 42L, NmTutor = "Maria", NrTelefone = "11900000000" };
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(42L)).ReturnsAsync(tutorExistente);
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        var dto = new TutorUpdateDto
+        {
+            NmTutor = "Maria Silva",
+            NrCpf = "12345678901",
+            DsEmail = "maria@email.com",
+            NrTelefone = nrTelefoneBruto
+        };
+
+        await _sut.UpdateAsync(42L, dto);
+
+        tutorExistente.NrTelefone.Should().Be("Não informado");
+        _tutorRepoMock.Verify(r => r.Update(It.IsAny<Tutor>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NrTelefonePreenchido_NaoSobrescreveComSentinela()
+    {
+        var tutorExistente = new Tutor { Id = 42L, NmTutor = "Maria", NrTelefone = "11900000000" };
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(42L)).ReturnsAsync(tutorExistente);
+        _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
+
+        var dto = new TutorUpdateDto
+        {
+            NmTutor = "Maria Silva",
+            NrCpf = "12345678901",
+            DsEmail = "maria@email.com",
+            NrTelefone = "11977776666"
+        };
+
+        await _sut.UpdateAsync(42L, dto);
+
+        tutorExistente.NrTelefone.Should().Be("11977776666");
     }
 }

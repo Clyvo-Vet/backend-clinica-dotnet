@@ -23,5 +23,12 @@ public sealed class VacinaCreateValidator : AbstractValidator<VacinaCreateDto>
         RuleFor(x => x.NrLote)
             .NotEmpty()
             .MaximumLength(50);
+
+        // TASK-60: DS_FABRICANTE é NOT NULL no Oracle (VACINA.DS_FABRICANTE, V9:170, migration
+        // imutável), mas de propósito sem NotEmpty() aqui — mesmo padrão da TASK-56
+        // (DsObservacao em ConsultaCreateValidator): quem satisfaz a restrição de armazenamento
+        // é o coalesce em VacinaService.CreateAsync, não uma regra de negócio no validator.
+        RuleFor(x => x.DsFabricante)
+            .MaximumLength(200);
     }
 }

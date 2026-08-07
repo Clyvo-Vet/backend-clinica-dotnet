@@ -19,5 +19,10 @@ public sealed class TutorUpdateValidator : AbstractValidator<TutorUpdateDto>
         RuleFor(x => x.DsEmail)
             .NotEmpty()
             .MaximumLength(150);
+
+        // TASK-60: mesmo gap de TutorCreateValidator — sem NotEmpty() de propósito, o coalesce
+        // em TutorService.UpdateAsync satisfaz TUTOR.DS_TELEFONE NOT NULL.
+        RuleFor(x => x.NrTelefone)
+            .MaximumLength(20);
     }
 }

@@ -72,7 +72,15 @@ public sealed class MedicamentoService : IMedicamentoService
         {
             NmMedicamento = dto.NmMedicamento,
             DsPrincipioAtivo = dto.DsPrincipioAtivo,
-            DsApresentacao = dto.DsApresentacao
+            // TASK-60: MEDICAMENTO.DS_APRESENTACAO é NOT NULL (V9:78, migration imutável) e o
+            // Oracle trata VARCHAR2 vazio como NULL. MedicamentoCreateValidator nunca teve regra
+            // NotEmpty() para este campo (só NmMedicamento/DsPrincipioAtivo) — sem este coalesce,
+            // um payload sem dsApresentacao estoura ORA-01400 (500) no INSERT. Mesmo padrão da
+            // TASK-56: a restrição de armazenamento se resolve aqui, não como regra de negócio
+            // no validator.
+            DsApresentacao = string.IsNullOrWhiteSpace(dto.DsApresentacao)
+                ? "Apresentação não informada"
+                : dto.DsApresentacao
         };
         await _repository.AddAsync(medicamento);
         await _uow.CommitAsync();

@@ -88,7 +88,14 @@ public sealed class TutorService : ITutorService
             NmTutor = dto.NmTutor,
             NrCpf = dto.NrCpf,
             DsEmail = dto.DsEmail,
-            NrTelefone = dto.NrTelefone,
+            // TASK-60: TUTOR.DS_TELEFONE é NOT NULL (V1:91, migration imutável) e o Oracle trata
+            // VARCHAR2 vazio como NULL. TutorCreateValidator só valida NmTutor/NrCpf/DsEmail,
+            // nunca teve regra NotEmpty() para NrTelefone — sem este coalesce, um payload sem
+            // esse campo estoura ORA-01400 (500) no INSERT. Mesmo padrão da TASK-56: a restrição
+            // de armazenamento se resolve aqui, não como regra de negócio no validator.
+            NrTelefone = string.IsNullOrWhiteSpace(dto.NrTelefone)
+                ? "Não informado"
+                : dto.NrTelefone,
             StAvisoPrivacidade = "S",
             DtAvisoPrivacidade = DateTime.UtcNow,
             DsVersaoAviso = "v1.0"
@@ -116,7 +123,11 @@ public sealed class TutorService : ITutorService
         tutor.NmTutor = dto.NmTutor;
         tutor.NrCpf = dto.NrCpf;
         tutor.DsEmail = dto.DsEmail;
-        tutor.NrTelefone = dto.NrTelefone;
+        // TASK-60: mesmo coalesce de CreateAsync — TutorUpdateValidator também nunca teve regra
+        // NotEmpty() para NrTelefone.
+        tutor.NrTelefone = string.IsNullOrWhiteSpace(dto.NrTelefone)
+            ? "Não informado"
+            : dto.NrTelefone;
 
         _repository.Update(tutor);
         await _uow.CommitAsync();

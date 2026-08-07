@@ -29,12 +29,13 @@ public class PetServiceTests
             _uowMock.Object, _clinicaMock.Object, _tutorRepoMock.Object);
     }
 
-    private PetCreateDto ValidCreateDto() => new()
+    private PetCreateDto ValidCreateDto(string? dsVinculo = null) => new()
     {
         IdTutor = 20L, IdEspecie = 1L, IdRaca = 1L,
         IdVeterinarioResp = 5L, NmPet = "Rex",
         DtNascimento = new DateTime(2022, 1, 1),
-        SgSexo = 'M', SgPorte = 'M', StPrincipal = true
+        SgSexo = 'M', SgPorte = 'M', StPrincipal = true,
+        DsVinculo = dsVinculo ?? "PROPRIETARIO"
     };
 
     private void SetupTutor(long id) =>
@@ -111,5 +112,61 @@ public class PetServiceTests
 
         _petRepoMock.Verify(r => r.SoftDelete(It.IsAny<Pet>()), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateAsync_DsVinculoVazioOuWhitespace_ColescaParaProprietario(string dsVinculoBruto)
+    {
+        // TASK-60: TUTOR_PET.DS_VINCULO é NOT NULL (V1:156, migration imutável) e o Oracle trata
+        // VARCHAR2 vazio como NULL. PetCreateDto.DsVinculo já tem default "PROPRIETARIO" (não
+        // string.Empty) — mas um cliente que manda dsVinculo:"" explicitamente ainda estoura
+        // ORA-01400 (500) sem este coalesce.
+        SetupTutor(20L);
+        TutorPet? criado = null;
+        _tutorPetRepoMock.Setup(r => r.AddAsync(It.IsAny<TutorPet>()))
+            .Callback<TutorPet>(tp => criado = tp)
+            .Returns(Task.CompletedTask);
+
+        await _sut.CreateAsync(ValidCreateDto(dsVinculo: dsVinculoBruto));
+
+        criado.Should().NotBeNull();
+        criado!.DsVinculo.Should().Be("PROPRIETARIO");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DsVinculoPreenchido_NaoSobrescreveComDefault()
+    {
+        SetupTutor(20L);
+        TutorPet? criado = null;
+        _tutorPetRepoMock.Setup(r => r.AddAsync(It.IsAny<TutorPet>()))
+            .Callback<TutorPet>(tp => criado = tp)
+            .Returns(Task.CompletedTask);
+
+        await _sut.CreateAsync(ValidCreateDto(dsVinculo: "RESPONSAVEL_FINANCEIRO"));
+
+        criado.Should().NotBeNull();
+        criado!.DsVinculo.Should().Be("RESPONSAVEL_FINANCEIRO");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AdicionarTutorAsync_DsVinculoVazioOuWhitespace_ColescaParaCuidador(string dsVinculoBruto)
+    {
+        // Mesmo gap de PetCreateDto.DsVinculo — AdicionarTutorPetDto.DsVinculo tem default
+        // "CUIDADOR", mas dsVinculo:"" explícito também estoura ORA-01400.
+        SetupPet(1L);
+        _tutorPetRepoMock.Setup(r => r.ExistsAsync(30L, 1L)).ReturnsAsync(false);
+        TutorPet? criado = null;
+        _tutorPetRepoMock.Setup(r => r.AddAsync(It.IsAny<TutorPet>()))
+            .Callback<TutorPet>(tp => criado = tp)
+            .Returns(Task.CompletedTask);
+
+        await _sut.AdicionarTutorAsync(1L, new AdicionarTutorPetDto { IdTutor = 30L, DsVinculo = dsVinculoBruto });
+
+        criado.Should().NotBeNull();
+        criado!.DsVinculo.Should().Be("CUIDADOR");
     }
 }

@@ -72,7 +72,12 @@ public sealed class PetService : IPetService
         {
             IdTutor = dto.IdTutor,
             Pet = pet,
-            DsVinculo = dto.DsVinculo,
+            // TASK-60: TUTOR_PET.DS_VINCULO é NOT NULL (V1:156, migration imutável) e o Oracle
+            // trata VARCHAR2 vazio como NULL. PetCreateDto.DsVinculo já tem default "PROPRIETARIO"
+            // (não string.Empty), mas nada impede o cliente de mandar dsVinculo:"" explicitamente
+            // — sem este coalesce, esse payload estoura ORA-01400 (500). O fallback usa o próprio
+            // valor default do DTO, não um sentinela novo.
+            DsVinculo = string.IsNullOrWhiteSpace(dto.DsVinculo) ? "PROPRIETARIO" : dto.DsVinculo,
             StPrincipal = dto.StPrincipal
         };
 
@@ -117,7 +122,10 @@ public sealed class PetService : IPetService
         {
             IdTutor = dto.IdTutor,
             IdPet = idPet,
-            DsVinculo = dto.DsVinculo,
+            // TASK-60: mesmo gap de PetCreateDto.DsVinculo — AdicionarTutorPetDto.DsVinculo tem
+            // default "CUIDADOR", mas um dsVinculo:"" explícito no payload também estoura
+            // ORA-01400 em TUTOR_PET.DS_VINCULO sem este coalesce.
+            DsVinculo = string.IsNullOrWhiteSpace(dto.DsVinculo) ? "CUIDADOR" : dto.DsVinculo,
             StPrincipal = false
         };
 

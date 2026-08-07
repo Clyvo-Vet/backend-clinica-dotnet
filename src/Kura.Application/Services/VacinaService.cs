@@ -65,7 +65,14 @@ public sealed class VacinaService : IVacinaService
             EventoClinico = evento,
             NmVacina = dto.NmVacina,
             NrLote = dto.NrLote,
-            DsFabricante = dto.DsFabricante,
+            // TASK-60: VACINA.DS_FABRICANTE é NOT NULL (V9:170, migration imutável) e o Oracle
+            // trata VARCHAR2 vazio como NULL. VacinaCreateValidator só valida NmVacina/NrLote,
+            // nunca teve regra NotEmpty() para DsFabricante — sem este coalesce, um payload sem
+            // esse campo estoura ORA-01400 (500) no INSERT. Mesmo padrão da TASK-56: a restrição
+            // de armazenamento se resolve aqui, não como regra de negócio no validator.
+            DsFabricante = string.IsNullOrWhiteSpace(dto.DsFabricante)
+                ? "Fabricante não informado"
+                : dto.DsFabricante,
             DtProximaDose = dto.DtProximaDose
         };
 
