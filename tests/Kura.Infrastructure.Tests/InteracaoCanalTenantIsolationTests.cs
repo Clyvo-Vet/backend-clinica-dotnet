@@ -12,10 +12,19 @@ using Moq;
 /// armadilha documentada em CLAUDE.md/TenantFilterCoverageTests — o filtro DESLIGA
 /// inteiro (não nega) quando IdClinicaFiltro é null, que é sempre o caso real para os
 /// 3 endpoints consumidos pela Luna (autenticados por API Key, sem JWT de clínica).
-/// O isolamento real desses endpoints vem do escopo explícito no LINQ do
-/// LunaService/TutorService (deriva ID_CLINICA do tutor) — não deste query filter, que
-/// é só defesa em profundidade para uma futura leitura autenticada desta tabela.
-/// Mesmo padrão de MetricsControllerTenantScopeTests/TenantFilterCoverageTests.
+///
+/// CORREÇÃO (fix round 1, Important-3 da revisão): esta classe dizia que "o isolamento
+/// real desses endpoints vem do escopo explícito no LINQ do LunaService/TutorService" —
+/// impreciso. As leituras desses services são <c>GetByIdAsync</c> por PK
+/// (<c>FindAsync</c>), não uma query LINQ escopada por IdClinica — e o revisor
+/// confirmou por teste isolado que <c>FindAsync</c> aplica os query filters
+/// normalmente (não é o problema). O que de fato garante isolamento aqui: o
+/// <c>ID_CLINICA</c> da linha ESCRITA é sempre derivado do tutor (correto e suficiente
+/// para essa coluna), e — desde este fix — <c>LunaService.RegistrarTriagemAsync</c>
+/// valida explicitamente que <c>interacao.IdClinica == tutor.IdClinica</c> antes de
+/// gravar a FK, porque este query filter sozinho (inerte sem JWT) não pega esse tipo
+/// de inconsistência cross-tenant. Mesmo padrão de
+/// MetricsControllerTenantScopeTests/TenantFilterCoverageTests.
 /// </summary>
 public class InteracaoCanalTenantIsolationTests
 {
@@ -82,9 +91,12 @@ public class InteracaoCanalTenantIsolationTests
     {
         // Este é o caso REAL dos 3 endpoints da Luna: chamada por API Key, sem JWT ⇒
         // IdClinicaFiltro é sempre null aqui. O query filter, sozinho, NÃO isola nada
-        // nesse cenário — é por isso que LunaService/TutorService escopam
-        // explicitamente por IdClinica no LINQ ao ler/derivar (ver LunaService e
-        // TutorRepository.GetByTelefoneAsync), em vez de confiar neste filtro.
+        // nesse cenário. O que compensa: ID_CLINICA da linha escrita vem sempre do
+        // tutor (LunaService/TutorRepository.GetByTelefoneAsync), e a consistência da
+        // FK ID_INTERACAO é checada explicitamente em
+        // LunaService.RegistrarTriagemAsync (interacao.IdClinica == tutor.IdClinica) —
+        // nenhuma das duas coisas é "escopo no LINQ": são checagens depois de ler por
+        // PK, não uma query filtrada.
         var dbName = Guid.NewGuid().ToString();
         await SeedDuasClinicasAsync(dbName);
 
@@ -93,7 +105,8 @@ public class InteracaoCanalTenantIsolationTests
 
         interacoes.Should().HaveCount(2,
             "sem contexto de clínica o filtro desliga inteiro (não nega) — comportamento " +
-            "documentado, não bug. O isolamento real vem do escopo explícito no service.");
+            "documentado, não bug. A compensação real vem da derivação de ID_CLINICA a " +
+            "partir do tutor mais a checagem cross-FK em RegistrarTriagemAsync, não deste filtro.");
     }
 
     [Fact]

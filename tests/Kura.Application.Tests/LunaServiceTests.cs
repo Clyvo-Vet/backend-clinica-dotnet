@@ -179,11 +179,14 @@ public class LunaServiceTests
     }
 
     [Fact]
-    public async Task RegistrarInteracaoAsync_ConteudoMaiorQue4000_Trunca()
+    public async Task RegistrarInteracaoAsync_ConteudoMaiorQue4000_TruncaComMarcador()
     {
         // DS_CONTEUDO é VARCHAR2(4000) NOT NULL — sem truncar, o Oracle real
         // estouraria (na verdade Oracle trunca com erro ORA-12899, "value too large
         // for column"), não silenciosamente. Truncar aqui evita o 500 completamente.
+        // Conteúdo só-ASCII: 1 char = 1 byte, então este teste NÃO cobre o Important-2
+        // (byte vs char) — ver RegistrarInteracaoAsync_ConteudoAcentuadoMaiorQue4000Bytes_TruncaPorBytesNaoPorCaracteres
+        // logo abaixo para o caso que de fato distingue os dois.
         var tutor = TutorClinica42();
         _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
 
@@ -205,8 +208,92 @@ public class LunaServiceTests
 
         await _sut.RegistrarInteracaoAsync(dto);
 
-        capturada!.DsConteudo.Length.Should().Be(4000);
-        capturada.DsConteudo.Should().Be(conteudoGigante[..4000]);
+        System.Text.Encoding.UTF8.GetByteCount(capturada!.DsConteudo).Should().BeLessThanOrEqualTo(4000);
+        capturada.DsConteudo.Should().EndWith("…[truncado]",
+            "Minor-5 da revisão: quem lê a linha depois precisa distinguir mensagem " +
+            "curta de mensagem cortada");
+    }
+
+    [Fact]
+    public async Task RegistrarInteracaoAsync_ConteudoAcentuadoMaiorQue4000Bytes_TruncaPorBytesNaoPorCaracteres()
+    {
+        // TASK-67 fix round 1 — Important-2 da revisão, teste que morde: revertendo
+        // TruncarPorBytesUtf8 para um truncamento por CARACTERE (dto.DsConteudo[..4000]),
+        // este teste falha (o texto acentuado gerado tem exatamente 4000 caracteres mas
+        // ~5600+ bytes em UTF-8 — muito acima do teto real da coluna
+        // VARCHAR2(4000) BYTE). Com o fix (truncar por Rune, medindo bytes UTF-8 de
+        // verdade), o resultado cabe sempre dentro de 4000 bytes.
+        var tutor = TutorClinica42();
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+
+        InteracaoCanal? capturada = null;
+        _interacaoRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<InteracaoCanal>()))
+            .Callback<InteracaoCanal>(i => capturada = i)
+            .Returns(Task.CompletedTask);
+
+        // "não é possível avaliação " tem acentos e cedilhas — cada um custa 2 bytes em
+        // UTF-8. Repetido até passar de 4000 caracteres (WhatsApp aceita até 4096).
+        var trechoAcentuado = "não é possível avaliação sem informação adicional çãêôáíóú ";
+        var conteudoAcentuado = string.Concat(Enumerable.Repeat(trechoAcentuado, 100))[..4000];
+
+        var dto = new InteractionRequestDto
+        {
+            IdTutor = tutor.Id,
+            DsCanal = "WHATSAPP",
+            DsDirecao = "INBOUND",
+            DsConteudo = conteudoAcentuado,
+            DtRecebimento = DateTime.UtcNow
+        };
+
+        await _sut.RegistrarInteracaoAsync(dto);
+
+        var bytesGravados = System.Text.Encoding.UTF8.GetByteCount(capturada!.DsConteudo);
+        bytesGravados.Should().BeLessThanOrEqualTo(4000,
+            "VARCHAR2(4000) sem CHAR herda NLS_LENGTH_SEMANTICS=BYTE (default Oracle) — " +
+            "gravar mais que 4000 bytes estoura ORA-12899 (500) contra Oracle real, " +
+            "mesmo que o C# ache que 'só' são 4000 caracteres");
+    }
+
+    [Fact]
+    public async Task RegistrarInteracaoAsync_ConteudoComEmojiNoLimite_NaoQuebraParDeSurrogate()
+    {
+        // Emoji custa 4 bytes UTF-8 e é representado por um par substituto (2 code
+        // units) em C#. Um truncamento ingênuo por índice de char podia cortar bem no
+        // meio do par, produzindo uma string malformada. TruncarPorBytesUtf8 itera por
+        // Rune (unidade Unicode completa), então isso nunca acontece.
+        var tutor = TutorClinica42();
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+
+        InteracaoCanal? capturada = null;
+        _interacaoRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<InteracaoCanal>()))
+            .Callback<InteracaoCanal>(i => capturada = i)
+            .Returns(Task.CompletedTask);
+
+        // 3999 'a' (1 byte cada) + uma sequência de emojis (4 bytes cada) — o corte cai
+        // exatamente na fronteira de um emoji.
+        var conteudoComEmoji = new string('a', 3999) + string.Concat(Enumerable.Repeat("🐾", 50));
+
+        var dto = new InteractionRequestDto
+        {
+            IdTutor = tutor.Id,
+            DsCanal = "WHATSAPP",
+            DsDirecao = "INBOUND",
+            DsConteudo = conteudoComEmoji,
+            DtRecebimento = DateTime.UtcNow
+        };
+
+        await _sut.RegistrarInteracaoAsync(dto);
+
+        // String.IsNormalized não detecta par quebrado de forma confiável — a prova
+        // real é: reencodar para UTF-8 e decodificar de volta não pode lançar nem
+        // produzir caractere de substituição (U+FFFD), o que aconteceria com um
+        // surrogate órfão.
+        var bytes = System.Text.Encoding.UTF8.GetBytes(capturada!.DsConteudo);
+        var textoRoundTrip = System.Text.Encoding.UTF8.GetString(bytes);
+        textoRoundTrip.Should().NotContain("�", "um par substituto quebrado vira U+FFFD no round-trip UTF-8");
+        System.Text.Encoding.UTF8.GetByteCount(capturada.DsConteudo).Should().BeLessThanOrEqualTo(4000);
     }
 
     [Fact]
@@ -320,7 +407,106 @@ public class LunaServiceTests
 
         await _sut.RegistrarTriagemAsync(dto);
 
-        capturada!.DsDescricao.Length.Should().Be(2000);
+        System.Text.Encoding.UTF8.GetByteCount(capturada!.DsDescricao).Should().BeLessThanOrEqualTo(2000);
+        capturada.DsDescricao.Should().EndWith("…[truncado]");
+    }
+
+    [Fact]
+    public async Task RegistrarTriagemAsync_DescricaoAcentuadaMaiorQue2000Bytes_TruncaPorBytesNaoPorCaracteres()
+    {
+        // Mesmo bug de Important-2, no outro campo que passa pelo mesmo helper
+        // (TruncarPorBytesUtf8) — DS_DESCRICAO é VARCHAR2(2000) BYTE.
+        var tutor = TutorClinica42();
+        var interacao = InteracaoExistente();
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+        _interacaoRepoMock.Setup(r => r.GetByIdAsync(interacao.Id)).ReturnsAsync(interacao);
+
+        TriagemLuna? capturada = null;
+        _triagemRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<TriagemLuna>()))
+            .Callback<TriagemLuna>(t => capturada = t)
+            .Returns(Task.CompletedTask);
+
+        var recomendacaoAcentuada = string.Concat(Enumerable.Repeat(
+            "recomendação médica não é possível sem avaliação presencial çãêôáíóú ", 60));
+
+        var dto = new TriageRequestDto
+        {
+            IdInteracao = interacao.Id,
+            IdTutor = tutor.Id,
+            Sintomas = ["vomito"],
+            DsUrgencia = "ALTA",
+            NrScore = 90,
+            DsRecomendacao = recomendacaoAcentuada
+        };
+
+        await _sut.RegistrarTriagemAsync(dto);
+
+        System.Text.Encoding.UTF8.GetByteCount(capturada!.DsDescricao).Should().BeLessThanOrEqualTo(2000,
+            "DS_DESCRICAO é VARCHAR2(2000) BYTE — o mesmo raciocínio do Important-2 " +
+            "se aplica aqui, não só em DS_CONTEUDO");
+    }
+
+    [Fact]
+    public async Task RegistrarTriagemAsync_InteracaoDeOutraClinica_Lanca422ENaoGrava()
+    {
+        // TASK-67 fix round 1 — Important-3 da revisão, teste que morde: sem a
+        // checagem `interacao.IdClinica != tutor.IdClinica`, este teste passaria uma
+        // triagem gravável com FK cruzando clínicas (interação da clínica 99 associada
+        // a um tutor da clínica 42). Nas condições reais destes 3 endpoints (API Key,
+        // sem JWT), o query filter de tenant fica inerte — ver
+        // InteracaoCanalTenantIsolationTests — então esta checagem explícita é a única
+        // defesa real contra essa inconsistência cross-tenant.
+        var tutor = TutorClinica42(); // IdClinica = 42
+        var interacaoDeOutraClinica = InteracaoExistente(id: 200, idClinica: 99);
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+        _interacaoRepoMock.Setup(r => r.GetByIdAsync(interacaoDeOutraClinica.Id)).ReturnsAsync(interacaoDeOutraClinica);
+
+        var dto = new TriageRequestDto
+        {
+            IdInteracao = interacaoDeOutraClinica.Id,
+            IdTutor = tutor.Id,
+            Sintomas = ["vomito"],
+            DsUrgencia = "ALTA",
+            NrScore = 90,
+            DsRecomendacao = "levar ao vet"
+        };
+
+        var act = async () => await _sut.RegistrarTriagemAsync(dto);
+
+        var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
+        ex.Which.Message.Should().NotContain("42").And.NotContain("99",
+            "mensagem sem PII/detalhe interno de propósito — só que a combinação é inválida");
+        _triagemRepoMock.Verify(r => r.AddAsync(It.IsAny<TriagemLuna>()), Times.Never,
+            "a triagem cross-tenant não pode chegar a ser gravada");
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarTriagemAsync_InteracaoDaMesmaClinica_NaoLanca()
+    {
+        // Contraparte "caminho feliz" do teste acima — prova que a checagem nova não
+        // é falso-positivo pro caso normal (interação e tutor da mesma clínica).
+        var tutor = TutorClinica42();
+        var interacao = InteracaoExistente(idClinica: 42);
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+        _interacaoRepoMock.Setup(r => r.GetByIdAsync(interacao.Id)).ReturnsAsync(interacao);
+        _triagemRepoMock.Setup(r => r.AddAsync(It.IsAny<TriagemLuna>())).Returns(Task.CompletedTask);
+
+        var dto = new TriageRequestDto
+        {
+            IdInteracao = interacao.Id,
+            IdTutor = tutor.Id,
+            Sintomas = ["vomito"],
+            DsUrgencia = "ALTA",
+            NrScore = 90,
+            DsRecomendacao = "levar ao vet"
+        };
+
+        var act = async () => await _sut.RegistrarTriagemAsync(dto);
+
+        await act.Should().NotThrowAsync();
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 namespace Kura.Application.Services;
 
+using System.Text;
 using Kura.Application.DTOs.Luna;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Entities;
@@ -14,14 +15,26 @@ public sealed class LunaService : ILunaService
     // de rejeitar: o objetivo deste backlog é parar de perder mensagem de WhatsApp
     // silenciosamente — devolver 422 para uma mensagem longa recria exatamente esse
     // sintoma (a Luna cai no except genérico e a interação nunca é persistida). Perder
-    // a cauda de uma mensagem rara acima de 4000 chars é preferível a perder o registro
+    // a cauda de uma mensagem rara acima do teto é preferível a perder o registro
     // inteiro. ds_conteudo nunca é vazio aqui (InteractionRequestValidator.NotEmpty()),
     // então truncar não reintroduz o bug '' -> NULL.
-    private const int MaxTamanhoConteudo = 4000;
+    //
+    // TASK-67 fix round 1 (Important-2 da revisão): "4000" aqui é o teto em BYTES da
+    // coluna, não em caracteres. VARCHAR2(4000) sem "CHAR" herda NLS_LENGTH_SEMANTICS,
+    // cujo default Oracle é BYTE; num banco AL32UTF8 (o do compose) cada acentuado
+    // custa 2 bytes e cada emoji até 4. Truncar em 4000 *caracteres* podia estourar
+    // 4000 *bytes* com uma mensagem de WhatsApp acentuada (WhatsApp aceita até 4096
+    // chars) → ORA-12899 → 500 — a mesma classe de bug Oracle-only do FIX_4, que
+    // InMemory nunca reproduz. TruncarPorBytesUtf8 corta por Rune (nunca no meio de um
+    // caractere multibyte/par substituto) e mede o resultado em bytes UTF-8 de verdade.
+    private const int MaxTamanhoConteudoBytes = 4000;
 
     // DS_DESCRICAO é VARCHAR2(2000) NOT NULL (V9__schema_drift_clinico.sql) e é onde
     // sintomas[]/nr_score/ds_recomendacao são compostos (decisão 2, ver RegistrarTriagemAsync).
-    private const int MaxTamanhoDescricaoTriagem = 2000;
+    // Mesmo raciocínio de bytes-vs-caracteres do MaxTamanhoConteudoBytes acima.
+    private const int MaxTamanhoDescricaoTriagemBytes = 2000;
+
+    private const string MarcadorTruncamento = "…[truncado]";
 
     private readonly ITriagemLunaRepository _triagemRepository;
     private readonly IRepository<InteracaoCanal> _interacaoRepository;
@@ -84,9 +97,7 @@ public sealed class LunaService : ILunaService
         var tutor = await _tutorRepository.GetByIdAsync(dto.IdTutor.Value)
             ?? throw new EntidadeNaoEncontradaException("Tutor", dto.IdTutor.Value);
 
-        var conteudo = dto.DsConteudo.Length > MaxTamanhoConteudo
-            ? dto.DsConteudo[..MaxTamanhoConteudo]
-            : dto.DsConteudo;
+        var conteudo = TruncarPorBytesUtf8(dto.DsConteudo, MaxTamanhoConteudoBytes);
 
         var interacao = new InteracaoCanal
         {
@@ -112,6 +123,21 @@ public sealed class LunaService : ILunaService
 
         var tutor = await _tutorRepository.GetByIdAsync(dto.IdTutor)
             ?? throw new EntidadeNaoEncontradaException("Tutor", dto.IdTutor);
+
+        // TASK-67 fix round 1 (Important-3 da revisão): sem JWT de clínica nestes 3
+        // endpoints, IdClinicaFiltro é sempre null e o HasQueryFilter de
+        // KuraDbContext.ApplyTenantFilters fica INERTE (não filtra nada) — as duas
+        // leituras acima (GetByIdAsync por PK) não escopam por clínica sozinhas. Sem
+        // esta checagem, uma triagem gravada com ID_CLINICA da clínica do tutor podia
+        // carregar ID_INTERACAO apontando para uma interação de OUTRA clínica —
+        // inconsistência de FK cross-tenant que hoje não vaza conteúdo (nenhum join
+        // lê INTERACAO_CANAL a partir de TRIAGEM_LUNA), mas vira vazamento real no dia
+        // em que alguém adicionar esse join. Mensagem sem PII de propósito.
+        if (interacao.IdClinica != tutor.IdClinica)
+        {
+            throw new RegraDeNegocioException(
+                "id_interacao não pertence à clínica do tutor informado (id_tutor).");
+        }
 
         var triagem = new TriagemLuna
         {
@@ -145,8 +171,40 @@ public sealed class LunaService : ILunaService
     {
         var sintomasTexto = sintomas.Count > 0 ? string.Join(", ", sintomas) : "não informado";
         var texto = $"Sintomas: {sintomasTexto}. Score: {score}. Recomendação: {recomendacao}";
-        return texto.Length > MaxTamanhoDescricaoTriagem
-            ? texto[..MaxTamanhoDescricaoTriagem]
-            : texto;
+        return TruncarPorBytesUtf8(texto, MaxTamanhoDescricaoTriagemBytes);
+    }
+
+    /// <summary>
+    /// TASK-67 fix round 1 (Important-2 da revisão): trunca <paramref name="texto"/> para
+    /// caber em <paramref name="maxBytes"/> bytes UTF-8 — não em caracteres. Itera por
+    /// <see cref="Rune"/> (unidade de escalar Unicode completa: nunca quebra um par
+    /// substituto/emoji ao meio) somando o comprimento UTF-8 de cada um
+    /// (<see cref="Rune.Utf8SequenceLength"/>) até que o próximo não caiba mais. Quando
+    /// trunca de fato, reserva espaço para <see cref="MarcadorTruncamento"/> (Minor-5 da
+    /// revisão: sem marcador, quem lê a linha depois não distingue "mensagem curta" de
+    /// "mensagem cortada") — o orçamento de bytes é sempre respeitado, marcador incluso.
+    /// </summary>
+    internal static string TruncarPorBytesUtf8(string texto, int maxBytes)
+    {
+        if (Encoding.UTF8.GetByteCount(texto) <= maxBytes)
+            return texto;
+
+        var marcadorBytes = Encoding.UTF8.GetByteCount(MarcadorTruncamento);
+        var orcamentoTexto = Math.Max(0, maxBytes - marcadorBytes);
+
+        var builder = new StringBuilder();
+        var bytesUsados = 0;
+        foreach (var rune in texto.EnumerateRunes())
+        {
+            var bytesRune = rune.Utf8SequenceLength;
+            if (bytesUsados + bytesRune > orcamentoTexto)
+                break;
+
+            builder.Append(rune.ToString());
+            bytesUsados += bytesRune;
+        }
+
+        builder.Append(MarcadorTruncamento);
+        return builder.ToString();
     }
 }

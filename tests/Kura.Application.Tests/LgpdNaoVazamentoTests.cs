@@ -14,12 +14,23 @@ using Kura.Domain.Interfaces;
 /// aparecer em log de aplicação, em LOG_ERRO, ou em mensagem de exceção — mesma classe
 /// de vazamento que a TASK-46 corrigiu do lado da Luna (telefone cru em log).
 ///
-/// Por que isto é suficiente como prova: <c>ExceptionHandlerMiddleware</c> (Kura.Api)
-/// só loga/devolve <c>ex.Message</c> — nunca lê campos do request diretamente — e
-/// documenta explicitamente que não escreve em LOG_ERRO (essa tabela é escrita só pela
-/// Luna, PL/SQL). Logo, "nenhuma exceção lançada pelo caminho novo (TASK-67) interpola
-/// ds_conteudo/telefone na sua Message" fecha o requisito de ponta a ponta: não há
-/// nenhum outro lugar no código novo que logue esses campos.
+/// CORREÇÃO (fix round 1, Important-1 da revisão cética): a versão anterior deste
+/// comentário afirmava que "o middleware nunca lê campos do request diretamente" — isso
+/// era **falso**. <c>ExceptionHandlerMiddleware</c> loga <c>context.Request.Path</c>
+/// integralmente, e GET /api/v1/tutores/telefone/{numero} carrega o telefone **no
+/// path**, não no body — logo o telefone vazava para o log em qualquer exceção nesse
+/// endpoint. Corrigido em <c>ExceptionHandlerMiddleware.RedigirPathSensivel</c> e
+/// provado de verdade (exercitando o middleware com um logger capturador, não por
+/// leitura de código) em <c>ExceptionHandlerMiddlewareLgpdTests.cs</c>
+/// (`tests/Kura.Infrastructure.Tests/`).
+///
+/// O que ESTA classe prova, com escopo mais estreito e honesto: nenhuma exceção
+/// lançada pelo caminho novo (TASK-67) interpola <c>ds_conteudo</c> na sua
+/// <c>Message</c> (o corpo RFC 7807 devolve <c>ex.Message</c> como <c>title</c>, e o
+/// middleware também loga o texto da exceção — então a Message em si é sensível). Para
+/// o telefone, o caminho de "não encontrado" em <c>BuscarContextoPorTelefoneAsync</c>
+/// é modelado como retorno <c>null</c>, nunca exceção — não há Message nenhuma para
+/// inspecionar nesse caso, o que já elimina esse vetor por construção.
 /// </summary>
 public class LgpdNaoVazamentoTests
 {
