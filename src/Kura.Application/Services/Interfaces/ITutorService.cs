@@ -1,5 +1,6 @@
 namespace Kura.Application.Services.Interfaces;
 
+using Kura.Application.DTOs.Luna;
 using Kura.Application.DTOs.Pet;
 using Kura.Application.DTOs.Tutor;
 
@@ -11,4 +12,13 @@ public interface ITutorService
     Task<TutorComInviteResponseDto> CreateAsync(TutorCreateDto dto, long clinicaId);
     Task<TutorResponseDto> UpdateAsync(long id, TutorUpdateDto dto);
     Task SoftDeleteAsync(long id);
+
+    /// <summary>
+    /// TASK-67: GET /api/v1/tutores/telefone/{numero} — consumido pela IA Luna para
+    /// resolver clínica + pets a partir do WhatsApp, antes de registrar interações.
+    /// Deliberadamente sem escopo de clínica (ver ITutorRepository.GetByTelefoneAsync).
+    /// Retorna null se não houver tutor ativo com esse telefone (controller mapeia
+    /// para 404).
+    /// </summary>
+    Task<TutorContextoLunaDto?> BuscarContextoPorTelefoneAsync(string numero);
 }

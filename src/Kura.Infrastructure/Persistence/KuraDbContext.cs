@@ -35,6 +35,7 @@ public class KuraDbContext : DbContext
     public DbSet<AlertaTemperatura> AlertasTemperatura => Set<AlertaTemperatura>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
+    public DbSet<InteracaoCanal> InteracoesCanal => Set<InteracaoCanal>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
     public DbSet<ContaTutor> ContasTutor => Set<ContaTutor>();
     public DbSet<Consentimento> Consentimentos => Set<Consentimento>();
@@ -98,6 +99,20 @@ public class KuraDbContext : DbContext
                  e.IdClinica == _clinicaContext.IdClinicaFiltro);
 
         modelBuilder.Entity<TriagemLuna>()
+            .HasQueryFilter(e => e.StAtiva &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        // TASK-67: InteracaoCanal também entra aqui (TenantFilterCoverageTests exige
+        // filtro OU allowlist, e a allowlist está fechada só para Agendamento). Na
+        // prática, os 3 endpoints consumidos pela Luna são chamados sem JWT de clínica
+        // (autenticação por API Key — LunaApiKeyAuthFilter), então
+        // IdClinicaFiltro é sempre null nessas chamadas e este filtro fica inerte:
+        // o isolamento de tenant real nesses endpoints vem do escopo explícito no LINQ
+        // do LunaService/TutorService (deriva ID_CLINICA do tutor), não deste filtro.
+        // O filtro continua útil como defesa em profundidade para qualquer leitura
+        // futura desta tabela feita com JWT de clínica (ex.: um relatório autenticado).
+        modelBuilder.Entity<InteracaoCanal>()
             .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));

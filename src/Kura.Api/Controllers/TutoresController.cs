@@ -1,5 +1,7 @@
 namespace Kura.Api.Controllers;
 
+using Kura.Api.Filters;
+using Kura.Application.DTOs.Luna;
 using Kura.Application.DTOs.Pet;
 using Kura.Application.DTOs.Tutor;
 using Kura.Application.Services.Interfaces;
@@ -62,6 +64,30 @@ public class TutoresController : ControllerBase
     {
         var result = await _service.GetPetsAsync(id);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// TASK-67: busca o contexto completo de um tutor (clínica + pets) pelo número de
+    /// WhatsApp. Consumido pela IA Luna antes de registrar interações/triagens — chamada
+    /// servidor-a-servidor, autenticada por API Key (ver <see cref="LunaApiKeyAuthFilter"/>),
+    /// nunca pelo JWT de clínica exigido pelo resto deste controller ([AllowAnonymous]
+    /// sobrepõe o [Authorize] de classe só nesta ação).
+    /// </summary>
+    /// <param name="numero">Número de WhatsApp do tutor (mesmo formato salvo em NrTelefone).</param>
+    /// <returns>Contexto do tutor (id, nome, telefone, clínica, pets).</returns>
+    /// <response code="200">Tutor encontrado.</response>
+    /// <response code="401">API Key ausente ou inválida.</response>
+    /// <response code="404">Nenhum tutor ativo com esse telefone.</response>
+    [HttpGet("telefone/{numero}")]
+    [AllowAnonymous]
+    [ServiceFilter(typeof(LunaApiKeyAuthFilter))]
+    [ProducesResponseType(typeof(TutorContextoLunaDto), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetPorTelefone(string numero)
+    {
+        var contexto = await _service.BuscarContextoPorTelefoneAsync(numero);
+        return contexto is null ? NotFound() : Ok(contexto);
     }
 
     /// <summary>

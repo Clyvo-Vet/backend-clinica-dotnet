@@ -9,4 +9,11 @@ public class TriagemLuna : EntidadeBase
     public string DsDescricao { get; set; } = string.Empty;
     public bool StEncaminhadoVet { get; set; }
     public DateTime DtTriagem { get; set; }
+
+    /// <summary>
+    /// FK nullable para INTERACAO_CANAL (TASK-66/67) — liga a triagem à interação de
+    /// canal que a originou. TriageRequestDTO da Luna sempre envia id_interacao, mas a
+    /// coluna nasceu nullable porque TRIAGEM_LUNA é pré-existente (V9).
+    /// </summary>
+    public long? IdInteracao { get; set; }
 }

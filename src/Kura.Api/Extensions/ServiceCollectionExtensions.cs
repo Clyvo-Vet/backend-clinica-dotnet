@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IClinicaContext, ClinicaContext>();
         services.AddScoped<Kura.Api.Filters.ApiKeyAuthFilter>();
+        services.AddScoped<Kura.Api.Filters.LunaApiKeyAuthFilter>();
 
         // Repositórios especializados
         services.AddScoped<IClinicaRepository, ClinicaRepository>();

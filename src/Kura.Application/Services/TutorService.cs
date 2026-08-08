@@ -1,5 +1,6 @@
 namespace Kura.Application.Services;
 
+using Kura.Application.DTOs.Luna;
 using Kura.Application.DTOs.Pet;
 using Kura.Application.DTOs.Tutor;
 using Kura.Application.Services.Interfaces;
@@ -140,6 +141,42 @@ public sealed class TutorService : ITutorService
             ?? throw new EntidadeNaoEncontradaException("Tutor", id);
         _repository.SoftDelete(tutor);
         await _uow.CommitAsync();
+    }
+
+    public async Task<TutorContextoLunaDto?> BuscarContextoPorTelefoneAsync(string numero)
+    {
+        // TASK-67: SEM idClinica — este é justamente o endpoint que resolve a clínica a
+        // partir do telefone para um caller sem JWT (a IA Luna). Ver comentário em
+        // ITutorRepository.GetByTelefoneAsync. Mensagem de erro (se o tutor não existir)
+        // nunca deve interpolar `numero` — LGPD, ver InteracaoCanalLgpdTests.
+        var tutor = await _repository.GetByTelefoneAsync(numero);
+        if (tutor is null)
+            return null;
+
+        var vinculos = await _tutorPetRepository.GetByTutorIdAsync(tutor.Id);
+        var pets = new List<PetResumoLunaDto>();
+        foreach (var vinculo in vinculos)
+        {
+            var pet = vinculo.Pet;
+            var especie = await _especieRepository.GetByIdAsync(pet.IdEspecie);
+            var raca = await _racaRepository.GetByIdAsync(pet.IdRaca);
+            pets.Add(new PetResumoLunaDto
+            {
+                IdPet = pet.Id,
+                NmPet = pet.NmPet,
+                NmEspecie = especie?.NmEspecie ?? string.Empty,
+                NmRaca = raca?.NmRaca
+            });
+        }
+
+        return new TutorContextoLunaDto
+        {
+            IdTutor = tutor.Id,
+            NmTutor = tutor.NmTutor,
+            DsWhatsapp = tutor.NrTelefone,
+            IdClinica = tutor.IdClinica,
+            Pets = pets
+        };
     }
 
     private static TutorResponseDto ToResponse(Tutor t) => new()

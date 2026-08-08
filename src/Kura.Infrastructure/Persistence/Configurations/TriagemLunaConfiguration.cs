@@ -44,6 +44,11 @@ public class TriagemLunaConfiguration : IEntityTypeConfiguration<TriagemLuna>
             .HasColumnName("DT_TRIAGEM")
             .IsRequired();
 
+        // TASK-67: FK nullable adicionada pela V15 (backend-tutor-java) — liga a
+        // triagem à interação de canal que a originou.
+        builder.Property(e => e.IdInteracao)
+            .HasColumnName("ID_INTERACAO");
+
         builder.Property(e => e.StAtiva)
             .HasColumnName("ST_ATIVA")
             .HasColumnType("CHAR(1)")

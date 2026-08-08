@@ -220,4 +220,89 @@ public class TutorServiceTests
 
         tutorExistente.NrTelefone.Should().Be("11977776666");
     }
+
+    // ── BuscarContextoPorTelefoneAsync (TASK-67) ────────────────────────────
+
+    [Fact]
+    public async Task BuscarContextoPorTelefoneAsync_TelefoneInexistente_RetornaNull()
+    {
+        _tutorRepoMock.Setup(r => r.GetByTelefoneAsync("5511900000000"))
+            .ReturnsAsync((Tutor?)null);
+
+        var result = await _sut.BuscarContextoPorTelefoneAsync("5511900000000");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task BuscarContextoPorTelefoneAsync_TutorExiste_RetornaContextoComIdClinicaEPets()
+    {
+        var tutor = new Tutor
+        {
+            Id = 7,
+            IdClinica = 42,
+            NmTutor = "Fulano",
+            NrCpf = "11122233344",
+            DsEmail = "fulano@teste.com",
+            NrTelefone = "5511999990000",
+            StAtiva = true
+        };
+        var pet = new Pet { Id = 3, IdClinica = 42, IdEspecie = 1, IdRaca = 5, NmPet = "Rex", DtNascimento = DateTime.UtcNow, StAtiva = true };
+        var especie = new Especie { Id = 1, NmEspecie = "Cachorro" };
+        var raca = new Raca { Id = 5, IdEspecie = 1, NmRaca = "Vira-lata" };
+
+        _tutorRepoMock.Setup(r => r.GetByTelefoneAsync("5511999990000")).ReturnsAsync(tutor);
+        _tutorPetRepoMock.Setup(r => r.GetByTutorIdAsync(tutor.Id))
+            .ReturnsAsync(new List<TutorPet> { new() { IdTutor = tutor.Id, IdPet = pet.Id, Pet = pet } });
+        _especieRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(especie);
+        _racaRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(raca);
+
+        var result = await _sut.BuscarContextoPorTelefoneAsync("5511999990000");
+
+        result.Should().NotBeNull();
+        result!.IdTutor.Should().Be(7);
+        result.NmTutor.Should().Be("Fulano");
+        result.DsWhatsapp.Should().Be("5511999990000");
+        result.IdClinica.Should().Be(42, "quem chama (a Luna) não sabe a clínica antecipadamente — é isto que o endpoint resolve");
+        result.Pets.Should().ContainSingle();
+        result.Pets[0].IdPet.Should().Be(3);
+        result.Pets[0].NmPet.Should().Be("Rex");
+        result.Pets[0].NmEspecie.Should().Be("Cachorro");
+        result.Pets[0].NmRaca.Should().Be("Vira-lata");
+    }
+
+    [Fact]
+    public async Task BuscarContextoPorTelefoneAsync_TutorSemPets_RetornaListaVazia()
+    {
+        var tutor = new Tutor { Id = 8, IdClinica = 42, NmTutor = "Ciclano", NrTelefone = "5511988887777", StAtiva = true };
+        _tutorRepoMock.Setup(r => r.GetByTelefoneAsync("5511988887777")).ReturnsAsync(tutor);
+        _tutorPetRepoMock.Setup(r => r.GetByTutorIdAsync(tutor.Id)).ReturnsAsync(new List<TutorPet>());
+
+        var result = await _sut.BuscarContextoPorTelefoneAsync("5511988887777");
+
+        result.Should().NotBeNull();
+        result!.Pets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BuscarContextoPorTelefoneAsync_TutorInexistente_NuncaMencionaONumeroBuscado()
+    {
+        // LGPD: o número de telefone não pode vazar em nenhuma mensagem/exceção que
+        // suba até o middleware/log — aqui não há exceção nenhuma (retorna null), o que
+        // já é a forma mais segura de "não encontrado" (sem construir mensagem alguma).
+        var numeroSensivel = "5511900001234";
+        _tutorRepoMock.Setup(r => r.GetByTelefoneAsync(numeroSensivel)).ReturnsAsync((Tutor?)null);
+
+        Exception? excecaoCapturada = null;
+        try
+        {
+            await _sut.BuscarContextoPorTelefoneAsync(numeroSensivel);
+        }
+        catch (Exception ex)
+        {
+            excecaoCapturada = ex;
+        }
+
+        excecaoCapturada.Should().BeNull("tutor não encontrado é modelado como null, não exceção — nada para vazar");
+    }
 }

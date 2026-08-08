@@ -25,4 +25,7 @@ public class TutorRepository : Repository<Tutor>, ITutorRepository
 
     public Task<Tutor?> GetByIdAsync(long id, long idClinica)
         => _dbSet.FirstOrDefaultAsync(t => t.Id == id && t.IdClinica == idClinica);
+
+    public Task<Tutor?> GetByTelefoneAsync(string numero)
+        => _dbSet.FirstOrDefaultAsync(t => t.NrTelefone == numero);
 }

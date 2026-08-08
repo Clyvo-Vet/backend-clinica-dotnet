@@ -169,6 +169,14 @@ A API conecta ao Oracle externo da FIAP. Nenhum banco de dados local é necessá
 | Dispositivos IoT (ESP32) | API Key — `X-Api-Key: {key}` | Sensores de temperatura |
 | IA Luna (Python) | API Key — `X-Api-Key: {key}` | Chatbot de triagem |
 
+> A linha "IA Luna" acima documenta o par `Luna:ApiKey`/`LUNA_API_KEY` — a chave que a
+> Luna manda (`Authorization: Bearer` hoje, migrando para `X-Api-Key` na TASK-68) para
+> autenticar suas chamadas *para* este backend (`GET /tutores/telefone/{numero}`,
+> `POST /luna/interactions`, `POST /luna/triage` — TASK-67). **Não confundir** com
+> `Luna:InboundApiKey`/`LUNA_INBOUND_API_KEY`, usada na direção oposta (este backend →
+> Luna, `POST /transcricao`, FEAT-02). São duas chaves/direções diferentes mesmo
+> compartilhando o prefixo `Luna:` na config.
+
 ### Fluxo de autenticação JWT
 
 ```
@@ -222,6 +230,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tutores
 | GET | `/api/v1/tutores` | Listar tutores (busca por nome/CPF) | JWT |
 | GET | `/api/v1/tutores/{id}` | Buscar por ID | JWT |
 | GET | `/api/v1/tutores/{id}/pets` | Pets vinculados ao tutor | JWT |
+| GET | `/api/v1/tutores/telefone/{numero}` | Contexto do tutor (clínica + pets) pelo WhatsApp — consumido pela IA Luna (TASK-67) | API Key |
 | POST | `/api/v1/tutores` | Criar tutor + invite de onboarding (retorna `TutorComInviteResponseDto` com token UUID válido por 7 dias e canal WHATSAPP \| EMAIL \| SMS) | JWT |
 | PUT | `/api/v1/tutores/{id}` | Atualizar tutor | JWT |
 
@@ -265,6 +274,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tutores
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
 | GET | `/api/v1/luna/triagens/relatorio?dataInicio=&dataFim=` | Relatório agregado de triagens geradas pelo chatbot | JWT |
+| POST | `/api/v1/luna/interactions` | Registra interação de canal (WhatsApp/e-mail/SMS) recebida/enviada pela Luna (TASK-67) | API Key |
+| POST | `/api/v1/luna/triage` | Registra resultado de triagem de IA, ligado à interação de origem (TASK-67) | API Key |
 
 ### Dashboard
 

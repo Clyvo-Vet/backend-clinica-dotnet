@@ -12,4 +12,9 @@ public class TriagemLunaRepository(KuraDbContext context) : ITriagemLunaReposito
             .Where(t => t.DtTriagem >= dataInicio && t.DtTriagem <= dataFim)
             .ToListAsync();
     }
+
+    public async Task AddAsync(TriagemLuna entidade)
+    {
+        await context.TriagensLuna.AddAsync(entidade);
+    }
 }
