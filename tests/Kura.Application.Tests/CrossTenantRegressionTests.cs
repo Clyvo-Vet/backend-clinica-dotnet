@@ -10,6 +10,7 @@ using Kura.Domain.Interfaces;
 using Kura.Infrastructure.Persistence;
 using Kura.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
 /// TASK-21 — Testes de regressão para o vazamento cross-tenant em Tutor
@@ -47,7 +48,7 @@ public class CrossTenantRegressionTests
         clinicaContextMock.Setup(c => c.IdClinica).Returns(idClinica);
 
         return new TutorService(
-            new TutorRepository(ctx),
+            new TutorRepository(ctx, NullLogger<TutorRepository>.Instance),
             new TutorPetRepository(ctx),
             new Mock<IRepository<Especie>>().Object,
             new Mock<IRepository<Raca>>().Object,
@@ -187,7 +188,7 @@ public class CrossTenantRegressionTests
         // Soft delete via repositório real (mesmo caminho usado por TutorService.SoftDeleteAsync).
         await using (var ctxDelete = CreateContext(dbName, idClinicaFiltro: null))
         {
-            var repo = new TutorRepository(ctxDelete);
+            var repo = new TutorRepository(ctxDelete, NullLogger<TutorRepository>.Instance);
             var tutor = await repo.GetByIdAsync(1L, ClinicaA);
             tutor.Should().NotBeNull();
             repo.SoftDelete(tutor!);

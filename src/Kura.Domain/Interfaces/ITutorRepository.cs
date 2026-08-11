@@ -25,6 +25,15 @@ public interface ITutorRepository : IRepository<Tutor>
     /// já resolvido. O EF ainda aplica o HasQueryFilter de StAtiva (soft delete) — a
     /// parte de tenant do filtro fica inerte porque a chamada não tem
     /// IClinicaContext.IdClinicaFiltro (sem JWT), não porque foi ignorada de propósito.
+    ///
+    /// TASK-79: TUTOR.DS_TELEFONE não tem UNIQUE, então mais de um tutor ATIVO pode
+    /// compartilhar o mesmo número — inclusive dois tutores da MESMA clínica (ex.:
+    /// casal com o telefone da casa), não só entre clínicas diferentes. Telefone
+    /// ambíguo (>1 resultado, qualquer clínica) é tratado como "não encontrado"
+    /// (null), a mesma forma já usada para telefone inexistente. Consequência real da
+    /// colisão intra-clínica: aquele domicílio recebe o fallback genérico da Luna e a
+    /// interação é gravada com ID_CLINICA/ID_TUTOR nulos — decisão mantida de
+    /// propósito (ver TutorRepository.GetByTelefoneAsync para o raciocínio completo).
     /// </summary>
     Task<Tutor?> GetByTelefoneAsync(string numero);
 }

@@ -148,7 +148,11 @@ public sealed class TutorService : ITutorService
         // TASK-67: SEM idClinica — este é justamente o endpoint que resolve a clínica a
         // partir do telefone para um caller sem JWT (a IA Luna). Ver comentário em
         // ITutorRepository.GetByTelefoneAsync. Mensagem de erro (se o tutor não existir)
-        // nunca deve interpolar `numero` — LGPD, ver InteracaoCanalLgpdTests.
+        // nunca deve interpolar `numero` — LGPD, ver LgpdNaoVazamentoTests.
+        // TASK-79: `tutor is null` cobre TANTO "nenhum tutor com esse telefone" QUANTO
+        // "mais de um tutor ativo com esse telefone, qualquer clínica — inclusive dois
+        // da MESMA clínica" — o repositório já resolve a ambiguidade para null, ver
+        // TutorRepository.
         var tutor = await _repository.GetByTelefoneAsync(numero);
         if (tutor is null)
             return null;

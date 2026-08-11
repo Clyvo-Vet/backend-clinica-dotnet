@@ -18,7 +18,11 @@ public interface ITutorService
     /// resolver clínica + pets a partir do WhatsApp, antes de registrar interações.
     /// Deliberadamente sem escopo de clínica (ver ITutorRepository.GetByTelefoneAsync).
     /// Retorna null se não houver tutor ativo com esse telefone (controller mapeia
-    /// para 404).
+    /// para 404) — e também se houver MAIS DE UM tutor ativo com esse telefone,
+    /// qualquer clínica, inclusive dois tutores da MESMA clínica (TASK-79): tratado
+    /// como não encontrado em vez de devolver um tutor arbitrário (potencialmente de
+    /// clínica errada). Consequência: aquele telefone recebe o fallback genérico da
+    /// Luna e a interação é gravada com clínica/tutor nulos.
     /// </summary>
     Task<TutorContextoLunaDto?> BuscarContextoPorTelefoneAsync(string numero);
 }
