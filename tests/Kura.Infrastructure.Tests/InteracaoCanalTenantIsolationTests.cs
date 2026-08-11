@@ -110,6 +110,71 @@ public class InteracaoCanalTenantIsolationTests
     }
 
     [Fact]
+    public async Task SemJwt_InteracaoSemClinica_SempreAparece()
+    {
+        // TASK-77 (FIX_7): interação de tutor não identificado grava com IdClinica
+        // null. Sem JWT de clínica (IdClinicaFiltro null — o caso real dos 3 endpoints
+        // da Luna, autenticados por API Key), o filtro desliga inteiro, exatamente como
+        // já provado para linhas COM clínica em SemContextoDeClinica_FiltroDesligaInteiro_RetornaAsDuasClinicas
+        // acima. Esta linha deve aparecer junto com as demais.
+        var dbName = Guid.NewGuid().ToString();
+        await SeedDuasClinicasAsync(dbName);
+
+        using (var seedCtx = CreateContext(idClinicaFiltro: null, dbName))
+        {
+            seedCtx.InteracoesCanal.Add(new InteracaoCanal
+            {
+                Id = 3, IdClinica = null, DsCanal = "WHATSAPP", DsDirecao = "INBOUND",
+                DsConteudo = "tutor desconhecido", DtRecebimento = DateTime.UtcNow, StAtiva = true
+            });
+            await seedCtx.SaveChangesAsync();
+        }
+
+        using var ctx = CreateContext(idClinicaFiltro: null, dbName);
+        var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
+
+        interacoes.Should().HaveCount(3,
+            "sem JWT o filtro desliga inteiro — a interação sem clínica atribuída deve " +
+            "aparecer junto com as duas de clínica conhecida");
+        interacoes.Should().ContainSingle(i => i.Id == 3)
+            .Which.IdClinica.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ComJwt_InteracaoSemClinica_NuncaAparece()
+    {
+        // TASK-77 (FIX_7) — este é o comportamento que precisava ser PROVADO, não
+        // assumido: com IdClinicaFiltro preenchido (JWT de clínica real, hoje só usado
+        // por leitura futura desta tabela — os 3 endpoints da Luna não passam JWT), a
+        // comparação `e.IdClinica == filtro` passa a ser nullable == não-nullable. O
+        // predicado em ApplyTenantFilters escreve `e.IdClinica != null && ...` de
+        // propósito, sem depender da tradução de null do EF Core — este teste prova o
+        // resultado real (contra InMemory; Oracle real é responsabilidade do G4 do
+        // ciclo, não desta suíte).
+        var dbName = Guid.NewGuid().ToString();
+        await SeedDuasClinicasAsync(dbName);
+
+        using (var seedCtx = CreateContext(idClinicaFiltro: null, dbName))
+        {
+            seedCtx.InteracoesCanal.Add(new InteracaoCanal
+            {
+                Id = 3, IdClinica = null, DsCanal = "WHATSAPP", DsDirecao = "INBOUND",
+                DsConteudo = "tutor desconhecido", DtRecebimento = DateTime.UtcNow, StAtiva = true
+            });
+            await seedCtx.SaveChangesAsync();
+        }
+
+        using var ctx = CreateContext(idClinicaFiltro: 1, dbName);
+        var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
+
+        interacoes.Should().ContainSingle()
+            .Which.IdClinica.Should().Be(1,
+                "com JWT de clínica 1, a interação sem clínica atribuída (Id=3) NÃO pode " +
+                "aparecer — é a consequência aceita e documentada da decisão de produto " +
+                "(ganho é auditoria, não visibilidade no app)");
+    }
+
+    [Fact]
     public async Task StAtivaFalse_NuncaAparece_MesmoSemContextoDeClinica()
     {
         var dbName = Guid.NewGuid().ToString();

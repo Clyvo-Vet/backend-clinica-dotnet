@@ -38,11 +38,27 @@ public class LgpdNaoVazamentoTests
     private const string TelefoneSensivel = "5511900009999";
 
     [Fact]
-    public async Task RegistrarInteracaoAsync_IdTutorNull_MensagemDeExcecaoNaoContemDsConteudo()
+    public async Task RegistrarInteracaoAsync_IdTutorNull_NaoLancaENaoVazaDsConteudoEmExcecao()
     {
+        // Reescrito na TASK-77 (FIX_7): id_tutor null deixou de lançar
+        // RegraDeNegocioException — a interação passa a ser GRAVADA com IdClinica/IdTutor
+        // nulos (decisão de produto, ver LunaService.RegistrarInteracaoAsync). O teste
+        // original desta classe provava "a mensagem de exceção não contém ds_conteudo";
+        // hoje o vetor é mais forte ainda: não há exceção nenhuma nesse caminho, então
+        // não há Message para vazar por construção — mesmo raciocínio já usado abaixo
+        // para BuscarContextoPorTelefoneAsync (ausência modelada sem exceção). O que
+        // continua valendo é o contrato desta classe: ds_conteudo PODE ser persistido
+        // (é o propósito da tabela), mas nunca deve aparecer fora dela por este caminho.
+        var interacaoRepo = new Mock<IRepository<InteracaoCanal>>();
+        InteracaoCanal? capturada = null;
+        interacaoRepo
+            .Setup(r => r.AddAsync(It.IsAny<InteracaoCanal>()))
+            .Callback<InteracaoCanal>(i => capturada = i)
+            .Returns(Task.CompletedTask);
+
         var sut = new LunaService(
             Mock.Of<ITriagemLunaRepository>(),
-            Mock.Of<IRepository<InteracaoCanal>>(),
+            interacaoRepo.Object,
             Mock.Of<ITutorRepository>(),
             Mock.Of<IUnitOfWork>());
 
@@ -57,8 +73,13 @@ public class LgpdNaoVazamentoTests
 
         var act = async () => await sut.RegistrarInteracaoAsync(dto);
 
-        var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
-        ex.Which.Message.Should().NotContain(ConteudoSensivel);
+        await act.Should().NotThrowAsync(
+            "não há mais rejeição para id_tutor null — se este teste lançar, é regressão " +
+            "da decisão de produto da TASK-77, não um comportamento LGPD válido");
+        capturada.Should().NotBeNull();
+        capturada!.DsConteudo.Should().Be(ConteudoSensivel,
+            "ds_conteudo é persistido normalmente — o que este teste garante é que não " +
+            "há exceção (logo não há Message) por onde ele pudesse vazar");
     }
 
     [Fact]

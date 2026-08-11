@@ -79,30 +79,39 @@ public sealed class LunaService : ILunaService
 
     public async Task<InteractionResponseDto> RegistrarInteracaoAsync(InteractionRequestDto dto)
     {
-        // Decisão 1 (TASK-67, brief §"Mapeamentos que exigem decisão explícita"):
-        // ID_CLINICA é NOT NULL em INTERACAO_CANAL e o Pydantic InteractionRequestDTO
-        // declara id_tutor como int | None — a Luna PODE mandar null. Sem id_tutor não
-        // há como derivar id_clinica, então rejeitamos com 422 (RegraDeNegocioException
-        // — mesmo mapeamento de status que o resto deste projeto usa para regra de
-        // negócio violada, ex.: IotController leitura fora de faixa). Nunca 500: não
-        // deixamos o Oracle reclamar do NOT NULL. Mensagem sem PII de propósito — não
-        // interpola nem telefone nem ds_conteudo (ver InteracaoCanalLgpdTests).
-        if (dto.IdTutor is null)
+        // Decisão 1 (TASK-77, FIX_7 — decisão de produto do Felipe, substitui a decisão 1
+        // original da TASK-67): telefone não cadastrado (id_tutor null no payload da
+        // Luna) deixa de ser rejeitado com 422 e passa a GRAVAR a interação, com
+        // IdClinica/IdTutor nulos. A rejeição antiga perdia o registro inteiro (nenhuma
+        // INTERACAO_CANAL gravada) e ainda gerava um erro FALSO em LOG_ERRO do lado da
+        // Luna — dois efeitos colaterais ruins para um caso que não é excepcional (tutor
+        // desconhecido é esperado no fluxo real de WhatsApp). Viável hoje porque
+        // INTERACAO_CANAL.ID_CLINICA é nullable desde
+        // V16__interacao_canal_clinica_nullable.sql (backend-tutor-java, TASK-76).
+        //
+        // Consequência aceita e documentada (não é bug): uma linha com IdClinica nulo é
+        // invisível para qualquer leitura escopada por clínica (ver
+        // KuraDbContext.ApplyTenantFilters) — o ganho aqui é auditoria/parar o erro falso
+        // em LOG_ERRO, não visibilidade no app da clínica. Não construir tela/consulta de
+        // "triagem não atribuída" — fora de escopo desta task.
+        //
+        // Quando id_tutor vem preenchido, o comportamento é idêntico ao da TASK-67:
+        // tutor inexistente ainda lança 404 (não vira registro anônimo silenciosamente —
+        // um id_tutor que a Luna mandou e não existe é sinal de payload inconsistente,
+        // diferente de id_tutor ausente por não cadastro).
+        Tutor? tutor = null;
+        if (dto.IdTutor is not null)
         {
-            throw new RegraDeNegocioException(
-                "id_tutor é obrigatório para registrar uma interação: sem ele não é " +
-                "possível derivar id_clinica (INTERACAO_CANAL.ID_CLINICA é NOT NULL).");
+            tutor = await _tutorRepository.GetByIdAsync(dto.IdTutor.Value)
+                ?? throw new EntidadeNaoEncontradaException("Tutor", dto.IdTutor.Value);
         }
-
-        var tutor = await _tutorRepository.GetByIdAsync(dto.IdTutor.Value)
-            ?? throw new EntidadeNaoEncontradaException("Tutor", dto.IdTutor.Value);
 
         var conteudo = TruncarPorBytesUtf8(dto.DsConteudo, MaxTamanhoConteudoBytes);
 
         var interacao = new InteracaoCanal
         {
-            IdClinica = tutor.IdClinica,
-            IdTutor = tutor.Id,
+            IdClinica = tutor?.IdClinica,
+            IdTutor = tutor?.Id,
             DsCanal = dto.DsCanal,
             DsDirecao = dto.DsDirecao,
             DsConteudo = conteudo,
@@ -133,7 +142,20 @@ public sealed class LunaService : ILunaService
         // inconsistência de FK cross-tenant que hoje não vaza conteúdo (nenhum join
         // lê INTERACAO_CANAL a partir de TRIAGEM_LUNA), mas vira vazamento real no dia
         // em que alguém adicionar esse join. Mensagem sem PII de propósito.
-        if (interacao.IdClinica != tutor.IdClinica)
+        //
+        // Decisão TASK-77 (FIX_7): InteracaoCanal.IdClinica é nullable desde esta task
+        // (interação de tutor não identificado grava com IdClinica null — ver
+        // RegistrarInteracaoAsync). NÃO afrouxar esta checagem para o caso null: uma
+        // triagem SEMPRE tem id_tutor conhecido (TriageRequestDto.IdTutor é
+        // obrigatório, não nullable — a Luna só triga depois de identificar o tutor).
+        // Se a interação referenciada por id_interacao não tem clínica atribuída
+        // (IdClinica null), associá-la a um tutor real é exatamente o tipo de
+        // inconsistência que esta checagem existe para pegar — ex.: um id_interacao
+        // "chutado"/reciclado de uma interação anônima anterior. Rejeitar com o mesmo
+        // 422 do caso cross-tenant, sem criar um terceiro caminho silencioso. Coberto
+        // por RegistrarTriagemAsync_InteracaoSemClinicaAtribuida_Lanca422 em
+        // LunaServiceTests.
+        if (interacao.IdClinica is null || interacao.IdClinica != tutor.IdClinica)
         {
             throw new RegraDeNegocioException(
                 "id_interacao não pertence à clínica do tutor informado (id_tutor).");

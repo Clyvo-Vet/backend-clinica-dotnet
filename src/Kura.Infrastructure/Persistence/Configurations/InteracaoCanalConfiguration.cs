@@ -18,9 +18,13 @@ public class InteracaoCanalConfiguration : IEntityTypeConfiguration<InteracaoCan
             .HasColumnName("ID_INTERACAO")
             .HasDefaultValueSql("SEQ_INTERACAO_CANAL.NEXTVAL");
 
+        // Nullable desde a TASK-77 (FIX_7): interação de tutor não identificado grava
+        // com ID_CLINICA null (decisão de produto, ver LunaService.RegistrarInteracaoAsync
+        // e InteracaoCanal.cs). Coluna Oracle já nullable desde
+        // V16__interacao_canal_clinica_nullable.sql (backend-tutor-java, TASK-76) — sem
+        // IsRequired() aqui para o EF não inferir NOT NULL a partir do tipo `long?`.
         builder.Property(e => e.IdClinica)
-            .HasColumnName("ID_CLINICA")
-            .IsRequired();
+            .HasColumnName("ID_CLINICA");
 
         builder.Property(e => e.IdTutor)
             .HasColumnName("ID_TUTOR");

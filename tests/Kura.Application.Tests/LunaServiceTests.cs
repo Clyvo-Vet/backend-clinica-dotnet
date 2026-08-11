@@ -103,11 +103,19 @@ public class LunaServiceTests
     };
 
     [Fact]
-    public async Task RegistrarInteracaoAsync_IdTutorNull_Lanca422SemMencionarPayload()
+    public async Task RegistrarInteracaoAsync_IdTutorNull_GravaComIdClinicaEIdTutorNulos()
     {
-        // Teste que morde: um mapeamento ingênuo (gravar ID_CLINICA = 0/null direto)
-        // estouraria ORA-01400 (NOT NULL) no Oracle real — 500. Este teste prova que o
-        // service intercepta ANTES de chegar no banco.
+        // TASK-77 (FIX_7) — decisão de produto do Felipe, substitui o teste homônimo da
+        // TASK-67 que provava um 422. Comportamento antigo: id_tutor null (telefone não
+        // cadastrado) rejeitava a interação inteira e ainda gerava um erro FALSO em
+        // LOG_ERRO do lado da Luna. Comportamento novo: grava mesmo assim, com
+        // IdClinica/IdTutor nulos — ganho de auditoria, não de visibilidade (uma linha
+        // com IdClinica nulo fica invisível a qualquer leitura escopada por clínica, ver
+        // KuraDbContext.ApplyTenantFilters).
+        //
+        // Teste que morde: rodado contra o código da TASK-67 (HEAD 823f400, antes desta
+        // task), este teste FALHA — o service lança RegraDeNegocioException e nunca
+        // chama AddAsync/CommitAsync. Saída real colada no relatório da TASK-77.
         var dto = new InteractionRequestDto
         {
             IdTutor = null,
@@ -117,15 +125,22 @@ public class LunaServiceTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        InteracaoCanal? capturada = null;
+        _interacaoRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<InteracaoCanal>()))
+            .Callback<InteracaoCanal>(i => capturada = i)
+            .Returns(Task.CompletedTask);
+
         var act = async () => await _sut.RegistrarInteracaoAsync(dto);
+        await act.Should().NotThrowAsync();
 
-        var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
-        ex.Which.Message.Should().NotContain("MARCADOR_LGPD_conteudo_sensivel_x7f2",
-            "a mensagem de exceção não pode vazar ds_conteudo — ela sobe até o " +
-            "ExceptionHandlerMiddleware, que loga ex.Message e o devolve no corpo HTTP");
-
-        _interacaoRepoMock.Verify(r => r.AddAsync(It.IsAny<InteracaoCanal>()), Times.Never);
-        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+        capturada.Should().NotBeNull();
+        capturada!.IdClinica.Should().BeNull("tutor não identificado — não há como derivar a clínica");
+        capturada.IdTutor.Should().BeNull();
+        capturada.DsConteudo.Should().Be("MARCADOR_LGPD_conteudo_sensivel_x7f2");
+        _tutorRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<long>()), Times.Never,
+            "sem id_tutor no payload não há PK para buscar — não deve nem tentar");
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
     [Fact]
@@ -479,6 +494,44 @@ public class LunaServiceTests
             "mensagem sem PII/detalhe interno de propósito — só que a combinação é inválida");
         _triagemRepoMock.Verify(r => r.AddAsync(It.IsAny<TriagemLuna>()), Times.Never,
             "a triagem cross-tenant não pode chegar a ser gravada");
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarTriagemAsync_InteracaoSemClinicaAtribuida_Lanca422()
+    {
+        // TASK-77 (FIX_7): interação gravada com IdClinica null (tutor não identificado
+        // no momento da mensagem, ver RegistrarInteracaoAsync) referenciada depois por
+        // uma triagem que TEM tutor conhecido (TriageRequestDto.IdTutor não é nullable).
+        // Decisão documentada em RegistrarTriagemAsync: não afrouxar a checagem
+        // cross-tenant para esse caso — uma triagem sempre tem tutor identificado, então
+        // associá-la a uma interação sem clínica atribuída é o tipo de inconsistência
+        // que a checagem já existe para pegar (ex.: id_interacao reciclado/errado).
+        // Teste que morde: se a checagem virasse `interacao.IdClinica != tutor.IdClinica`
+        // sem o `is null ||` explícito, o comportamento AINDA seria correto por
+        // igualdade lifted do C# (null != 5 → true) — mas essa é exatamente a trivia de
+        // linguagem que este teste existe para não depender de leitura de código, e sim
+        // de comportamento provado.
+        var tutor = TutorClinica42();
+        var interacaoSemClinica = InteracaoExistente(id: 300);
+        interacaoSemClinica.IdClinica = null;
+        _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
+        _interacaoRepoMock.Setup(r => r.GetByIdAsync(interacaoSemClinica.Id)).ReturnsAsync(interacaoSemClinica);
+
+        var dto = new TriageRequestDto
+        {
+            IdInteracao = interacaoSemClinica.Id,
+            IdTutor = tutor.Id,
+            Sintomas = ["vomito"],
+            DsUrgencia = "ALTA",
+            NrScore = 90,
+            DsRecomendacao = "levar ao vet"
+        };
+
+        var act = async () => await _sut.RegistrarTriagemAsync(dto);
+
+        await act.Should().ThrowAsync<RegraDeNegocioException>();
+        _triagemRepoMock.Verify(r => r.AddAsync(It.IsAny<TriagemLuna>()), Times.Never);
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
 

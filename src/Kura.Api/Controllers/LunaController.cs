@@ -39,22 +39,23 @@ public class LunaController(ILunaService lunaService) : ControllerBase
 
     /// <summary>
     /// TASK-67: registra uma interação de canal (WhatsApp/e-mail/SMS) recebida ou
-    /// enviada pela IA Luna. Deriva ID_CLINICA a partir do tutor — ver LunaService
-    /// para a decisão de negócio quando id_tutor vem null.
+    /// enviada pela IA Luna. Deriva ID_CLINICA a partir do tutor quando id_tutor é
+    /// informado. Desde a TASK-77 (FIX_7, decisão de produto): id_tutor ausente
+    /// (telefone não cadastrado) NÃO é mais rejeitado — a interação é registrada mesmo
+    /// assim, com id_clinica nulo (ver LunaService.RegistrarInteracaoAsync para a
+    /// decisão completa e a consequência aceita sobre visibilidade por clínica).
     /// </summary>
     /// <param name="dto">Dados da interação (shape espelha InteractionRequestDTO, Pydantic).</param>
     /// <returns>ID da interação registrada.</returns>
-    /// <response code="201">Interação registrada com sucesso.</response>
+    /// <response code="201">Interação registrada com sucesso (com ou sem tutor identificado).</response>
     /// <response code="400">Payload malformado (ds_canal/ds_direcao fora do enum, ds_conteudo vazio).</response>
-    /// <response code="404">id_tutor informado não corresponde a um tutor existente.</response>
-    /// <response code="422">id_tutor ausente — não é possível derivar id_clinica.</response>
+    /// <response code="404">id_tutor informado (quando presente) não corresponde a um tutor existente.</response>
     [HttpPost("interactions")]
     [AllowAnonymous]
     [ServiceFilter(typeof(LunaApiKeyAuthFilter))]
     [ProducesResponseType(typeof(InteractionResponseDto), 201)]
     [ProducesResponseType(typeof(ProblemDetails), 400)]
     [ProducesResponseType(typeof(ProblemDetails), 404)]
-    [ProducesResponseType(typeof(ProblemDetails), 422)]
     public async Task<IActionResult> RegistrarInteracao([FromBody] InteractionRequestDto dto)
     {
         var result = await lunaService.RegistrarInteracaoAsync(dto);

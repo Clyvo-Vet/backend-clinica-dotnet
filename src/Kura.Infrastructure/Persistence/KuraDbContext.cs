@@ -119,10 +119,26 @@ public class KuraDbContext : DbContext
         // 422), não por este query filter nem por uma query LINQ. O filtro continua
         // útil como defesa em profundidade para qualquer leitura futura desta tabela
         // feita com JWT de clínica (ex.: um relatório autenticado).
+        //
+        // TASK-77 (FIX_7): IdClinica virou `long?` — interação de tutor não identificado
+        // grava com IdClinica null (decisão de produto do Felipe, ver
+        // LunaService.RegistrarInteracaoAsync). Isso torna `e.IdClinica ==
+        // _clinicaContext.IdClinicaFiltro` uma comparação nullable == nullable, e o
+        // predicado abaixo escreve o `e.IdClinica != null` de propósito em vez de
+        // confiar na tradução de null do EF Core: por padrão (sem UseRelationalNulls,
+        // não configurado neste projeto — conferido em ServiceCollectionExtensions.cs) o
+        // EF Core replica semântica de comparação C# (null == 5 é false, não UNKNOWN),
+        // então a tradução implícita já produziria o resultado certo — mas depender
+        // disso é exatamente o tipo de trivia de tradução que este projeto já foi
+        // mordido por assumir sem verificar (ver nota em CLAUDE.md sobre "5xx nos logs"
+        // do FIX_6). Comportamento provado em
+        // InteracaoCanalTenantIsolationTests.SemJwt_InteracaoSemClinica_SempreAparece e
+        // ComJwt_InteracaoSemClinica_NuncaAparece (InMemory — replicar contra Oracle
+        // real é responsabilidade do G4 do ciclo, não desta suíte).
         modelBuilder.Entity<InteracaoCanal>()
             .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
-                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+                 (e.IdClinica != null && e.IdClinica == _clinicaContext.IdClinicaFiltro)));
 
         // TASK-21: Tutor tinha apenas HasQueryFilter(StAtiva) em TutorConfiguration — sem
         // filtro de tenant, vazamento cross-clinica de PII (CPF, e-mail, telefone).
