@@ -63,7 +63,7 @@ az webapp config appsettings set \
     Jwt__Key="<YOUR_JWT_SECRET_MIN_32_CHARS>" \
     Jwt__Issuer="kura-api" \
     Jwt__Audience="kura-client" \
-    IoT__ApiKey="kura-iot-device-key-2026"
+    IoT__ApiKey="<YOUR_IOT_API_KEY>"
 ```
 
 ## 7. Validar deploy

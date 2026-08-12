@@ -40,9 +40,9 @@ Health:  http://<IP>:8080/metrics
 Antes de executar, edite as variáveis no bloco SSH do script:
 
 ```bash
-ConnectionStrings__DefaultConnection="User Id=RM562999;Password=SUASENHA;Data Source=oracle.fiap.com.br:1521/orcl"
-Jwt__Key="kura-api-secret-key-fiap-2026-clyvovet"
-IoT__ApiKey="kura-iot-device-key-2026"
+ConnectionStrings__DefaultConnection="User Id=RM562999;Password=<YOUR_ORACLE_PASSWORD>;Data Source=oracle.fiap.com.br:1521/orcl"
+Jwt__Key="<YOUR_JWT_SECRET_MIN_32_CHARS>"
+IoT__ApiKey="<YOUR_IOT_API_KEY>"
 ```
 
 Ou crie um arquivo `.env` na raiz do repositório clonado e ajuste o `docker-compose.yml`.

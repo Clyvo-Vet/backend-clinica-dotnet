@@ -88,9 +88,9 @@ hoje** — não há fluxo do app dependendo do endpoint ausente.
 
 | Variável | Onde é lida | Onde é enviada | Valor default (dev local) |
 |---|---|---|---|
-| `KURA_API_KEY` (Luna) / `Luna__ApiKey` (.NET) | .NET valida no header de chamadas outbound da Luna | Luna envia via `KURA_API_KEY` para chamar `.NET` | `kura-luna-integration-key-2026` — já alinhado antes desta task |
-| `LUNA_INBOUND_API_KEY` (Luna) | Luna valida no header `X-API-Key` de `POST /whatsapp/enviar` | `mobile-clinica-rn` envia via `EXPO_PUBLIC_LUNA_API_KEY` | `kura-luna-inbound-key-2026` — **corrigido nesta task**, antes não existia em lugar nenhum |
-| `IoT__ApiKey` (.NET) | .NET valida chamadas de dispositivos IoT | N/A (fora do escopo mobile) | `kura-iot-device-key-2026` — não tocado |
+| `KURA_API_KEY` (Luna) / `Luna__ApiKey` (.NET) | .NET valida no header de chamadas outbound da Luna | Luna envia via `KURA_API_KEY` para chamar `.NET` | `<YOUR_LUNA_INTEGRATION_KEY>` — já alinhado antes desta task |
+| `LUNA_INBOUND_API_KEY` (Luna) | Luna valida no header `X-API-Key` de `POST /whatsapp/enviar` | `mobile-clinica-rn` envia via `EXPO_PUBLIC_LUNA_API_KEY` | `<YOUR_LUNA_INBOUND_KEY>` — **corrigido nesta task**, antes não existia em lugar nenhum |
+| `IoT__ApiKey` (.NET) | .NET valida chamadas de dispositivos IoT | N/A (fora do escopo mobile) | `<YOUR_IOT_API_KEY>` — não tocado |
 
 ## Ambiente local usado para este smoke test
 
