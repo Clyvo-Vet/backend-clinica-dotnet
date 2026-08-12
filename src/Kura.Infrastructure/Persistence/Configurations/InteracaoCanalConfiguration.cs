@@ -14,8 +14,16 @@ public class InteracaoCanalConfiguration : IEntityTypeConfiguration<InteracaoCan
 
         // .NET-owned: PK por sequence, não IDENTITY (ver V12-pk-strategy-map.md e o
         // comentário de cabeçalho de V15__interacao_canal.sql, backend-tutor-java).
+        // HasColumnType("NUMBER(10)") explícito (TASK-86): sem override, o provider
+        // Oracle.EntityFrameworkCore mapeia `long` para NUMBER(19), mas
+        // V15__interacao_canal.sql (Flyway, quem realmente cria a tabela) declara
+        // ID_INTERACAO como NUMBER(10). EF nunca executa DDL contra o Oracle neste
+        // projeto (Flyway é a única autoridade de schema), então isto é cosmético —
+        // alinha o modelo do EF ao schema real sem mudar nenhum comportamento de
+        // runtime (a coluna real do banco já impõe o limite de qualquer forma).
         builder.Property(e => e.Id)
             .HasColumnName("ID_INTERACAO")
+            .HasColumnType("NUMBER(10)")
             .HasDefaultValueSql("SEQ_INTERACAO_CANAL.NEXTVAL");
 
         // Nullable desde a TASK-77 (FIX_7): interação de tutor não identificado grava
@@ -23,11 +31,15 @@ public class InteracaoCanalConfiguration : IEntityTypeConfiguration<InteracaoCan
         // e InteracaoCanal.cs). Coluna Oracle já nullable desde
         // V16__interacao_canal_clinica_nullable.sql (backend-tutor-java, TASK-76) — sem
         // IsRequired() aqui para o EF não inferir NOT NULL a partir do tipo `long?`.
+        // HasColumnType("NUMBER(10)") pelo mesmo motivo do Id acima (TASK-86, cosmético).
         builder.Property(e => e.IdClinica)
-            .HasColumnName("ID_CLINICA");
+            .HasColumnName("ID_CLINICA")
+            .HasColumnType("NUMBER(10)");
 
+        // HasColumnType("NUMBER(10)") pelo mesmo motivo do Id acima (TASK-86, cosmético).
         builder.Property(e => e.IdTutor)
-            .HasColumnName("ID_TUTOR");
+            .HasColumnName("ID_TUTOR")
+            .HasColumnType("NUMBER(10)");
 
         // TASK-67 nota de fidelidade EF↔Flyway: sem HasColumnType explícito, o
         // provider Oracle.EntityFrameworkCore mapeia `string` para NVARCHAR2, mas
