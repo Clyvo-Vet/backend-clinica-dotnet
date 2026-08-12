@@ -44,7 +44,7 @@ public class LunaApiKeyAuthFilter : IAuthorizationFilter
     public void OnAuthorization(AuthorizationFilterContext context)
     {
         if (!context.HttpContext.Request.Headers.TryGetValue(ApiKeyHeader, out var providedKey)
-            || providedKey != _apiKey)
+            || !ApiKeyComparer.IsMatch(providedKey, _apiKey))
         {
             context.Result = new UnauthorizedResult();
         }
