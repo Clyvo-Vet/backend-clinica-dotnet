@@ -5,7 +5,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using FluentValidation.AspNetCore;
 using Microsoft.OpenApi;
-using Kura.Api.Middlewares;
 using Kura.Api.Extensions;
 using Kura.Infrastructure.Persistence;
 using Oracle.ManagedDataAccess.Client;
@@ -115,9 +114,9 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// ExceptionHandlerMiddleware must be first
-app.UseMiddleware<ExceptionHandlerMiddleware>();
-app.UseSerilogRequestLogging();
+// TASK-84: UseSerilogRequestLogging() precisa vir ANTES de ExceptionHandlerMiddleware
+// (ordem, não nível — ver comentário completo em RequestPipelineExtensions).
+app.UseRequestLoggingAndExceptionHandling();
 
 if (app.Environment.IsDevelopment())
 {
