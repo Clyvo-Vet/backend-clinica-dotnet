@@ -54,6 +54,12 @@ public class RequestLoggingPipelineTests : IAsyncLifetime
     {
         var serilogLogger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
+            // S3D-01: precisa espelhar Program.cs (Enrich.FromLogContext() em Program.cs:22)
+            // para que LogContext.PushProperty("TraceId", ...) — empurrado pelo middleware
+            // registrado em UseRequestLoggingAndExceptionHandling() — realmente apareça nas
+            // propriedades estruturadas dos LogEvent capturados por este harness. Sem esta
+            // linha, o middleware roda mas o sink nunca vê a propriedade.
+            .Enrich.FromLogContext()
             .WriteTo.Sink(_sink)
             .CreateLogger();
 
@@ -80,6 +86,16 @@ public class RequestLoggingPipelineTests : IAsyncLifetime
         app.MapGet("/nao-encontrado", () => { throw new EntidadeNaoEncontradaException("Pet", 42); });
         app.MapGet("/nao-mapeada", () => { throw new InvalidOperationException("bug genuíno não mapeado"); });
         app.MapGet("/ok", () => Results.Ok("tudo certo"));
+
+        // S3D-01: rota que emite uma linha de log DE NEGÓCIO no meio do processamento
+        // (distinta da linha de conclusão que o Serilog.AspNetCore emite sozinho), para
+        // provar correlação real entre linhas — não só a linha final. Palavra
+        // deliberadamente diferente de "responded" (ver EncontrarLinhaDeRequestLogging).
+        app.MapGet("/com-log-de-negocio", () =>
+        {
+            app.Logger.LogInformation("Processando etapa intermediária de negócio");
+            return Results.Ok("tudo certo, com log no meio do caminho");
+        });
 
         await app.StartAsync();
 
@@ -174,5 +190,47 @@ public class RequestLoggingPipelineTests : IAsyncLifetime
         var linha = EncontrarLinhaDeRequestLogging();
         linha.RenderMessage().Should().Contain("responded 200");
         linha.Level.Should().Be(LogEventLevel.Information);
+    }
+
+    /// <summary>
+    /// S3D-01: prova de correlação de requisição. Duas linhas de log DISTINTAS emitidas
+    /// dentro da MESMA requisição HTTP — a linha de conclusão do
+    /// Serilog.AspNetCore (emitida por dentro de <c>UseSerilogRequestLogging</c>) e a
+    /// linha de negócio emitida pelo endpoint no meio do processamento — precisam
+    /// carregar o MESMO valor de <c>TraceId</c> como propriedade estruturada. Isso só é
+    /// possível porque o middleware registrado por
+    /// <see cref="RequestPipelineExtensions.UseRequestLoggingAndExceptionHandling"/>
+    /// (o primeiro <c>app.Use(...)</c>, ver comentário da classe) empurra
+    /// <c>HttpContext.TraceIdentifier</c> para o <c>LogContext</c> ANTES de
+    /// <c>UseSerilogRequestLogging</c> e do endpoint rodarem, envolvendo o pipeline
+    /// inteiro. Sem esse middleware, nenhuma das duas linhas carregaria a propriedade
+    /// (prova de mordida: ver relatório da task com o teste falhando de propósito
+    /// contra o código sem o middleware).
+    /// </summary>
+    [Fact]
+    public async Task DuasLinhasDeLogDaMesmaRequisicao_ComMiddlewareDeCorrelacao_CompartilhamMesmoTraceId()
+    {
+        var response = await _client.GetAsync("/com-log-de-negocio");
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        var linhaDeConclusao = EncontrarLinhaDeRequestLogging();
+        var linhaDeNegocio = _sink.Events.SingleOrDefault(e =>
+            e.MessageTemplate.Text.Contains("etapa intermediária de negócio", StringComparison.OrdinalIgnoreCase));
+
+        linhaDeNegocio.Should().NotBeNull(
+            "o endpoint de teste precisa ter emitido uma linha de log de negócio no meio do processamento");
+
+        linhaDeConclusao.Properties.Should().ContainKey("TraceId",
+            "a linha de conclusão do Serilog.AspNetCore precisa carregar TraceId estruturado");
+        linhaDeNegocio!.Properties.Should().ContainKey("TraceId",
+            "a linha de negócio, emitida dentro do mesmo escopo de LogContext, também precisa carregar TraceId");
+
+        var traceIdDaConclusao = ((ScalarValue)linhaDeConclusao.Properties["TraceId"]).Value as string;
+        var traceIdDoNegocio = ((ScalarValue)linhaDeNegocio.Properties["TraceId"]).Value as string;
+
+        traceIdDaConclusao.Should().NotBeNullOrWhiteSpace();
+        traceIdDoNegocio.Should().Be(traceIdDaConclusao,
+            "S3D-01: correlação de requisição — duas linhas distintas da mesma requisição HTTP " +
+            "devem compartilhar o mesmo TraceId, não só a linha de conclusão");
     }
 }

@@ -98,6 +98,10 @@ StyleCopReport.xml
 *.tmp_proj
 *_wpftmp.csproj
 *.log
+# S3D-01: diretório do sink de arquivo do Serilog (rolling diário), gerado em runtime
+# ao lado do binário — não existe pasta "logs/" versionada hoje, e *.log acima não
+# cobre o diretório em si (só o glob do arquivo).
+logs/
 *.tlog
 *.vspscc
 *.vssscc

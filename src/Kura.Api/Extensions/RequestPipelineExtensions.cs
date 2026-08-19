@@ -2,6 +2,7 @@ namespace Kura.Api.Extensions;
 
 using Kura.Api.Middlewares;
 using Serilog;
+using Serilog.Context;
 using Serilog.Events;
 
 /// <summary>
@@ -34,11 +35,31 @@ using Serilog.Events;
 /// Invariante que este arranjo depende, e que não pode regredir:
 /// <see cref="ExceptionHandlerMiddleware"/> SEMPRE escreve uma resposta e NUNCA
 /// relança (ver <c>HandleExceptionAsync</c>). Se isso mudar, a garantia acima quebra.
+///
+/// S3D-01: acrescenta correlação de requisição. O primeiro <c>app.Use(...)</c> abaixo
+/// empurra <c>HttpContext.TraceIdentifier</c> para o <see cref="LogContext"/> do
+/// Serilog, envolvendo o pipeline inteiro (Serilog request-logging + qualquer log de
+/// negócio emitido durante o processamento). Como <c>Enrich.FromLogContext()</c> já
+/// está ativo em <c>Program.cs</c>, toda linha emitida dentro do <c>using</c> — não só
+/// a linha de conclusão da requisição — carrega a propriedade estruturada
+/// <c>TraceId</c> com o mesmo valor, permitindo correlacionar linhas distintas da
+/// mesma requisição num agregador de log. Deliberadamente <c>LogContext.PushProperty</c>
+/// e não <c>opts.EnrichDiagnosticContext</c> (do <c>UseSerilogRequestLogging</c> logo
+/// abaixo): este último só enriquece a única linha de conclusão, nunca as linhas
+/// intermediárias — não atende ao que a rubrica pede.
+/// Precisa vir ANTES de <c>UseSerilogRequestLogging()</c> para que a própria linha de
+/// conclusão do Serilog também entre no escopo do <c>using</c>.
 /// </summary>
 public static class RequestPipelineExtensions
 {
     public static WebApplication UseRequestLoggingAndExceptionHandling(this WebApplication app)
     {
+        app.Use(async (context, next) =>
+        {
+            using (LogContext.PushProperty("TraceId", context.TraceIdentifier))
+                await next();
+        });
+
         app.UseSerilogRequestLogging(opts =>
         {
             opts.GetLevel = (ctx, _, ex) => ex != null || ctx.Response.StatusCode > 499

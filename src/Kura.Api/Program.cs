@@ -17,10 +17,16 @@ QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 var builder = WebApplication.CreateBuilder(args);
 
 // Serilog — 3-arg overload so the built IServiceProvider is available for the Oracle sink
+// S3D-01: sink de arquivo (rolling diário) ao lado do console — a rubrica pede
+// "console/arquivo" e um dos dois já bastaria, mas o custo é baixo e remove ambiguidade
+// de leitura. Caminho relativo ("logs/") funciona tanto local (fica ao lado do binário
+// em execução) quanto em container (relativo ao WORKDIR da imagem), sem exigir volume
+// dedicado nem configuração adicional.
 builder.Host.UseSerilog((ctx, sp, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console());
+    .WriteTo.Console()
+    .WriteTo.File("logs/kura-api-.log", rollingInterval: RollingInterval.Day));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
