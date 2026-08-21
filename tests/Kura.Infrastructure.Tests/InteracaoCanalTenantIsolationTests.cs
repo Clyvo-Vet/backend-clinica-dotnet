@@ -74,7 +74,7 @@ public class InteracaoCanalTenantIsolationTests
     }
 
     [Fact]
-    public async Task ComContextoDeClinica_RetornaApenasInteracoesDaquelaClinica()
+    public async Task ComContextoDeClinica_FiltroIsolaPorClinica_RetornaApenasInteracoesDaquelaClinica()
     {
         var dbName = Guid.NewGuid().ToString();
         await SeedDuasClinicasAsync(dbName);

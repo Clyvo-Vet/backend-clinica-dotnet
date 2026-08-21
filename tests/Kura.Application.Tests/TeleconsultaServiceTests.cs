@@ -175,7 +175,7 @@ public class TeleconsultaServiceTests
     // ---------- ObterSalaAsync ----------
 
     [Fact]
-    public async Task ObterSalaAsync_RetornaEstadoAtualSemChamarDailyOuConsentimento()
+    public async Task ObterSalaAsync_SalaJaCriada_RetornaEstadoAtualSemChamarDailyOuConsentimento()
     {
         var agendamento = AgendamentoSemSala();
         agendamento.StTeleconsulta = true;

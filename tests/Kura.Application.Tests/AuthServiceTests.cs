@@ -282,7 +282,7 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task RegisterClinicaAsync_SenhaNaoRetornadaNoResponse()
+    public async Task RegisterClinicaAsync_DtoDeResponseViaReflection_SenhaNaoRetornadaNoResponse()
     {
         var tipo = typeof(RegisterClinicaResponseDto);
 

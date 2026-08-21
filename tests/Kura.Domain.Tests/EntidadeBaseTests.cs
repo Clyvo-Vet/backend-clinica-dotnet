@@ -26,7 +26,7 @@ public class EntidadeBaseTests
     }
 
     [Fact]
-    public void NovaEntidade_PreencheDtCriacaoAutomaticamenteProximoDeAgora()
+    public void NovaEntidade_AoSerCriada_PreencheDtCriacaoAutomaticamenteProximoDeAgora()
     {
         var antes = DateTime.UtcNow;
 
@@ -37,7 +37,7 @@ public class EntidadeBaseTests
     }
 
     [Fact]
-    public void NovaEntidade_NaoTemDtAtualizacaoAteSerModificada()
+    public void NovaEntidade_AoSerCriada_NaoTemDtAtualizacaoAteSerModificada()
     {
         var entidade = new EntidadeDeTeste();
 

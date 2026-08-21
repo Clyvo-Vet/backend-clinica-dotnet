@@ -142,7 +142,7 @@ public class ConsultaServiceTests
     }
 
     [Fact]
-    public async Task CriarConsultaAsync_CommitChamadoUmaVez()
+    public async Task CriarConsultaAsync_PetEVeterinarioValidos_CommitChamadoUmaVez()
     {
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });

@@ -23,7 +23,7 @@ public class NotificacaoServiceTests
     }
 
     [Fact]
-    public async Task GetAllByClinicaAsync_RetornaNotificacoesClinica()
+    public async Task GetAllByClinicaAsync_SemFiltroDeLidas_RetornaNotificacoesClinica()
     {
         var clinicaId = 10L;
         var lista = new List<Notificacao>

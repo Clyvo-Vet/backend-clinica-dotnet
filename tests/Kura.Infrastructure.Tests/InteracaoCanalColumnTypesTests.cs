@@ -38,7 +38,7 @@ public class InteracaoCanalColumnTypesTests
     [InlineData("Id", "NUMBER(10)")]
     [InlineData("IdClinica", "NUMBER(10)")]
     [InlineData("IdTutor", "NUMBER(10)")]
-    public void PropriedadesNumericas_DeclaramColumnTypeAlinhadoAoFlyway(
+    public void PropriedadesNumericas_DeInteracaoCanal_DeclaramColumnTypeAlinhadoAoFlyway(
         string nomePropriedade, string columnTypeEsperado)
     {
         using var ctx = CreateContext();

@@ -68,7 +68,7 @@ public class TenantFilterCoverageTests
 
     [Theory]
     [MemberData(nameof(EntidadesComIdClinica))]
-    public void TodaEntidadeComIdClinica_EstaNoFiltroOuNaAllowlist(Type entidade)
+    public void TodaEntidadeComIdClinica_DescobertaPorReflection_EstaNoFiltroOuNaAllowlist(Type entidade)
     {
         if (CompensadasManualmente.ContainsKey(entidade.Name))
         {
@@ -105,7 +105,7 @@ public class TenantFilterCoverageTests
     }
 
     [Fact]
-    public void Allowlist_ContemApenasAgendamento()
+    public void Allowlist_DeCompensacaoManual_ContemApenasAgendamento()
     {
         CompensadasManualmente.Keys.Should().BeEquivalentTo(
             new[] { "Agendamento" },

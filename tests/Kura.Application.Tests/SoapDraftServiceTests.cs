@@ -105,7 +105,7 @@ public class SoapDraftServiceTests
     // ---------- ConfirmarSoapAsync ----------
 
     [Fact]
-    public async Task ConfirmarSoapAsync_GravaTextoRevisadoEMarcaConfirmado()
+    public async Task ConfirmarSoapAsync_ComDraftSoapPendente_GravaTextoRevisadoEMarcaConfirmado()
     {
         var evento = EventoSemDraft();
         evento.DsSoapS = "draft s";

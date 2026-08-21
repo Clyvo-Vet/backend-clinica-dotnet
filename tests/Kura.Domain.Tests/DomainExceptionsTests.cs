@@ -47,7 +47,7 @@ public class DomainExceptionsTests
     }
 
     [Fact]
-    public void RegraDeNegocioException_PropagaMensagemRecebida()
+    public void RegraDeNegocioException_ComMensagemPersonalizada_PropagaMensagemRecebida()
     {
         var ex = new RegraDeNegocioException("Agendamento fora do horário de funcionamento da clínica.");
 

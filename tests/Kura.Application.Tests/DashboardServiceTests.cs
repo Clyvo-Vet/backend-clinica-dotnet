@@ -24,7 +24,7 @@ public class DashboardServiceTests
     }
 
     [Fact]
-    public async Task GetHojeAsync_RetornaDtoComMetricas()
+    public async Task GetHojeAsync_ComUmEventoEUmAlertaAtivoHoje_RetornaDtoComMetricas()
     {
         var hoje = DateTime.UtcNow.Date;
         _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
@@ -48,7 +48,7 @@ public class DashboardServiceTests
     }
 
     [Fact]
-    public async Task GetAlertasAsync_RetornaAlertasAtivosEVacinasVencendo()
+    public async Task GetAlertasAsync_ComAlertaAtivoEVacinaProximaEm30Dias_RetornaAlertasAtivosEVacinasVencendo()
     {
         var proximos30Dias = DateTime.UtcNow.AddDays(15).Date;
         _alertaMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AlertaTemperatura, bool>>>()))
