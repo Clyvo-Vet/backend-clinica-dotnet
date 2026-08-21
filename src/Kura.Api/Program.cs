@@ -35,6 +35,9 @@ builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+// S3D-03: health checks reais (API + Oracle + Luna), substituindo o antigo
+// HealthController (200 incondicional). Ver Extensions/HealthCheckExtensions.cs.
+builder.Services.AddKuraHealthChecks(builder.Configuration);
 
 // JWT
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -134,5 +137,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// S3D-03: substitui o antigo HealthController — não usar [AllowAnonymous] extra
+// aqui, MapHealthChecks já não exige autenticação por padrão.
+app.MapKuraHealthChecks("/health");
 
 app.Run();
