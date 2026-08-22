@@ -3,7 +3,7 @@ namespace Kura.Infrastructure.Tests;
 using System.Diagnostics;
 using FluentAssertions;
 using Kura.Api.Extensions;
-using Kura.Domain.Observability;
+using Kura.CrossCutting.Observability;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;

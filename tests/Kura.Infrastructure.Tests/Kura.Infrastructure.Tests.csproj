@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kura.Infrastructure\Kura.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Kura.Domain\Kura.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Kura.CrossCutting\Kura.CrossCutting.csproj" />
     <!-- TASK-45: referência ao Kura.Api só para exercitar MetricsController
          diretamente (in-memory, sem WebApplicationFactory — o repo não tem esse
          padrão hoje). -->

@@ -2,9 +2,9 @@ namespace Kura.Application.Services;
 
 using Kura.Application.DTOs.Agenda;
 using Kura.Application.Services.Interfaces;
+using Kura.CrossCutting.Observability;
 using Kura.Domain.Exceptions;
 using Kura.Domain.Interfaces;
-using Kura.Domain.Observability;
 
 public sealed class AgendaService : IAgendaService
 {
