@@ -12,7 +12,9 @@ using Kura.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 /// <summary>
@@ -213,5 +215,76 @@ public class ObservabilityExtensionsTests
             .Options;
 
         return new KuraDbContext(options, clinicaContext.Object);
+    }
+
+    /// <summary>
+    /// S3D-04c item C2 — o teste que faltava, e que deixou a regressão C1 passar verde.
+    /// </summary>
+    [Fact]
+    public async Task PipelineDeProducaoReal_SpansEmitidosPeloTracerProviderDoDI_PreservamHierarquiaEntreCamadasECarregamServiceName()
+    {
+        var coletor = new ColetorDeSpansDoProvider();
+
+        var services = new ServiceCollection();
+        services.AddKuraObservability();
+        services.ConfigureOpenTelemetryTracerProvider(b => b.AddProcessor(coletor));
+
+        using var sp = services.BuildServiceProvider();
+        // Ordem deliberada: o TelemetryHostedService do OpenTelemetry.Extensions.Hosting
+        // resolve MeterProvider antes de TracerProvider em produção — reproduzir a ordem
+        // evita que o teste dependa de uma sequência que produção não usa.
+        using var meterProvider = sp.GetRequiredService<MeterProvider>();
+        using var tracerProvider = sp.GetRequiredService<TracerProvider>();
+
+        var contexto = CriarContextoInMemory();
+        var dataInicio = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var dataFim = new DateTime(2026, 3, 20, 0, 0, 0, DateTimeKind.Utc);
+        contexto.Agendamentos.Add(new Agendamento
+        {
+            Id = 1, IdClinica = IdClinicaDoTeste, NmPaciente = "Rex",
+            DtAgendamento = dataInicio.AddDays(5), StStatus = "AGENDADO"
+        });
+        await contexto.SaveChangesAsync();
+
+        var clinicaContext = new Mock<IClinicaContext>();
+        clinicaContext.Setup(x => x.IdClinica).Returns(IdClinicaDoTeste);
+
+        var service = new AgendaService(
+            new AgendaReadRepository(contexto),
+            clinicaContext.Object,
+            Mock.Of<IAgendamentoRepository>(),
+            Mock.Of<IUnitOfWork>());
+
+        using var fonteHttpSimulada = new ActivitySource("Microsoft.AspNetCore");
+        using var spanDeBorda = fonteHttpSimulada.StartActivity("GET api/v1/agenda", ActivityKind.Server);
+        spanDeBorda.Should().NotBeNull();
+
+        var resposta = await service.GetAgendaAsync(dataInicio, dataFim, idVeterinario: null);
+        resposta.Agendamentos.Should().HaveCount(1);
+
+        var spanApplication = coletor.Spans.SingleOrDefault(a => a.OperationName == "Application.AgendaService.GetAgendaAsync");
+        var spanInfrastructure = coletor.Spans.SingleOrDefault(a => a.OperationName == "Infrastructure.AgendaReadRepository.GetByIntervaloAsync");
+
+        spanApplication.Should().NotBeNull("DIAG: spans coletados = " + string.Join(", ", coletor.Spans.Select(a => a.OperationName)));
+        spanInfrastructure.Should().NotBeNull("DIAG");
+        spanInfrastructure!.ParentSpanId.Should().Be(spanApplication!.SpanId, "DIAG hierarquia");
+        spanInfrastructure.TraceId.Should().Be(spanApplication.TraceId, "DIAG traceid");
+        spanApplication.ParentSpanId.Should().Be(spanDeBorda!.SpanId, "DIAG borda");
+
+        coletor.RecursoDoProvider.Should().NotBeNull();
+        coletor.RecursoDoProvider!.Attributes.Should().Contain(a => a.Key == "service.name" && (string)a.Value == "Kura.Api");
+    }
+
+    private sealed class ColetorDeSpansDoProvider : BaseProcessor<Activity>
+    {
+        private readonly List<Activity> _spans = new();
+        public IReadOnlyList<Activity> Spans { get { lock (_spans) return _spans.ToList(); } }
+        public Resource? RecursoDoProvider { get; private set; }
+
+        public override void OnEnd(Activity data)
+        {
+            RecursoDoProvider ??= ParentProvider?.GetResource();
+            lock (_spans) _spans.Add(data);
+        }
     }
 }

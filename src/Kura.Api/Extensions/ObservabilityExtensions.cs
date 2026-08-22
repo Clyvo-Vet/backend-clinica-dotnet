@@ -37,11 +37,14 @@ using OpenTelemetry.Trace;
 ///   chamada HTTP do healthcheck da Luna (S3D-03) e qualquer outra chamada via
 ///   <c>HttpClient</c> agora vira span, em vez de invisível como o G2 da S3D-04
 ///   registrou (achado Minor #3).
-/// - 🆕 S3D-04c — <c>ResourceBuilder</c> com <c>AddService(...)</c>: antes desta task todo
+/// - 🆕 S3D-04c — <c>ConfigureResource(r =&gt; r.AddService(...))</c>: antes desta task todo
 ///   span/métrica saía com <c>service.name: unknown_service:Kura.Api</c>, o fallback que a
-///   OTel SDK inventa a partir do nome do processo quando ninguém declara o recurso. É
-///   aplicado às DUAS pilhas (tracing e métricas) — o <c>Resource</c> é por provider, então
-///   configurar só uma deixaria a outra com o <c>unknown_service</c>.
+///   OTel SDK inventa a partir do nome do processo quando ninguém declara o recurso. O
+///   recurso é declarado UMA vez, no nível do <c>AddOpenTelemetry()</c>, e vale para as duas
+///   pilhas. ⚠️ A forma alternativa — <c>SetResourceBuilder(...)</c> dentro de cada provider —
+///   foi tentada na 1ª volta desta task e REPROVADA no G2: a instância na pilha de métricas
+///   quebra o parentesco dos spans entre camadas em runtime. Ver o comentário no corpo de
+///   <c>AddKuraObservability</c> e o §5 de task-S3D-04c-report.md.
 /// - Exporter Prometheus (<c>OpenTelemetry.Exporter.Prometheus.AspNetCore</c>) — NÃO
 ///   incluído pelo mesmo motivo: toda a série é prerelease (até 1.18.0-beta.1). O
 ///   Console exporter sozinho já atende ao critério de aceite (prova de emissão real
@@ -59,27 +62,30 @@ public static class ObservabilityExtensions
     /// <see cref="KuraActivitySource.Instancia"/>.</summary>
     private const string VersaoServico = "1.0.0";
 
-    /// <summary>
-    /// Fábrica em vez de instância compartilhada: <see cref="ResourceBuilder"/> é mutável e
-    /// cada provider (tracing/métricas) recebe o seu, para que uma configuração futura de um
-    /// não vaze no outro.
-    /// </summary>
-    private static ResourceBuilder CriarResource() =>
-        ResourceBuilder.CreateDefault().AddService(
-            serviceName: NomeServico,
-            serviceVersion: VersaoServico);
-
     public static IServiceCollection AddKuraObservability(this IServiceCollection services)
     {
         services.AddOpenTelemetry()
+            // 🔴 S3D-04c (2ª volta) — ConfigureResource NO NÍVEL DO BUILDER, um só, antes dos
+            // dois providers. NÃO trocar por .SetResourceBuilder(...) dentro de WithTracing/
+            // WithMetrics: a 1ª volta desta task fez exatamente isso e o G2 mediu que o
+            // SetResourceBuilder da pilha de MÉTRICAS DESPARENTA os spans entre camadas — o
+            // span de Infrastructure vira raiz, com TraceId próprio e sem ParentSpanId,
+            // destruindo a hierarquia que a S3D-04b existe para provar. Medição pareada, 3
+            // execuções por configuração, em task-S3D-04c-review.md §1 e no §5 do relatório
+            // desta task. O mecanismo interno pelo qual o Resource do MeterProvider afeta o
+            // parentesco de Activity do TracerProvider NÃO foi determinado por ninguém até
+            // agora — o que está estabelecido é a causalidade e o ponto exato. Travado por
+            // teste: ObservabilityExtensionsTests
+            // .PipelineDeProducaoReal_SpansEmitidosPeloTracerProviderDoDI_...
+            .ConfigureResource(r => r.AddService(
+                serviceName: NomeServico,
+                serviceVersion: VersaoServico))
             .WithTracing(t => t
-                .SetResourceBuilder(CriarResource())
                 .AddSource(KuraActivitySource.NomeFonte)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddConsoleExporter())
             .WithMetrics(m => m
-                .SetResourceBuilder(CriarResource())
                 .AddAspNetCoreInstrumentation()
                 .AddConsoleExporter());
 
