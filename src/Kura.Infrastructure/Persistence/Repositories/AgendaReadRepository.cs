@@ -2,6 +2,7 @@ namespace Kura.Infrastructure.Persistence.Repositories;
 
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
+using Kura.Domain.Observability;
 using Microsoft.EntityFrameworkCore;
 
 public class AgendaReadRepository(KuraDbContext context) : IAgendamentoReadRepository
@@ -9,6 +10,13 @@ public class AgendaReadRepository(KuraDbContext context) : IAgendamentoReadRepos
     public async Task<IEnumerable<Agendamento>> GetByIntervaloAsync(
         long idClinica, DateTime dataInicio, DateTime dataFim, long? idVeterinario)
     {
+        // S3D-04b: span-filho de camada Infrastructure — filho do span de
+        // Application acima (AgendaService), que por sua vez é filho do span HTTP.
+        // Prova a hierarquia de 3 níveis: API -> Application -> Infrastructure -> Oracle.
+        using var activity = KuraActivitySource.Instancia.StartActivity("Infrastructure.AgendaReadRepository.GetByIntervaloAsync");
+        activity?.SetTag("kura.layer", "Infrastructure");
+        activity?.SetTag("kura.id_clinica", idClinica);
+
         var query = context.Agendamentos
             .Include(a => a.Pet)
             .Include(a => a.Tutor)

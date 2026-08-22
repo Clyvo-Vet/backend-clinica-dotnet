@@ -4,6 +4,7 @@ using Kura.Application.DTOs.Agenda;
 using Kura.Application.Services.Interfaces;
 using Kura.Domain.Exceptions;
 using Kura.Domain.Interfaces;
+using Kura.Domain.Observability;
 
 public sealed class AgendaService : IAgendaService
 {
@@ -29,6 +30,13 @@ public sealed class AgendaService : IAgendaService
     public async Task<AgendaResponseDto> GetAgendaAsync(
         DateTime dataInicio, DateTime dataFim, long? idVeterinario)
     {
+        // S3D-04b: span-filho de camada Application, aninhado sob o span HTTP
+        // (AddAspNetCoreInstrumentation, S3D-04) por Activity.Current — sem passagem
+        // manual de contexto, é o comportamento padrão do System.Diagnostics.Activity.
+        using var activity = KuraActivitySource.Instancia.StartActivity("Application.AgendaService.GetAgendaAsync");
+        activity?.SetTag("kura.layer", "Application");
+        activity?.SetTag("kura.intervalo_dias", (dataFim - dataInicio).TotalDays);
+
         if (dataFim < dataInicio)
             throw new RegraDeNegocioException("DataFim não pode ser anterior à DataInicio.");
 
