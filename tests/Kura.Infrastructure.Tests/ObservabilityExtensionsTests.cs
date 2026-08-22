@@ -218,7 +218,30 @@ public class ObservabilityExtensionsTests
     }
 
     /// <summary>
-    /// S3D-04c item C2 — o teste que faltava, e que deixou a regressão C1 passar verde.
+    /// 🆕 S3D-04c (2ª volta), achado C2 do G2 — o teste que faltava: este é o ÚNICO teste do
+    /// repositório que afirma sobre spans emitidos <b>através do pipeline OTel de produção</b>.
+    ///
+    /// Os outros dois testes desta classe param antes disso: um prova que o DI expõe
+    /// <c>TracerProvider</c>/<c>MeterProvider</c>, o outro prova que o <c>.AddSource(...)</c>
+    /// está registrado. E o teste de instrumentação (o quarto) captura por
+    /// <see cref="ActivityListener"/> da BCL, que <b>não passa por nenhuma configuração do
+    /// provider</b> — logo é estruturalmente cego a regressão vinda da CONFIGURAÇÃO do
+    /// pipeline (resource, sampler, processor, exporter). Foi essa cegueira que o G2 apontou.
+    ///
+    /// Aqui a captura é feita por um <see cref="BaseProcessor{T}"/> anexado ao
+    /// <c>TracerProvider</c> real, construído pela <c>AddKuraObservability()</c> de produção
+    /// — sem alterar a configuração de produção e <b>sem pacote novo</b>
+    /// (<c>ConfigureOpenTelemetryTracerProvider</c> vem de <c>OpenTelemetry.Extensions.Hosting</c>,
+    /// já referenciado; <c>OpenTelemetry.Exporter.InMemory</c> não foi necessário).
+    ///
+    /// Cobre, além da hierarquia: <c>service.name</c> — que até esta volta não tinha
+    /// <b>nenhuma</b> cobertura automatizada (achado M1 do G2: trocar o valor passava 284/284).
+    ///
+    /// ⚠️ Limite declarado, para não vender mais do que este teste entrega: ele exercita o
+    /// pipeline OTel de produção, mas <b>não</b> o pipeline HTTP do ASP.NET Core — o span de
+    /// borda aqui é criado à mão na fonte <c>"Microsoft.AspNetCore"</c>, não pelo
+    /// <c>AddAspNetCoreInstrumentation()</c> reagindo a uma requisição real. Prova de runtime
+    /// contra a API de verdade continua sendo responsabilidade do relatório da task.
     /// </summary>
     [Fact]
     public async Task PipelineDeProducaoReal_SpansEmitidosPeloTracerProviderDoDI_PreservamHierarquiaEntreCamadasECarregamServiceName()
@@ -227,12 +250,15 @@ public class ObservabilityExtensionsTests
 
         var services = new ServiceCollection();
         services.AddKuraObservability();
+        // Anexa o coletor ao MESMO TracerProvider que a produção monta, sem tocar na
+        // configuração dela. Se AddKuraObservability parar de ouvir o KuraActivitySource,
+        // ou parar de declarar o resource, este teste vê.
         services.ConfigureOpenTelemetryTracerProvider(b => b.AddProcessor(coletor));
 
         using var sp = services.BuildServiceProvider();
         // Ordem deliberada: o TelemetryHostedService do OpenTelemetry.Extensions.Hosting
         // resolve MeterProvider antes de TracerProvider em produção — reproduzir a ordem
-        // evita que o teste dependa de uma sequência que produção não usa.
+        // evita que o teste dependa de uma sequência que a produção não usa.
         using var meterProvider = sp.GetRequiredService<MeterProvider>();
         using var tracerProvider = sp.GetRequiredService<TracerProvider>();
 
@@ -241,8 +267,11 @@ public class ObservabilityExtensionsTests
         var dataFim = new DateTime(2026, 3, 20, 0, 0, 0, DateTimeKind.Utc);
         contexto.Agendamentos.Add(new Agendamento
         {
-            Id = 1, IdClinica = IdClinicaDoTeste, NmPaciente = "Rex",
-            DtAgendamento = dataInicio.AddDays(5), StStatus = "AGENDADO"
+            Id = 1,
+            IdClinica = IdClinicaDoTeste,
+            NmPaciente = "Rex",
+            DtAgendamento = dataInicio.AddDays(5),
+            StStatus = "AGENDADO"
         });
         await contexto.SaveChangesAsync();
 
@@ -257,28 +286,54 @@ public class ObservabilityExtensionsTests
 
         using var fonteHttpSimulada = new ActivitySource("Microsoft.AspNetCore");
         using var spanDeBorda = fonteHttpSimulada.StartActivity("GET api/v1/agenda", ActivityKind.Server);
-        spanDeBorda.Should().NotBeNull();
+        spanDeBorda.Should().NotBeNull(
+            "setup: AddAspNetCoreInstrumentation() faz o TracerProvider de produção ouvir a fonte 'Microsoft.AspNetCore'");
 
         var resposta = await service.GetAgendaAsync(dataInicio, dataFim, idVeterinario: null);
-        resposta.Agendamentos.Should().HaveCount(1);
+        resposta.Agendamentos.Should().HaveCount(1,
+            "o fluxo real precisa ter atravessado Application -> Infrastructure -> DbContext");
 
-        var spanApplication = coletor.Spans.SingleOrDefault(a => a.OperationName == "Application.AgendaService.GetAgendaAsync");
-        var spanInfrastructure = coletor.Spans.SingleOrDefault(a => a.OperationName == "Infrastructure.AgendaReadRepository.GetByIntervaloAsync");
+        var spansDoTrace = coletor.Spans.Where(a => a.TraceId == spanDeBorda!.TraceId).ToList();
 
-        spanApplication.Should().NotBeNull("DIAG: spans coletados = " + string.Join(", ", coletor.Spans.Select(a => a.OperationName)));
-        spanInfrastructure.Should().NotBeNull("DIAG");
-        spanInfrastructure!.ParentSpanId.Should().Be(spanApplication!.SpanId, "DIAG hierarquia");
-        spanInfrastructure.TraceId.Should().Be(spanApplication.TraceId, "DIAG traceid");
-        spanApplication.ParentSpanId.Should().Be(spanDeBorda!.SpanId, "DIAG borda");
+        var spanApplication = spansDoTrace
+            .SingleOrDefault(a => a.OperationName == "Application.AgendaService.GetAgendaAsync");
+        var spanInfrastructure = spansDoTrace
+            .SingleOrDefault(a => a.OperationName == "Infrastructure.AgendaReadRepository.GetByIntervaloAsync");
 
-        coletor.RecursoDoProvider.Should().NotBeNull();
-        coletor.RecursoDoProvider!.Attributes.Should().Contain(a => a.Key == "service.name" && (string)a.Value == "Kura.Api");
+        spanApplication.Should().NotBeNull(
+            "o span de Application precisa CHEGAR ao TracerProvider de produção — se AddKuraObservability parar de registrar a fonte, ele não chega e o tracing morre em silêncio");
+        spanInfrastructure.Should().NotBeNull(
+            "idem para o span de Infrastructure");
+
+        spanApplication!.ParentSpanId.Should().Be(spanDeBorda!.SpanId,
+            "hierarquia sob o pipeline de produção: Application é filho do span de borda");
+        spanInfrastructure!.ParentSpanId.Should().Be(spanApplication.SpanId,
+            "hierarquia sob o pipeline de produção: Infrastructure é filho de Application — critério de aceite central da S3D-04b");
+        spanInfrastructure.TraceId.Should().Be(spanApplication.TraceId,
+            "os três spans pertencem ao mesmo trace");
+
+        coletor.RecursoDoProvider.Should().NotBeNull(
+            "o TracerProvider de produção sempre tem um Resource associado");
+        coletor.RecursoDoProvider!.Attributes.Should().Contain(
+            a => a.Key == "service.name" && (string)a.Value == "Kura.Api",
+            "S3D-04c item 3: sem ConfigureResource/AddService o Resource cai no fallback 'unknown_service:<processo>' — era o sintoma que o item 3 existe para corrigir, e até esta volta nada travava isso");
     }
 
+    /// <summary>
+    /// Processador anexado ao <c>TracerProvider</c> de produção. <see cref="BaseProcessor{T}"/>
+    /// é o ponto de extensão público da OTel para observar spans já processados pelo provider;
+    /// <c>ParentProvider.GetResource()</c> dá acesso ao <c>Resource</c> efetivo do provider,
+    /// que é o que carrega <c>service.name</c>.
+    /// </summary>
     private sealed class ColetorDeSpansDoProvider : BaseProcessor<Activity>
     {
-        private readonly List<Activity> _spans = new();
-        public IReadOnlyList<Activity> Spans { get { lock (_spans) return _spans.ToList(); } }
+        private readonly List<Activity> _spans = [];
+
+        public IReadOnlyList<Activity> Spans
+        {
+            get { lock (_spans) return _spans.ToList(); }
+        }
+
         public Resource? RecursoDoProvider { get; private set; }
 
         public override void OnEnd(Activity data)
