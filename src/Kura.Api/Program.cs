@@ -92,37 +92,44 @@ var app = builder.Build();
 
 // Validação de migrations pendentes — apenas aviso, NÃO aplica nada (schema é responsabilidade do Flyway)
 // Retry com backoff exponencial para aguardar o serviço XEPDB1 registrar-se no listener Oracle
-using (var scope = app.Services.CreateScope())
+// S3D-05: o bloco de retry abaixo abre conexão real com o Oracle no startup. Em teste
+// de integração (WebApplicationFactory<Program>) não há banco, e o loop de 10 tentativas
+// com backoff exponencial atrasaria a suíte sem necessidade. Fora do ambiente "Testing"
+// nada muda: o bloco roda exatamente como antes.
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    var context = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
-
-    const int maxAttempts = 10;
-    int[] retriableErrors = [12514, 1109, 12541, 17002];
-
-    for (int attempt = 1; attempt <= maxAttempts; attempt++)
+    using (var scope = app.Services.CreateScope())
     {
-        try
+        var context = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
+
+        const int maxAttempts = 10;
+        int[] retriableErrors = [12514, 1109, 12541, 17002];
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-            if (pendingMigrations.Any())
+            try
             {
-                app.Logger.LogWarning(
-                    "Existem {Count} migrations pendentes no EF Core. " +
-                    "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
-                    "Migrations pendentes: {Migrations}",
-                    pendingMigrations.Count(),
-                    string.Join(", ", pendingMigrations));
+                var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+                if (pendingMigrations.Any())
+                {
+                    app.Logger.LogWarning(
+                        "Existem {Count} migrations pendentes no EF Core. " +
+                        "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
+                        "Migrations pendentes: {Migrations}",
+                        pendingMigrations.Count(),
+                        string.Join(", ", pendingMigrations));
+                }
+                break;
             }
-            break;
-        }
-        catch (OracleException ex) when (retriableErrors.Contains(ex.Number) && attempt < maxAttempts)
-        {
-            var delaySecs = Math.Min(Math.Pow(2, attempt - 1), 60);
-            app.Logger.LogWarning(
-                "Oracle não disponível (ORA-{ErrorCode}) — tentativa {Attempt}/{MaxAttempts}. " +
-                "Aguardando {Delay}s antes de nova tentativa...",
-                ex.Number, attempt, maxAttempts, delaySecs);
-            await Task.Delay(TimeSpan.FromSeconds(delaySecs));
+            catch (OracleException ex) when (retriableErrors.Contains(ex.Number) && attempt < maxAttempts)
+            {
+                var delaySecs = Math.Min(Math.Pow(2, attempt - 1), 60);
+                app.Logger.LogWarning(
+                    "Oracle não disponível (ORA-{ErrorCode}) — tentativa {Attempt}/{MaxAttempts}. " +
+                    "Aguardando {Delay}s antes de nova tentativa...",
+                    ex.Number, attempt, maxAttempts, delaySecs);
+                await Task.Delay(TimeSpan.FromSeconds(delaySecs));
+            }
         }
     }
 }
@@ -147,3 +154,14 @@ app.MapControllers();
 app.MapKuraHealthChecks("/health");
 
 app.Run();
+
+// S3D-05: declaração explícita para destravar WebApplicationFactory<Program> (S3D-06),
+// que exige um tipo Program público, e precisa vir DEPOIS de todos os top-level statements.
+// ⚠️ MEDIDO neste repo (SDK 10.0.203, net10.0): o Program gerado a partir de top-level
+// statements JÁ SAI public — reproduzido também num projeto web mínimo e limpo. A receita
+// clássica do WebApplicationFactory ("adicione esta linha porque o tipo seria internal")
+// descreve SDKs anteriores; hoje ela é REDUNDANTE. Mantida de propósito como fixação
+// explícita da visibilidade, para não depender do comportamento implícito do SDK instalado
+// em cada máquina/CI — mesmo raciocínio da guarda de null em KuraDbContext.ApplyTenantFilters.
+// Alternativa descartada: InternalsVisibleTo (mais indireto, e sem precedente neste repo).
+public partial class Program;
