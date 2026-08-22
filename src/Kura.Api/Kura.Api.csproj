@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Kura.Application\Kura.Application.csproj" />
+    <ProjectReference Include="..\Kura.CrossCutting\Kura.CrossCutting.csproj" />
     <ProjectReference Include="..\Kura.Infrastructure\Kura.Infrastructure.csproj" />
   </ItemGroup>
 

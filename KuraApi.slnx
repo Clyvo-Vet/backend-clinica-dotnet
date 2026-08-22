@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Kura.Api/Kura.Api.csproj" />
     <Project Path="src/Kura.Application/Kura.Application.csproj" />
+    <Project Path="src/Kura.CrossCutting/Kura.CrossCutting.csproj" />
     <Project Path="src/Kura.Domain/Kura.Domain.csproj" />
     <Project Path="src/Kura.Infrastructure/Kura.Infrastructure.csproj" />
   </Folder>

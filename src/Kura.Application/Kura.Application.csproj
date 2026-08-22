@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\Kura.CrossCutting\Kura.CrossCutting.csproj" />
     <ProjectReference Include="..\Kura.Domain\Kura.Domain.csproj" />
   </ItemGroup>
 

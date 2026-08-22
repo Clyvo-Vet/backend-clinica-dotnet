@@ -1,8 +1,8 @@
 namespace Kura.Infrastructure.Persistence.Repositories;
 
+using Kura.CrossCutting.Observability;
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
-using Kura.Domain.Observability;
 using Microsoft.EntityFrameworkCore;
 
 public class AgendaReadRepository(KuraDbContext context) : IAgendamentoReadRepository
