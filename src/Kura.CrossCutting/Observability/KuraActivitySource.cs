@@ -34,15 +34,34 @@ public static class KuraActivitySource
     /// <summary>
     /// Nome usado tanto na criação do <see cref="ActivitySource"/> quanto no
     /// <c>.AddSource(...)</c> registrado em <c>ObservabilityExtensions</c>
-    /// (<c>Kura.Api</c>). Os dois precisam bater — é o nome que o SDK usa para decidir
-    /// se ouve esta fonte. Divergência entre os dois mata o tracing EM SILÊNCIO
-    /// (<c>StartActivity</c> passa a devolver <c>null</c>, sem erro), por isso o valor não
-    /// foi alterado na S3D-04c junto com a mudança de projeto/namespace.
+    /// (<c>Kura.Api</c>). É o nome que o SDK usa para decidir se ouve esta fonte.
     ///
-    /// O prefixo <c>Kura.Api</c> aqui nomeia o SERVIÇO implantado (o mesmo
-    /// <c>service.name</c> configurado no <c>ResourceBuilder</c> pela S3D-04c), não a camada
-    /// de API — lê-se "o escopo cross-layer do serviço Kura.Api". Fora do
-    /// <c>Kura.Domain</c>, esse nome deixou de ser contradição de vocabulário.
+    /// ⚠️ <b>Correção da 2ª volta da S3D-04c (achado I1 do G2):</b> a versão anterior deste
+    /// comentário alertava que "divergência entre os dois mata o tracing em silêncio" e usava
+    /// isso como razão principal para não mexer no valor. <b>Esse perigo não existe da forma
+    /// descrita</b>, e o revisor provou: há <b>um único literal</b> desta string no
+    /// repositório inteiro, e o <c>.AddSource(...)</c> referencia <b>esta constante</b>, nunca
+    /// uma cópia — não há dois lados para divergir, há uma fonte da verdade e dois leitores
+    /// dela. Trocar o valor da constante deixa a suíte verde (mutação C6 do G2, 284/284).
+    /// Manter o alerta seria documentação afirmando um risco que a estrutura do código
+    /// elimina — o mesmo dano de "documentação que garante o que o código não faz", invertido:
+    /// alguém que precisasse renomear a fonte deixaria de fazê-lo por medo de um risco
+    /// inexistente.
+    ///
+    /// <b>O valor é mantido por uma razão que se sustenta sozinha:</b> o prefixo
+    /// <c>Kura.Api</c> nomeia o SERVIÇO implantado — o mesmo <c>service.name</c> que
+    /// <c>ObservabilityExtensions</c> grava no <c>Resource</c> — e não a camada de API.
+    /// Lê-se "o escopo cross-layer do serviço Kura.Api", e no output do exporter o escopo
+    /// <c>Kura.Api.CrossLayer</c> aparece ao lado de <c>service.name: Kura.Api</c>, o que
+    /// reforça a leitura. Fora do <c>Kura.Domain</c>, esse nome deixou de ser contradição de
+    /// vocabulário — que era a objeção real do G2 da S3D-04b.
+    ///
+    /// Nota de precisão do G2, registrada para quem for mexer aqui: <c>const</c> em C# é
+    /// embutido em tempo de compilação no assembly consumidor, então existe UM cenário de
+    /// divergência real — recompilar <c>Kura.CrossCutting</c> sem recompilar <c>Kura.Api</c>.
+    /// É cenário de binário obsoleto, não de "digitaram diferente", e não é mitigado por
+    /// manter o valor; no fluxo de build deste repo (<c>dotnet build KuraApi.slnx</c> /
+    /// <c>docker build</c> do zero) todos os assemblies são recompilados juntos.
     /// </summary>
     public const string NomeFonte = "Kura.Api.CrossLayer";
 

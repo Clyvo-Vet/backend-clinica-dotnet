@@ -41,6 +41,8 @@ graph TD
     A --> C[Kura.Infrastructure]
     B --> D[Kura.Domain]
     C --> D
+    B --> F[Kura.CrossCutting]
+    C --> F
     C --> E[(Oracle 19c — FIAP)]
 ```
 
@@ -50,6 +52,7 @@ graph TD
 | **Kura.Application** | Serviços de orquestração, DTOs, validadores FluentValidation. |
 | **Kura.Infrastructure** | EF Core `KuraDbContext`, repositórios, configurações Fluent API, interceptors. |
 | **Kura.Api** | Controllers HTTP, filtros de autenticação, middlewares. Nenhuma lógica de negócio. |
+| **Kura.CrossCutting** | Preocupações transversais, que nenhuma camada "possui": hoje só o `ActivitySource` de tracing entre camadas (`KuraActivitySource`). Zero dependências externas, como o Domain — mas separado dele de propósito, porque o núcleo de domínio não deve saber que existe telemetria. |
 
 ### Padrões arquiteturais relevantes
 
