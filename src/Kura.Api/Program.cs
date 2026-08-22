@@ -92,10 +92,15 @@ var app = builder.Build();
 
 // Validação de migrations pendentes — apenas aviso, NÃO aplica nada (schema é responsabilidade do Flyway)
 // Retry com backoff exponencial para aguardar o serviço XEPDB1 registrar-se no listener Oracle
-// S3D-05: o bloco de retry abaixo abre conexão real com o Oracle no startup. Em teste
-// de integração (WebApplicationFactory<Program>) não há banco, e o loop de 10 tentativas
-// com backoff exponencial atrasaria a suíte sem necessidade. Fora do ambiente "Testing"
-// nada muda: o bloco roda exatamente como antes.
+// S3D-05: o bloco abaixo abre conexão real com o Oracle no startup, o que inviabiliza
+// subir o host num teste de integração (WebApplicationFactory<Program>). Não é questão de
+// lentidão: sem este guard, o processo de teste MORRE no startup — medido, 3,3s, exceção
+// não tratada. (O loop de 10 tentativas não chega a rodar: ver FIXES_PENDENTES.md §A3.)
+// Fora do ambiente "Testing" nada muda: o bloco roda exatamente como antes.
+// ⚠️ O guard só dispara se quem sobe o host pedir o ambiente explicitamente. O
+// WebApplicationFactory usa "Development" por PADRÃO — a factory da suíte de integração
+// PRECISA declarar UseEnvironment("Testing"), senão este bloco roda, carrega
+// appsettings.Development.json e abre conexão contra o Oracle de lá.
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using (var scope = app.Services.CreateScope())
@@ -157,11 +162,12 @@ app.Run();
 
 // S3D-05: declaração explícita para destravar WebApplicationFactory<Program> (S3D-06),
 // que exige um tipo Program público, e precisa vir DEPOIS de todos os top-level statements.
-// ⚠️ MEDIDO neste repo (SDK 10.0.203, net10.0): o Program gerado a partir de top-level
-// statements JÁ SAI public — reproduzido também num projeto web mínimo e limpo. A receita
-// clássica do WebApplicationFactory ("adicione esta linha porque o tipo seria internal")
-// descreve SDKs anteriores; hoje ela é REDUNDANTE. Mantida de propósito como fixação
-// explícita da visibilidade, para não depender do comportamento implícito do SDK instalado
-// em cada máquina/CI — mesmo raciocínio da guarda de null em KuraDbContext.ApplyTenantFilters.
+// ⚠️ MEDIDO neste repo: em net10.0 o Program gerado a partir de top-level statements JÁ SAI
+// public, e WebApplicationFactory<Program> compila COM e SEM esta linha. A receita clássica
+// ("adicione isto porque o tipo seria internal") descreve TFMs anteriores; hoje é REDUNDANTE.
+// O que governa é o TARGET FRAMEWORK, não a versão do SDK: com o MESMO SDK 10.0.203,
+// net8.0 → NotPublic, net9.0 → NotPublic, net10.0 → Public. Mantida de propósito como
+// fixação explícita da visibilidade, que sobrevive a um downgrade de TFM — mesmo raciocínio
+// da guarda de null em KuraDbContext.ApplyTenantFilters.
 // Alternativa descartada: InternalsVisibleTo (mais indireto, e sem precedente neste repo).
 public partial class Program;
