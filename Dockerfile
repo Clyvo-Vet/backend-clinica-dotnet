@@ -5,6 +5,7 @@ WORKDIR /app
 # Copiar apenas o csproj da Api para restaurar dependências
 COPY src/Kura.Api/Kura.Api.csproj src/Kura.Api/
 COPY src/Kura.Application/Kura.Application.csproj src/Kura.Application/
+COPY src/Kura.CrossCutting/Kura.CrossCutting.csproj src/Kura.CrossCutting/
 COPY src/Kura.Domain/Kura.Domain.csproj src/Kura.Domain/
 COPY src/Kura.Infrastructure/Kura.Infrastructure.csproj src/Kura.Infrastructure/
 
