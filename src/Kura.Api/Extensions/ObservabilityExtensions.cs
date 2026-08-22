@@ -41,10 +41,11 @@ using OpenTelemetry.Trace;
 ///   span/métrica saía com <c>service.name: unknown_service:Kura.Api</c>, o fallback que a
 ///   OTel SDK inventa a partir do nome do processo quando ninguém declara o recurso. O
 ///   recurso é declarado UMA vez, no nível do <c>AddOpenTelemetry()</c>, e vale para as duas
-///   pilhas. ⚠️ A forma alternativa — <c>SetResourceBuilder(...)</c> dentro de cada provider —
-///   foi tentada na 1ª volta desta task e REPROVADA no G2: a instância na pilha de métricas
-///   quebra o parentesco dos spans entre camadas em runtime. Ver o comentário no corpo de
-///   <c>AddKuraObservability</c> e o §5 de task-S3D-04c-report.md.
+///   pilhas — é a forma idiomática da OTel para recurso compartilhado entre providers. A
+///   alternativa <c>SetResourceBuilder(...)</c> por provider foi ACUSADA, na 1ª volta desta
+///   task, de quebrar o parentesco dos spans entre camadas; essa causalidade foi DERRUBADA
+///   por medição posterior. Ver o comentário no corpo de <c>AddKuraObservability</c> e
+///   task-S3D-04c-investigacao-F2.md.
 /// - Exporter Prometheus (<c>OpenTelemetry.Exporter.Prometheus.AspNetCore</c>) — NÃO
 ///   incluído pelo mesmo motivo: toda a série é prerelease (até 1.18.0-beta.1). O
 ///   Console exporter sozinho já atende ao critério de aceite (prova de emissão real
@@ -65,18 +66,33 @@ public static class ObservabilityExtensions
     public static IServiceCollection AddKuraObservability(this IServiceCollection services)
     {
         services.AddOpenTelemetry()
-            // 🔴 S3D-04c (2ª volta) — ConfigureResource NO NÍVEL DO BUILDER, um só, antes dos
-            // dois providers. NÃO trocar por .SetResourceBuilder(...) dentro de WithTracing/
-            // WithMetrics: a 1ª volta desta task fez exatamente isso e o G2 mediu que o
-            // SetResourceBuilder da pilha de MÉTRICAS DESPARENTA os spans entre camadas — o
-            // span de Infrastructure vira raiz, com TraceId próprio e sem ParentSpanId,
-            // destruindo a hierarquia que a S3D-04b existe para provar. Medição pareada, 3
-            // execuções por configuração, em task-S3D-04c-review.md §1 e no §5 do relatório
-            // desta task. O mecanismo interno pelo qual o Resource do MeterProvider afeta o
-            // parentesco de Activity do TracerProvider NÃO foi determinado por ninguém até
-            // agora — o que está estabelecido é a causalidade e o ponto exato. Travado por
-            // teste: ObservabilityExtensionsTests
-            // .PipelineDeProducaoReal_SpansEmitidosPeloTracerProviderDoDI_...
+            // S3D-04c — ConfigureResource NO NÍVEL DO BUILDER: declara o Resource uma única
+            // vez e ele vale para as duas pilhas (tracing e métricas). É a forma idiomática da
+            // OTel para recurso compartilhado, e evita duplicar a declaração em cada provider.
+            //
+            // Histórico, porque este arquivo já afirmou o CONTRÁRIO e alguém pode ter lido:
+            // a 1ª volta desta task usava .SetResourceBuilder(...) dentro de WithTracing/
+            // WithMetrics e foi reprovada no G2 sob a acusação de que a instância da pilha de
+            // MÉTRICAS desparentava os spans entre camadas. ESSA CAUSALIDADE NÃO SE SUSTENTOU.
+            // A investigação posterior mediu a configuração acusada em runtime — 127
+            // requisições reais, Production e Development, local e em container, cold start,
+            // sequencial e concorrente — e a hierarquia veio correta em 127/127, com controle
+            // positivo em cada aparelho provando que o defeito seria visto se existisse. O
+            // desparentamento observado na 1ª volta é real no log dela, mas foi reproduzido de
+            // forma controlada por OUTRA causa: binário obsoleto de Kura.Infrastructure
+            // carregado por `dotnet run --no-build`. Detalhe e limites em
+            // task-S3D-04c-investigacao-F2.md §6 e §7.
+            //
+            // Portanto: trocar para SetResourceBuilder não é proibido por medição nenhuma — é
+            // apenas menos idiomático e sem cobertura. ConfigureResource fica, e está travado
+            // por teste: remover esta chamada faz ObservabilityExtensionsTests falhar
+            // (a asserção de service.name).
+            //
+            // ⚠️ Armadilha de medição deste repo, para quem for reproduzir qualquer coisa aqui:
+            // tests/Kura.Infrastructure.Tests referencia Kura.Api, então um `dotnet test` com
+            // mutação aplicada REESCREVE src/Kura.Api/bin/.../Kura.Infrastructure.dll — e
+            // `git checkout` do fonte NÃO desfaz o binário. Medir com --no-build depois disso
+            // carrega código mutado enquanto service.name/version dizem que está tudo certo.
             .ConfigureResource(r => r.AddService(
                 serviceName: NomeServico,
                 serviceVersion: VersaoServico))
