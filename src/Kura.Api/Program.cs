@@ -38,6 +38,10 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // S3D-03: health checks reais (API + Oracle + Luna), substituindo o antigo
 // HealthController (200 incondicional). Ver Extensions/HealthCheckExtensions.cs.
 builder.Services.AddKuraHealthChecks(builder.Configuration);
+// S3D-04: tracing entre camadas + métricas de desempenho (OpenTelemetry, exporter
+// Console). Ver Extensions/ObservabilityExtensions.cs para a decisão de cobertura
+// (por que EntityFrameworkCore/Prometheus ficaram de fora).
+builder.Services.AddKuraObservability();
 
 // JWT
 var jwtKey = builder.Configuration["Jwt:Key"]
