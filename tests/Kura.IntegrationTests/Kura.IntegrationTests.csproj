@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="FluentAssertions" Version="8.9.0" />
+    <!-- S3D-06: é ESTE pacote que traz WebApplicationFactory<TEntryPoint>.
+         Microsoft.AspNetCore.TestHost (já presente em Kura.Infrastructure.Tests)
+         NÃO basta: ele expõe TestServer, mas não o bootstrap do host a partir do
+         Program.cs real da aplicação. Versão 10.0.8 = estável (mesma linha do
+         TestHost já usado no repo); prerelease é proibido nesta trilha. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.7" />
+    <!-- TASK-49 (herdado de Kura.Application.Tests): pin explícito. Sem isso, o NuGet
+         resolve Microsoft.EntityFrameworkCore.Relational para 10.0.0 (piso do range
+         flutuante "[10.0.0, 11.0.0)" declarado pelo Oracle.EntityFrameworkCore),
+         enquanto o Kura.Infrastructure.dll referenciado foi compilado contra 10.0.7,
+         gerando MSB3277 no build. 10.0.7 é a versão de produção. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kura.Api é o entry point real: WebApplicationFactory<Program> sobe o
+         Program.cs de produção, com toda a fiação (Serilog, JWT, Swagger,
+         health checks, observabilidade, pipeline de middlewares). -->
+    <ProjectReference Include="..\..\src\Kura.Api\Kura.Api.csproj" />
+    <ProjectReference Include="..\..\src\Kura.Application\Kura.Application.csproj" />
+    <ProjectReference Include="..\..\src\Kura.Domain\Kura.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Kura.Infrastructure\Kura.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
