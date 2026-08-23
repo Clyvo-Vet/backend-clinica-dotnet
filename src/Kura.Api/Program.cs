@@ -94,8 +94,15 @@ var app = builder.Build();
 // Retry com backoff exponencial para aguardar o serviço XEPDB1 registrar-se no listener Oracle
 // S3D-05: o bloco abaixo abre conexão real com o Oracle no startup, o que inviabiliza
 // subir o host num teste de integração (WebApplicationFactory<Program>). Não é questão de
-// lentidão: sem este guard, o processo de teste MORRE no startup — medido, 3,3s, exceção
-// não tratada. (O loop de 10 tentativas não chega a rodar: ver FIXES_PENDENTES.md §A3.)
+// lentidão: sem este guard, o processo de teste MORRE no startup, com exceção não tratada
+// — medido por mutação (reverter este arquivo para a versão sem o guard derruba a probe).
+// As 10 tentativas nunca chegam a acontecer: a PRIMEIRA já derruba o processo. O filtro do
+// catch abaixo compara ex.Number com o código EXTERNO, e o driver lança ORA-50201, que
+// apenas ENCAPSULA o erro real de rede (ORA-12514/12541) como InnerException — então o
+// "when" não casa, a exceção escapa e o retry é, hoje, código morto. Medido no cold start
+// do compose: 0 linhas "Oracle não disponível (ORA-…)" e RestartCount 10, ou seja, quem faz
+// a stack convergir é a restart policy do Docker, não este loop. NÃO credite o cold-start
+// ao retry em documentação: o mecanismo descrito aqui é o que roda.
 // Fora do ambiente "Testing" nada muda: o bloco roda exatamente como antes.
 // ⚠️ O guard só dispara se quem sobe o host pedir o ambiente explicitamente. O
 // WebApplicationFactory usa "Development" por PADRÃO — a factory da suíte de integração
@@ -169,5 +176,9 @@ app.Run();
 // net8.0 → NotPublic, net9.0 → NotPublic, net10.0 → Public. Mantida de propósito como
 // fixação explícita da visibilidade, que sobrevive a um downgrade de TFM — mesmo raciocínio
 // da guarda de null em KuraDbContext.ApplyTenantFilters.
+// A linha é redundante sob REMOÇÃO, mas load-bearing sob mutação de acessibilidade: trocar
+// "public" por "internal" aqui compila o Kura.Api normalmente e quebra só o consumidor, com
+// CS0122 ("Program" é inacessível) — medido. Ou seja, o modificador escrito neste arquivo é
+// quem governa; não é decoração.
 // Alternativa descartada: InternalsVisibleTo (mais indireto, e sem precedente neste repo).
 public partial class Program;
