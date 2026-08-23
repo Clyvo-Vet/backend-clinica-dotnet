@@ -96,13 +96,18 @@ var app = builder.Build();
 // subir o host num teste de integração (WebApplicationFactory<Program>). Não é questão de
 // lentidão: sem este guard, o processo de teste MORRE no startup, com exceção não tratada
 // — medido por mutação (reverter este arquivo para a versão sem o guard derruba a probe).
-// As 10 tentativas nunca chegam a acontecer: a PRIMEIRA já derruba o processo. O filtro do
-// catch abaixo compara ex.Number com o código EXTERNO, e o driver lança ORA-50201, que
-// apenas ENCAPSULA o erro real de rede (ORA-12514/12541) como InnerException — então o
-// "when" não casa, a exceção escapa e o retry é, hoje, código morto. Medido no cold start
-// do compose: 0 linhas "Oracle não disponível (ORA-…)" e RestartCount 10, ou seja, quem faz
-// a stack convergir é a restart policy do Docker, não este loop. NÃO credite o cold-start
-// ao retry em documentação: o mecanismo descrito aqui é o que roda.
+// As 10 tentativas nunca chegam a acontecer: a PRIMEIRA já derruba o processo.
+// O filtro do catch compara ex.Number com o código EXTERNO. Nas duas falhas de conexão
+// MEDIDAS neste repo (listener ausente; serviço não registrado no listener), o driver lança
+// ORA-50201 e o código real de rede (ORA-12541 / ORA-12514) só aparece DOIS níveis abaixo,
+// em NetworkException — que nem é OracleException, então não tem .Number para comparar.
+// Logo o "when" não casa e o retry não roda nesses caminhos. Os outros 2 códigos da lista
+// (1109, 17002) nunca foram exercitados — nada se afirma sobre eles.
+// No cold start do compose isso foi observado como 0 linhas "Oracle não disponível (ORA-…)"
+// e RestartCount 10: quem faz a stack convergir ali é a restart policy do Docker, não este
+// loop (observação de raspão, ainda sem G0 dedicado). Consequência para quem for escrever
+// documentação: NÃO credite o cold-start ao retry deste bloco — nos caminhos medidos, ele
+// não executa.
 // Fora do ambiente "Testing" nada muda: o bloco roda exatamente como antes.
 // ⚠️ O guard só dispara se quem sobe o host pedir o ambiente explicitamente. O
 // WebApplicationFactory usa "Development" por PADRÃO — a factory da suíte de integração
