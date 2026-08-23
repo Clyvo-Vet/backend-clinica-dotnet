@@ -39,8 +39,13 @@ public class FluxoDeNegocioHttpTests : IClassFixture<KuraApiFactory>
         lista.Should().NotBeNull();
         lista!.Should().Contain(v => v.Id == KuraApiFactory.IdVeterinarioSemeado
                                   && v.NmVeterinario == KuraApiFactory.NomeVeterinarioSemeado);
-        // Todo item vem escopado pela clínica do token — o query filter de tenant está
-        // ativo porque a claim clinicaId chegou pelo JWT.
+        // Escopo de tenant. O banco tem DUAS clínicas semeadas, cada uma com veterinário
+        // próprio; o token é só da primeira. Se o query filter de tenant for removido, ou
+        // se IClinicaContext devolver null (que em produção é vazamento cross-tenant
+        // total), o veterinário do outro tenant aparece aqui e as asserções abaixo quebram.
+        // Com uma clínica só — como era antes do G2 — elas não tinham como falhar.
+        lista.Should().NotContain(v => v.Id == KuraApiFactory.IdVeterinarioOutroTenant,
+            "o veterinário da outra clínica não pode vazar para este token");
         lista.Should().OnlyContain(v => v.IdClinica == KuraApiFactory.IdClinicaSemeada);
     }
 

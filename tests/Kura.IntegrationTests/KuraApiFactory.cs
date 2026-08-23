@@ -23,14 +23,27 @@ using Microsoft.Extensions.Hosting;
 /// <para>
 /// <b>(a) <c>UseEnvironment("Testing")</c> é obrigatório.</b> O
 /// <see cref="WebApplicationFactory{TEntryPoint}"/> usa o ambiente <c>Development</c>
-/// por PADRÃO (não <c>Testing</c>, não <c>Production</c>). Sem esta linha: o guard que a
-/// S3D-05 pôs no <c>Program.cs</c> não dispara, o bloco de validação de migrations abre
-/// conexão real com o Oracle no startup, e o host carrega
-/// <c>appsettings.Development.json</c> — que está versionado apontando para
-/// <c>oracle.fiap.com.br</c> com uma conta institucional BLOQUEADA. Isso vale também
-/// para o CI, que não define <c>ASPNETCORE_ENVIRONMENT</c>. Ver
-/// <see cref="AmbienteEFiacaoDoHostTests"/>: o ambiente é asserido em teste, justamente
-/// para que apagar esta linha quebre a suíte em vez de virar uma conexão silenciosa.
+/// por PADRÃO (não <c>Testing</c>, não <c>Production</c>). Sem esta linha o guard que a
+/// S3D-05 pôs no <c>Program.cs</c> não dispara e o bloco de validação de migrations roda
+/// no startup, carregando <c>appsettings.Development.json</c> — que está versionado
+/// apontando para <c>oracle.fiap.com.br</c> com uma conta institucional BLOQUEADA. Vale
+/// também para o CI, que não define <c>ASPNETCORE_ENVIRONMENT</c>.
+/// </para>
+///
+/// <para>
+/// ⚠️ <b>Onde está a barreira de verdade — medido no G2 desta task, em 4 variantes,
+/// incluindo o pior caso.</b> NESTA fábrica o bloco de startup <b>não chega a abrir
+/// conexão Oracle</b>: ele morre antes com
+/// <c>InvalidOperationException: Relational-specific methods…</c>, porque o
+/// <c>DbContext</c> já foi substituído por InMemory. Ou seja, <b>quem impede discar para
+/// a FIAP é a substituição do <c>DbContext</c>, não esta linha.</b> Não confie no
+/// contrário: uma segunda fábrica que mantenha <c>UseEnvironment</c> e dispense a
+/// substituição InMemory (p.ex. para testar contra um Oracle local) <b>não</b> está
+/// protegida por esta linha. A linha continua obrigatória por dois motivos medidos: sem
+/// ela a suíte fica <b>19/19 vermelha</b>, e numa fábrica sem substituição de
+/// <c>DbContext</c> o risco de conexão volta inteiro. Ver
+/// <see cref="AmbienteEFiacaoDoHostTests"/>, onde o ambiente é asserido em teste para que
+/// apagar a linha quebre a suíte em vez de degradar em silêncio.
 /// </para>
 ///
 /// <para>
@@ -55,6 +68,16 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     public const long IdClinicaSemeada = 1;
     public const long IdVeterinarioSemeado = 1;
     public const string NomeVeterinarioSemeado = "Dra. Integração";
+
+    // G2 Important-1: SEGUNDO tenant, semeado só para dar o que vazar.
+    // Com uma clínica só, a asserção "todo item veio da minha clínica" é logicamente
+    // incapaz de falhar — não existe linha de outro tenant no banco. Medido na revisão:
+    // removendo o query filter de Veterinario, e depois zerando IClinicaContext
+    // (vazamento cross-tenant total em produção), a suíte inteira ficava VERDE.
+    // Nenhum teste faz login neste tenant: ele existe exclusivamente como isca.
+    public const long IdClinicaOutroTenant = 2;
+    public const long IdVeterinarioOutroTenant = 2;
+    public const string NomeVeterinarioOutroTenant = "Dr. Outro Tenant";
 
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
@@ -177,6 +200,37 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             // escolhe o veterinário responsável pelo token.
             DsEmail = EmailClinica,
             NrTelefone = "11999990000",
+            StAtiva = true,
+        });
+
+        // Segundo tenant — ver o comentário nas constantes. Sem esta clínica, a asserção
+        // de escopo em FluxoDeNegocioHttpTests não tem como falhar.
+        db.Clinicas.Add(new Clinica
+        {
+            Id = IdClinicaOutroTenant,
+            NmClinica = "Clínica do Outro Tenant",
+            NrCnpj = "00000000000272",
+            NmRazaoSocial = "Clínica do Outro Tenant LTDA",
+            DsEndereco = "Rua do Vazamento, 200",
+            NmCidade = "São Paulo",
+            SgUf = "SP",
+            NrCep = "01002000",
+            NrTelefone = "1130000001",
+            DsEmail = "outro-tenant@kura.test",
+            DsEmailAcesso = "outro-tenant@kura.test",
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            StAtiva = true,
+            DtCadastro = DateTime.UtcNow,
+        });
+
+        db.Veterinarios.Add(new Veterinario
+        {
+            Id = IdVeterinarioOutroTenant,
+            IdClinica = IdClinicaOutroTenant,
+            NmVeterinario = NomeVeterinarioOutroTenant,
+            NrCrmv = "SP-88888",
+            DsEmail = "outro-tenant@kura.test",
+            NrTelefone = "11988880000",
             StAtiva = true,
         });
 

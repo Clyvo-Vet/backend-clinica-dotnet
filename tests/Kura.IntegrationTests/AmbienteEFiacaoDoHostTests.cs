@@ -35,11 +35,17 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     /// <c>WebApplicationFactory</c> usa <c>Development</c> por PADRÃO. Em
     /// <c>Development</c>, o <c>Program.cs</c> carrega <c>appsettings.Development.json</c>
     /// (versionado, apontando para <c>oracle.fiap.com.br</c> com conta bloqueada) e o
-    /// guard da S3D-05 não dispara, abrindo conexão real no startup — na máquina do dev
+    /// guard da S3D-05 não dispara, deixando o bloco de startup rodar — na máquina do dev
     /// E no CI, que não define <c>ASPNETCORE_ENVIRONMENT</c>.
     ///
+    /// ⚠️ Precisão medida no G2: nesta fábrica isso <b>não</b> vira conexão Oracle — morre
+    /// antes, em <c>InvalidOperationException: Relational-specific methods…</c>, porque o
+    /// <c>DbContext</c> já é InMemory. A barreira efetiva contra a FIAP é a substituição do
+    /// <c>DbContext</c>; esta asserção protege a <b>segunda</b> linha de defesa, que é a que
+    /// sobra se alguém escrever uma fábrica sem essa substituição.
+    ///
     /// Se alguém apagar <c>UseEnvironment("Testing")</c> da fábrica, é este teste que
-    /// grita, em vez de a suíte inteira sair discando para a FIAP.
+    /// grita — e a suíte inteira fica vermelha junto (19/19, medido).
     /// </summary>
     [Fact]
     public void Host_sobe_no_ambiente_Testing()
@@ -130,9 +136,15 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     }
 
     /// <summary>
-    /// O host SOBE. Parece trivial e não é: com o guard da S3D-05 removido ou invertido,
-    /// o bloco de validação de migrations roda no startup, tenta abrir conexão Oracle e
-    /// derruba o processo de teste com exceção não tratada. Medido por mutação nesta task.
+    /// O host SOBE. Parece trivial e não é: com o guard da S3D-05 removido ou invertido, o
+    /// bloco de validação de migrations roda no startup e derruba o processo de teste com
+    /// exceção não tratada — medido por mutação (19/19 vermelho).
+    ///
+    /// ⚠️ O que a mutação NÃO produziu, e por isso o nome deste teste é mais forte do que a
+    /// medição: <b>não houve tentativa de conexão Oracle</b> (0 linhas <c>ORA-</c>). A
+    /// exceção é <c>InvalidOperationException: Relational-specific methods…</c>, porque o
+    /// <c>DbContext</c> já é InMemory quando o bloco roda. Quem barra o Oracle aqui é a
+    /// substituição do <c>DbContext</c>, não o guard.
     /// </summary>
     [Fact]
     public async Task Host_responde_HTTP_sem_tocar_no_Oracle_no_startup()
