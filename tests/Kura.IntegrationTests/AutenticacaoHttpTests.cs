@@ -119,7 +119,11 @@ public class AutenticacaoHttpTests : IClassFixture<KuraApiFactory>
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         // O JwtBearer publica o motivo no header WWW-Authenticate; asserir isso separa
         // "expirou" de "assinatura errada" e impede que o teste passe por acidente.
-        resposta.Headers.WwwAuthenticate.ToString().Should().Contain("token is expired");
+        // Texto MEDIDO nesta versao do JwtBearer (10.0.7):
+        //   Bearer error="invalid_token", error_description="The token expired at '...'"
+        var motivo = resposta.Headers.WwwAuthenticate.ToString();
+        motivo.Should().Contain("invalid_token");
+        motivo.Should().Contain("The token expired at");
     }
 
     [Fact]

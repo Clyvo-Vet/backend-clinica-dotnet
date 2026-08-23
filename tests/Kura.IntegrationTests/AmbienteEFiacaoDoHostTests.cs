@@ -4,6 +4,7 @@ using System.Net;
 using FluentAssertions;
 using Kura.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Metrics;
@@ -88,6 +89,13 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     /// O código de status NÃO é asserido de propósito: ele depende de dependências
     /// externas (a Luna aponta para porta morta e devolve Degraded). O que prova a
     /// fiação é a rota RESPONDER com o corpo do <c>ResponseWriter</c> customizado.
+    ///
+    /// ⚠️ Valor MEDIDO nesta suíte: <c>200</c>, não <c>503</c>. O brief desta task
+    /// previa 503 com base na probe da revisão G2 da S3D-05 — mas naquela probe o
+    /// <c>DbContext</c> ainda era Oracle, então o check "oracle" ficava Unhealthy.
+    /// Aqui o <c>DbContext</c> é InMemory: "oracle" fica Healthy, só a Luna fica
+    /// Degraded, e o mapeamento padrão do ASP.NET Core traduz Degraded para 200.
+    /// Registrado para que ninguém "corrija" este teste para 503.
     /// </summary>
     [Fact]
     public async Task Rota_de_health_esta_mapeada_com_o_writer_customizado()
