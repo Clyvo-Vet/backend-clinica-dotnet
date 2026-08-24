@@ -1,4 +1,19 @@
-version: '3.9'
+# Compose de desenvolvimento local da API da clínica.
+#
+# Todas as variáveis abaixo usam a forma ${VAR:?mensagem} — o Compose ABORTA se a
+# variável não existir, em vez de substituir por string vazia. Isso é deliberado e
+# segue o padrão que a TASK-39 já aplicou no DevOps-Cloud.
+#
+# Por que importa: até 2026-08-24 este arquivo trazia `User Id` e `Data Source`
+# CRAVADOS apontando para a conta institucional da FIAP, com a senha vinda de um
+# ${ORACLE_PASSWORD} sem fail-fast. Sem um .env, o Compose renderizava
+# "Password=;Data Source=oracle.fiap.com.br" — usuário real, host vivo, senha vazia.
+# Cada tentativa gera ORA-01017, e o `restart` repetia isso em laço. ORA-01017
+# repetido é exatamente o que dispara ORA-28000 (conta bloqueada) — já aconteceu
+# neste projeto e travou a conta compartilhada.
+#
+# Não devolva default nenhum para ORACLE_DATA_SOURCE: o valor precisa ser escolha
+# consciente de quem sobe o container, nunca o host da FIAP por omissão.
 
 services:
   kura-api:
@@ -7,13 +22,18 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=User Id=RM562999;Password=${ORACLE_PASSWORD};Data Source=oracle.fiap.com.br:1521/orcl
-      - Jwt__Key=${JWT_KEY}
+      # Aspas obrigatórias: o valor contém ":" e sem elas o YAML lê o item da
+      # lista como mapa, e o Compose falha com "unexpected type map[string]...".
+      - "ConnectionStrings__DefaultConnection=User Id=${ORACLE_APP_USER:?defina ORACLE_APP_USER no .env};Password=${ORACLE_PASSWORD:?defina ORACLE_PASSWORD no .env};Data Source=${ORACLE_DATA_SOURCE:?defina ORACLE_DATA_SOURCE no .env - use localhost:9092/XEPDB1 para o Oracle local do DevOps-Cloud}"
+      - Jwt__Key=${JWT_KEY:?defina JWT_KEY no .env (openssl rand -base64 48)}
       - Jwt__Issuer=kura-api
       - Jwt__Audience=kura-client
-      - IoT__ApiKey=${IOT_API_KEY}
-      - Luna__ApiKey=${LUNA_API_KEY}
-      - Daily__ApiKey=${DAILY_API_KEY}
-    restart: on-failure
+      - IoT__ApiKey=${IOT_API_KEY:?defina IOT_API_KEY no .env}
+      - Luna__ApiKey=${LUNA_API_KEY:?defina LUNA_API_KEY no .env}
+      - Daily__ApiKey=${DAILY_API_KEY:?defina DAILY_API_KEY no .env}
+    # Limite explícito: `on-failure` sem contagem re-tenta indefinidamente. Se a
+    # credencial estiver errada, isso vira laço de login falho contra o banco —
+    # o amplificador que transforma ORA-01017 em ORA-28000.
+    restart: on-failure:3
