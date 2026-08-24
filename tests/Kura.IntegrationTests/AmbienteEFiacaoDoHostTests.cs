@@ -22,7 +22,9 @@ using OpenTelemetry.Trace;
 /// travam.
 /// </para>
 /// </summary>
-public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
+[Collection(ColecaoDeIntegracao.Nome)]
+[Trait(ConvencaoDeTestes.Categoria, ConvencaoDeTestes.Integracao)]
+public class AmbienteEFiacaoDoHostTests
 {
     private readonly KuraApiFactory _factory;
 

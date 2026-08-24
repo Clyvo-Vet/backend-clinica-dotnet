@@ -1,10 +1,6 @@
 namespace Kura.Infrastructure.Tests;
 
 using FluentAssertions;
-using Kura.Domain.Interfaces;
-using Kura.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-using Moq;
 
 /// <summary>
 /// TASK-86 (item 5, higiene): trava que as 3 colunas numéricas de InteracaoCanal
@@ -19,20 +15,23 @@ using Moq;
 /// remove do modelo). Por isso este teste NÃO prova que o schema real bate — Flyway
 /// continua sendo a única autoridade de DDL neste projeto — só prova que o modelo do EF
 /// não regride para NUMBER(19)/sem HasColumnType de novo.
+///
+/// <para>
+/// S3D-07: o <c>CreateContext()</c> estático, que montava um banco InMemory novo por caso
+/// de teste só para ler metadata, virou <see cref="ModeloEfInMemoryFixture"/> injetada por
+/// <c>IClassFixture</c> — este é o exemplo do padrão <b>Class Fixture</b> no lado
+/// <b>unitário</b> da suíte (o lado de integração usa <b>Collection Fixture</b>, em
+/// <c>Kura.IntegrationTests.ColecaoDeIntegracao</c>). O compartilhamento é seguro aqui, e
+/// só aqui, porque esta classe lê <b>metadata imutável</b> e nunca grava; ver a
+/// documentação da fixture para o porquê de as classes de repositório continuarem com
+/// banco próprio por teste.
+/// </para>
 /// </summary>
-public class InteracaoCanalColumnTypesTests
+public class InteracaoCanalColumnTypesTests : IClassFixture<ModeloEfInMemoryFixture>
 {
-    private static KuraDbContext CreateContext()
-    {
-        var clinicaContext = new Mock<IClinicaContext>();
-        clinicaContext.Setup(x => x.IdClinicaFiltro).Returns((long?)null);
+    private readonly ModeloEfInMemoryFixture _modelo;
 
-        var options = new DbContextOptionsBuilder<KuraDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-
-        return new KuraDbContext(options, clinicaContext.Object);
-    }
+    public InteracaoCanalColumnTypesTests(ModeloEfInMemoryFixture modelo) => _modelo = modelo;
 
     [Theory]
     [InlineData("Id", "NUMBER(10)")]
@@ -41,8 +40,7 @@ public class InteracaoCanalColumnTypesTests
     public void PropriedadesNumericas_DeInteracaoCanal_DeclaramColumnTypeAlinhadoAoFlyway(
         string nomePropriedade, string columnTypeEsperado)
     {
-        using var ctx = CreateContext();
-        var entityType = ctx.Model.FindEntityType(typeof(Kura.Domain.Entities.InteracaoCanal));
+        var entityType = _modelo.Modelo.FindEntityType(typeof(Kura.Domain.Entities.InteracaoCanal));
 
         entityType.Should().NotBeNull();
 
