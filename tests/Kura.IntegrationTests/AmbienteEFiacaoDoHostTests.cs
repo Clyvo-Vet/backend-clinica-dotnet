@@ -44,8 +44,14 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     /// <c>DbContext</c>; esta asserção protege a <b>segunda</b> linha de defesa, que é a que
     /// sobra se alguém escrever uma fábrica sem essa substituição.
     ///
-    /// Se alguém apagar <c>UseEnvironment("Testing")</c> da fábrica, é este teste que
-    /// grita — e a suíte inteira fica vermelha junto (19/19, medido).
+    /// ⚠️ Limite MEDIDO no G2b, e ele importa: este teste só grita quando
+    /// <c>ASPNETCORE_ENVIRONMENT</c> NÃO está no ambiente do processo (o caso do CI) — aí
+    /// apagar <c>UseEnvironment("Testing")</c> deixa a suíte 19/19 vermelha. Com
+    /// <c>ASPNETCORE_ENVIRONMENT=Testing</c> exportado — que é exatamente o que o protocolo
+    /// de revisão deste projeto manda exportar — apagar a linha deixa a suíte 19/19
+    /// <b>verde</b>: a asserção passa pelo motivo errado, porque ela olha o ambiente
+    /// EFETIVO, e a variável de ambiente também o satisfaz. Não trate isto como tripwire
+    /// local; ele é tripwire de CI.
     /// </summary>
     [Fact]
     public void Host_sobe_no_ambiente_Testing()
@@ -136,18 +142,22 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     }
 
     /// <summary>
-    /// O host SOBE. Parece trivial e não é: com o guard da S3D-05 removido ou invertido, o
-    /// bloco de validação de migrations roda no startup e derruba o processo de teste com
-    /// exceção não tratada — medido por mutação (19/19 vermelho).
+    /// O host SOBE e o pipeline inteiro responde. Parece trivial e não é: com o guard da
+    /// S3D-05 removido ou invertido, o bloco de validação de migrations roda no startup e
+    /// derruba o processo de teste com exceção não tratada — medido por mutação (19/19
+    /// vermelho).
     ///
-    /// ⚠️ O que a mutação NÃO produziu, e por isso o nome deste teste é mais forte do que a
-    /// medição: <b>não houve tentativa de conexão Oracle</b> (0 linhas <c>ORA-</c>). A
-    /// exceção é <c>InvalidOperationException: Relational-specific methods…</c>, porque o
-    /// <c>DbContext</c> já é InMemory quando o bloco roda. Quem barra o Oracle aqui é a
-    /// substituição do <c>DbContext</c>, não o guard.
+    /// ⚠️ Este teste NÃO asserta nada sobre Oracle, e por isso ele deixou de se chamar
+    /// <c>Host_responde_HTTP_sem_tocar_no_Oracle_no_startup</c> (achado do G2b). O corpo só
+    /// olha o status HTTP: ele ficaria igualmente verde se o startup tivesse aberto uma
+    /// conexão contra um Oracle alcançável. Nome que promete mais do que o corpo asserta é
+    /// a mesma classe de defeito que este projeto já rejeitou cinco vezes — e um rodapé em
+    /// XML não conserta, porque quem lê a saída do <c>dotnet test</c> vê só o nome. Quem
+    /// asserta a persistência é
+    /// <see cref="Persistencia_dos_testes_usa_InMemory_e_nao_Oracle"/>.
     /// </summary>
     [Fact]
-    public async Task Host_responde_HTTP_sem_tocar_no_Oracle_no_startup()
+    public async Task Host_sobe_e_o_pipeline_responde_401_sem_excecao_de_startup()
     {
         var client = _factory.CreateClient();
 

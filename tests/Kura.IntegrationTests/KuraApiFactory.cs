@@ -31,17 +31,22 @@ using Microsoft.Extensions.Hosting;
 /// </para>
 ///
 /// <para>
-/// ⚠️ <b>Onde está a barreira de verdade — medido no G2 desta task, em 4 variantes,
-/// incluindo o pior caso.</b> NESTA fábrica o bloco de startup <b>não chega a abrir
+/// ⚠️ <b>Onde está a barreira de verdade — medido em 4 variantes no G2 e em mais 3 no
+/// G2b, estas últimas incluindo a fábrica SEM substituição de <c>DbContext</c>, que é o
+/// caso que o G2 não cobriu.</b> NESTA fábrica o bloco de startup <b>não chega a abrir
 /// conexão Oracle</b>: ele morre antes com
 /// <c>InvalidOperationException: Relational-specific methods…</c>, porque o
 /// <c>DbContext</c> já foi substituído por InMemory. Ou seja, <b>quem impede discar para
 /// a FIAP é a substituição do <c>DbContext</c>, não esta linha.</b> Não confie no
 /// contrário: uma segunda fábrica que mantenha <c>UseEnvironment</c> e dispense a
 /// substituição InMemory (p.ex. para testar contra um Oracle local) <b>não</b> está
-/// protegida por esta linha. A linha continua obrigatória por dois motivos medidos: sem
-/// ela a suíte fica <b>19/19 vermelha</b>, e numa fábrica sem substituição de
-/// <c>DbContext</c> o risco de conexão volta inteiro. Ver
+/// protegida por esta linha — medido no G2b: 57 linhas <c>ORA-</c>
+/// (<c>ORA-50201</c>/<c>ORA-12541</c> contra porta morta), nascendo em <c>Semear</c> se
+/// <c>UseEnvironment</c> ficar, e em <c>Program.cs:129</c> se sair. A linha continua
+/// obrigatória por isso e porque, <b>num processo sem <c>ASPNETCORE_ENVIRONMENT</c>
+/// definido</b> (o CI), apagá-la deixa a suíte <b>19/19 vermelha</b>. Atenção ao limite
+/// também medido: com <c>ASPNETCORE_ENVIRONMENT=Testing</c> exportado, apagá-la deixa a
+/// suíte <b>19/19 verde</b>. Ver
 /// <see cref="AmbienteEFiacaoDoHostTests"/>, onde o ambiente é asserido em teste para que
 /// apagar a linha quebre a suíte em vez de degradar em silêncio.
 /// </para>
