@@ -1,0 +1,39 @@
+{
+  "_INSTRUCOES": [
+    "Copie este arquivo para 'appsettings.Development.json' e preencha os valores.",
+    "O arquivo real e IGNORADO pelo git (.gitignore) e pelo Docker (.dockerignore) DE PROPOSITO:",
+    "ele carrega credencial, e este repositorio e PUBLICO. Nunca use 'git add -f' nele.",
+    "",
+    "ORACLE: prefira o Oracle local do DevOps-Cloud (localhost:9092/XEPDB1). Apontar",
+    "'Data Source' para oracle.fiap.com.br e infraestrutura compartilhada VIVA: uma senha",
+    "errada gera ORA-01017 por tentativa, e ORA-01017 repetido trava a conta com ORA-28000.",
+    "Isso ja aconteceu neste projeto. Usuario e senha saem de DevOps-Cloud/.env",
+    "(ORACLE_APP_USER, ORACLE_APP_PASSWORD).",
+    "",
+    "Alternativa sem arquivo nenhum, equivalente e preferida em CI:",
+    "  ConnectionStrings__DefaultConnection=... (variavel de ambiente)",
+    "  Jwt__Key=...",
+    "",
+    "JWT: 'Key' assina HS256, entao precisa de no minimo 256 bits. Gere um valor novo,",
+    "nunca reaproveite o de outro ambiente:",
+    "  openssl rand -base64 48",
+    "  # ou: python -c \"import secrets,base64; print(base64.b64encode(secrets.token_bytes(48)).decode())\"",
+    "",
+    "Apague esta chave '_INSTRUCOES' depois de copiar."
+  ],
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "User Id=<ORACLE_APP_USER>;Password=<ORACLE_APP_PASSWORD>;Data Source=localhost:9092/XEPDB1"
+  },
+  "Jwt": {
+    "Key": "<GERE_COM_openssl_rand_base64_48>",
+    "Issuer": "kura-api",
+    "Audience": "kura-client",
+    "ExpiresInHours": 8
+  }
+}
