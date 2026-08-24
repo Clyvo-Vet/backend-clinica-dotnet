@@ -111,8 +111,15 @@ var app = builder.Build();
 // Fora do ambiente "Testing" nada muda: o bloco roda exatamente como antes.
 // ⚠️ O guard só dispara se quem sobe o host pedir o ambiente explicitamente. O
 // WebApplicationFactory usa "Development" por PADRÃO — a factory da suíte de integração
-// PRECISA declarar UseEnvironment("Testing"), senão este bloco roda, carrega
-// appsettings.Development.json e abre conexão contra o Oracle de lá.
+// PRECISA declarar UseEnvironment("Testing"), senão este bloco roda e carrega
+// appsettings.Development.json.
+// O que acontece DEPOIS disso depende da fábrica, e foi medido (G2/G2b da S3D-06):
+//   - fábrica com o DbContext substituído por InMemory (a KuraApiFactory de hoje): o bloco
+//     morre em InvalidOperationException "Relational-specific methods…", com 0 linhas ORA-.
+//     Quem barra o Oracle nesse caso é a substituição, NÃO este guard.
+//   - fábrica sem essa substituição: a linha do GetPendingMigrationsAsync abaixo abre
+//     conexão de verdade — medido, 57 linhas ORA- nascendo exatamente nela. É só nesse
+//     caso que este guard é a barreira.
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using (var scope = app.Services.CreateScope())
