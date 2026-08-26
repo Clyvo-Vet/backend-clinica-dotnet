@@ -12,7 +12,9 @@ using Kura.Application.DTOs.Auth;
 /// atravessando roteamento, model binding, autenticação JWT, autorização, os services
 /// reais e o EF (InMemory). Nenhum mock de <c>IAuthService</c>.
 /// </summary>
-public class AutenticacaoHttpTests : IClassFixture<KuraApiFactory>
+[Collection(ColecaoDeIntegracao.Nome)]
+[Trait(ConvencaoDeTestes.Categoria, ConvencaoDeTestes.Integracao)]
+public class AutenticacaoHttpTests
 {
     private readonly KuraApiFactory _factory;
 

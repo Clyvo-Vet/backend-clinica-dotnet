@@ -12,7 +12,9 @@ using Kura.Application.DTOs.Veterinario;
 /// é a de produção inteira: JWT -> <c>ClinicaContext</c> (claim <c>clinicaId</c>) ->
 /// query filter de tenant do <c>KuraDbContext</c> -> repositório -> service -> controller.
 /// </summary>
-public class FluxoDeNegocioHttpTests : IClassFixture<KuraApiFactory>
+[Collection(ColecaoDeIntegracao.Nome)]
+[Trait(ConvencaoDeTestes.Categoria, ConvencaoDeTestes.Integracao)]
+public class FluxoDeNegocioHttpTests
 {
     private readonly KuraApiFactory _factory;
 
