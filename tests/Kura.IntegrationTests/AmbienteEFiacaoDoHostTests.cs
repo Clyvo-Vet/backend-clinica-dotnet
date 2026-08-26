@@ -21,10 +21,21 @@ using OpenTelemetry.Trace;
 /// o host de verdade encostam nisso naturalmente, e é isso que as asserções abaixo
 /// travam.
 /// </para>
+/// <para>
+/// S3D-07 — esta classe usa <c>IClassFixture</c> (host PRÓPRIO), e NÃO a
+/// <see cref="ColecaoDeIntegracao"/>, por uma razão medida. Ela contém
+/// <c>Rota_de_health_esta_mapeada_com_o_writer_customizado</c>, que custa ~2,1s porque o
+/// health check <c>oracle</c> disca de verdade contra a connection string inerte e espera
+/// o timeout — custo que NÃO é bootstrap e não desaparece com fixture compartilhada.
+/// Mantendo esta classe numa collection separada, esses ~2,1s rodam <b>em paralelo</b> com
+/// a collection de negócio em vez de serializar atrás dela. Medido (4 execuções, wall de
+/// processo): as 3 classes numa collection só = <b>6,71s</b>; com esta separação =
+/// <b>5,51s</b>, contra <b>5,61s</b> da baseline com 3 <c>IClassFixture</c>. Ver
+/// <c>task-S3D-07-report.md</c> §1.
+/// </para>
 /// </summary>
-[Collection(ColecaoDeIntegracao.Nome)]
 [Trait(ConvencaoDeTestes.Categoria, ConvencaoDeTestes.Integracao)]
-public class AmbienteEFiacaoDoHostTests
+public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
 {
     private readonly KuraApiFactory _factory;
 
