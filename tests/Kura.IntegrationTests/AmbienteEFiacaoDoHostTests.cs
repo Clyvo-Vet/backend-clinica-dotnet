@@ -24,9 +24,16 @@ using OpenTelemetry.Trace;
 /// <para>
 /// S3D-07 — esta classe usa <c>IClassFixture</c> (host PRÓPRIO), e NÃO a
 /// <see cref="ColecaoDeIntegracao"/>, por uma razão medida. Ela contém
-/// <c>Rota_de_health_esta_mapeada_com_o_writer_customizado</c>, que custa ~2,1s porque o
-/// health check <c>oracle</c> disca de verdade contra a connection string inerte e espera
-/// o timeout — custo que NÃO é bootstrap e não desaparece com fixture compartilhada.
+/// <c>Rota_de_health_esta_mapeada_com_o_writer_customizado</c>, que custa ~2,1s por causa do
+/// health check <b><c>luna</c></b> (<see cref="Kura.Api.HealthChecks.LunaHealthCheck"/>), que
+/// faz <c>GET http://127.0.0.1:9999/health</c> contra porta morta e leva ~2s para desistir da
+/// conexão — custo que NÃO é bootstrap e não desaparece com fixture compartilhada.
+/// <b>NÃO é o check <c>oracle</c>:</b> ele roda sobre o <c>DbContext</c> InMemory que esta
+/// fábrica injeta, responde <c>Healthy</c> e não abre conexão nenhuma. Medido no corpo que o
+/// próprio teste lê (<c>durationMs</c> por check):
+/// <c>self</c> 0,9 ms · <c>oracle</c> <b>26,6 ms Healthy</b> · <c>luna</c> <b>2083,6 ms Degraded</b>.
+/// Confirmado por mutação: cortando o timeout do <c>HttpClient</c> da Luna de 3s para 200 ms, o
+/// <c>luna</c> cai para 238,3 ms e o <c>oracle</c> não se move (28,4 ms).
 /// Mantendo esta classe numa collection separada, esses ~2,1s rodam <b>em paralelo</b> com
 /// a collection de negócio em vez de serializar atrás dela. Medido (4 execuções, wall de
 /// processo): as 3 classes numa collection só = <b>6,71s</b>; com esta separação =

@@ -29,11 +29,15 @@ namespace Kura.IntegrationTests;
 ///
 /// <para>
 /// <b>Por isso <see cref="AmbienteEFiacaoDoHostTests"/> ficou de fora</b>, com
-/// <c>IClassFixture</c> próprio: ela carrega o teste do <c>/health</c>, ~2,1s de timeout de
-/// discagem que <b>não é bootstrap</b> e não some com fixture compartilhada (medido: custa o
-/// mesmo nos dois arranjos). Numa collection separada esses ~2,1s rodam <b>em paralelo</b>
-/// com esta. Resultado: <b>5,51s</b>, ou seja, o compartilhamento passou a caber dentro do
-/// orçamento de tempo da baseline. Os três arranjos estão medidos lado a lado em
+/// <c>IClassFixture</c> próprio: ela carrega o teste do <c>/health</c>, ~2,1s gastos pelo health
+/// check <b><c>luna</c></b> tentando alcançar <c>127.0.0.1:9999</c> — custo que <b>não é
+/// bootstrap</b> e não some com fixture compartilhada (medido: 2,088s / 2,113s / 2,130s, o mesmo
+/// nos <b>três</b> arranjos). Não é o check <c>oracle</c>, que é InMemory aqui e custa ~27 ms. Numa collection separada esses ~2,1s rodam <b>em paralelo</b>
+/// com esta. Resultado: <b>5,51s</b> na medição da implementação e <b>5,61s</b> na medição
+/// independente do G2, contra <b>5,59-5,61s</b> da baseline nas duas: o compartilhamento passou a
+/// <b>caber dentro</b> do orçamento de tempo da baseline — <b>empate, não ganho</b>. O critério de
+/// aceite é «o tempo não piora», e é isso que está provado; qualquer leitura de melhora estaria
+/// dentro do ruído da máquina. Os três arranjos estão medidos lado a lado em
 /// <c>task-S3D-07-report.md</c> §1.
 /// </para>
 ///
