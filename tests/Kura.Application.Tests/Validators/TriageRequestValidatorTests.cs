@@ -21,8 +21,10 @@ public class TriageRequestValidatorTests
     [Fact]
     public void Validate_DadosValidos_NaoRetornaErros()
     {
+        // Act
         var resultado = _sut.Validate(ValidDto());
 
+        // Assert
         resultado.IsValid.Should().BeTrue();
     }
 
@@ -32,16 +34,20 @@ public class TriageRequestValidatorTests
     [InlineData("ALTA")]
     public void Validate_DsUrgenciaValida_NaoRetornaErro(string urgencia)
     {
+        // Act
         var resultado = _sut.Validate(ValidDto(dsUrgencia: urgencia));
 
+        // Assert
         resultado.IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void Validate_DsUrgenciaForaDoEnum_RetornaErro()
     {
+        // Act
         var resultado = _sut.Validate(ValidDto(dsUrgencia: "CRITICA"));
 
+        // Assert
         resultado.IsValid.Should().BeFalse();
         resultado.Errors.Should().ContainSingle(e => e.PropertyName == nameof(TriageRequestDto.DsUrgencia));
     }
@@ -49,6 +55,7 @@ public class TriageRequestValidatorTests
     [Fact]
     public void Validate_IdInteracaoZero_RetornaErro()
     {
+        // Arrange
         var dto = new TriageRequestDto
         {
             IdInteracao = 0,
@@ -59,8 +66,10 @@ public class TriageRequestValidatorTests
             DsRecomendacao = "Levar ao veterinário"
         };
 
+        // Act
         var resultado = _sut.Validate(dto);
 
+        // Assert
         resultado.IsValid.Should().BeFalse();
         resultado.Errors.Should().ContainSingle(e => e.PropertyName == nameof(TriageRequestDto.IdInteracao));
     }

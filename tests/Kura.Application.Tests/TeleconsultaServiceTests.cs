@@ -65,6 +65,7 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_ComConsentimentoAceito_CriaSalaEPersiste()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
         _consentimentoRepoMock.Setup(r => r.GetMaisRecenteAsync(5L, "TELEORIENTACAO"))
@@ -72,8 +73,10 @@ public class TeleconsultaServiceTests
         _dailyServiceMock.Setup(d => d.CriarSalaAsync("kura-agendamento-10"))
             .ReturnsAsync(DailyRoomResult.ComSucesso("https://kura.daily.co/room-10"));
 
+        // Act
         var result = await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         result.DsSalaUrl.Should().Be("https://kura.daily.co/room-10");
         result.DsProvedorVideo.Should().Be("DAILY");
         result.StFallbackManual.Should().BeFalse();
@@ -85,13 +88,16 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_SemConsentimentoRegistrado_LancaRegraDeNegocioENaoChamaDaily()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
         _consentimentoRepoMock.Setup(r => r.GetMaisRecenteAsync(5L, "TELEORIENTACAO"))
             .ReturnsAsync((Consentimento?)null);
 
+        // Act
         var act = async () => await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
         _dailyServiceMock.Verify(d => d.CriarSalaAsync(It.IsAny<string>()), Times.Never);
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
@@ -100,13 +106,16 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_ConsentimentoRecusado_LancaRegraDeNegocio()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
         _consentimentoRepoMock.Setup(r => r.GetMaisRecenteAsync(5L, "TELEORIENTACAO"))
             .ReturnsAsync(ConsentimentoRecusado());
 
+        // Act
         var act = async () => await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
         _dailyServiceMock.Verify(d => d.CriarSalaAsync(It.IsAny<string>()), Times.Never);
     }
@@ -114,12 +123,15 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_AgendamentoSemTutor_TrataComoSemConsentimento()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala(idTutor: 0);
         agendamento.IdTutor = null;
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
+        // Act
         var act = async () => await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
         _consentimentoRepoMock.Verify(
             r => r.GetMaisRecenteAsync(It.IsAny<long>(), It.IsAny<string>()), Times.Never);
@@ -128,6 +140,7 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_DailyFalha_RetornaFallbackManualSemPersistir()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
         _consentimentoRepoMock.Setup(r => r.GetMaisRecenteAsync(5L, "TELEORIENTACAO"))
@@ -135,8 +148,10 @@ public class TeleconsultaServiceTests
         _dailyServiceMock.Setup(d => d.CriarSalaAsync(It.IsAny<string>()))
             .ReturnsAsync(DailyRoomResult.Falha());
 
+        // Act
         var result = await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         result.StFallbackManual.Should().BeTrue();
         result.DsSalaUrl.Should().BeNull();
         agendamento.StTeleconsulta.Should().BeFalse();
@@ -147,6 +162,7 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_SalaJaCriada_RetornaExistenteSemChamarDaily()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         agendamento.StTeleconsulta = true;
         agendamento.DsSalaUrl = "https://kura.daily.co/room-10";
@@ -155,8 +171,10 @@ public class TeleconsultaServiceTests
         _consentimentoRepoMock.Setup(r => r.GetMaisRecenteAsync(5L, "TELEORIENTACAO"))
             .ReturnsAsync(ConsentimentoAceito());
 
+        // Act
         var result = await _sut.CriarOuObterSalaAsync(10L);
 
+        // Assert
         result.DsSalaUrl.Should().Be("https://kura.daily.co/room-10");
         _dailyServiceMock.Verify(d => d.CriarSalaAsync(It.IsAny<string>()), Times.Never);
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
@@ -165,10 +183,13 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task CriarOuObterSalaAsync_AgendamentoInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(99L, 1L)).ReturnsAsync((Agendamento?)null);
 
+        // Act
         var act = async () => await _sut.CriarOuObterSalaAsync(99L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
@@ -177,14 +198,17 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task ObterSalaAsync_SalaJaCriada_RetornaEstadoAtualSemChamarDailyOuConsentimento()
     {
+        // Arrange
         var agendamento = AgendamentoSemSala();
         agendamento.StTeleconsulta = true;
         agendamento.DsSalaUrl = "https://kura.daily.co/room-10";
         agendamento.DsProvedorVideo = "DAILY";
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
+        // Act
         var result = await _sut.ObterSalaAsync(10L);
 
+        // Assert
         result.DsSalaUrl.Should().Be("https://kura.daily.co/room-10");
         _dailyServiceMock.Verify(d => d.CriarSalaAsync(It.IsAny<string>()), Times.Never);
         _consentimentoRepoMock.Verify(
@@ -194,10 +218,13 @@ public class TeleconsultaServiceTests
     [Fact]
     public async Task ObterSalaAsync_AgendamentoInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(99L, 1L)).ReturnsAsync((Agendamento?)null);
 
+        // Act
         var act = async () => await _sut.ObterSalaAsync(99L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 }

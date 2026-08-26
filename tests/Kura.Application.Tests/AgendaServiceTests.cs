@@ -36,6 +36,7 @@ public class AgendaServiceTests
     [Fact]
     public async Task GetAgendaAsync_IntervaloValido_RetornaAgendamentosMapeados()
     {
+        // Arrange
         var agendamentos = new List<Agendamento>
         {
             new()
@@ -58,8 +59,10 @@ public class AgendaServiceTests
         _readRepoMock.Setup(r => r.GetByIntervaloAsync(1L, Inicio, Fim, null))
             .ReturnsAsync(agendamentos);
 
+        // Act
         var result = await _sut.GetAgendaAsync(Inicio, Fim, null);
 
+        // Assert
         result.Should().NotBeNull();
         result.DataInicio.Should().Be(Inicio);
         result.DataFim.Should().Be(Fim);
@@ -79,8 +82,10 @@ public class AgendaServiceTests
     [Fact]
     public async Task GetAgendaAsync_DataFimAnteriorDataInicio_LancaRegraDeNegocio()
     {
+        // Act
         var act = async () => await _sut.GetAgendaAsync(Fim, Inicio, null);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().Be("DataFim não pode ser anterior à DataInicio.");
     }
@@ -88,11 +93,14 @@ public class AgendaServiceTests
     [Fact]
     public async Task GetAgendaAsync_IntervaloMaiorQue31Dias_LancaRegraDeNegocio()
     {
+        // Arrange
         var inicio = new DateTime(2026, 1, 1);
         var fimFora = inicio.AddDays(32);
 
+        // Act
         var act = async () => await _sut.GetAgendaAsync(inicio, fimFora, null);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().Be("Intervalo máximo de 31 dias.");
     }
@@ -100,11 +108,14 @@ public class AgendaServiceTests
     [Fact]
     public async Task GetAgendaAsync_ComVeterinarioId_PassaFiltroAoRepository()
     {
+        // Arrange
         _readRepoMock.Setup(r => r.GetByIntervaloAsync(1L, Inicio, Fim, 10L))
             .ReturnsAsync(new List<Agendamento>());
 
+        // Act
         await _sut.GetAgendaAsync(Inicio, Fim, 10L);
 
+        // Assert
         _readRepoMock.Verify(r => r.GetByIntervaloAsync(1L, Inicio, Fim, 10L), Times.Once);
     }
 
@@ -122,12 +133,15 @@ public class AgendaServiceTests
     [Fact]
     public async Task AtualizarStatusAsync_SemConflito_CommitERetornaStatusAtualizado()
     {
+        // Arrange
         var agendamento = AgendamentoAtivo(version: 2);
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 2 };
+        // Act
         var result = await _sut.AtualizarStatusAsync(10L, dto);
 
+        // Assert
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
         result.DsStatus.Should().Be("REALIZADO");
         agendamento.NrVersion.Should().Be(3);
@@ -136,12 +150,15 @@ public class AgendaServiceTests
     [Fact]
     public async Task AtualizarStatusAsync_VersionDesatualizada_LancaConflitoConcorrencia()
     {
+        // Arrange
         var agendamento = AgendamentoAtivo(version: 5);
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "CANCELADO", NrVersion = 3 };
+        // Act
         var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
 
+        // Assert
         await act.Should().ThrowAsync<ConflitoConcorrenciaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -149,25 +166,31 @@ public class AgendaServiceTests
     [Fact]
     public async Task AtualizarStatusAsync_CommitLancaConcurrencyException_PropagaConflito()
     {
+        // Arrange
         var agendamento = AgendamentoAtivo(version: 2);
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
         _uowMock.Setup(u => u.CommitAsync()).ThrowsAsync(new ConflitoConcorrenciaException());
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 2 };
+        // Act
         var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
 
+        // Assert
         await act.Should().ThrowAsync<ConflitoConcorrenciaException>();
     }
 
     [Fact]
     public async Task AtualizarStatusAsync_StatusFinal_LancaRegraDeNegocio()
     {
+        // Arrange
         var agendamento = AgendamentoAtivo(stStatus: "REALIZADO", version: 1);
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "CANCELADO", NrVersion = 1 };
+        // Act
         var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -175,11 +198,14 @@ public class AgendaServiceTests
     [Fact]
     public async Task AtualizarStatusAsync_AgendamentoInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _agendamentoRepoMock.Setup(r => r.GetByIdAsync(99L, 1L)).ReturnsAsync((Agendamento?)null);
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 0 };
+        // Act
         var act = async () => await _sut.AtualizarStatusAsync(99L, dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 }

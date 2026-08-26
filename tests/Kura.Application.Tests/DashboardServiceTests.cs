@@ -26,6 +26,7 @@ public class DashboardServiceTests
     [Fact]
     public async Task GetHojeAsync_ComUmEventoEUmAlertaAtivoHoje_RetornaDtoComMetricas()
     {
+        // Arrange
         var hoje = DateTime.UtcNow.Date;
         _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
             .ReturnsAsync(new List<EventoClinico>
@@ -41,8 +42,10 @@ public class DashboardServiceTests
         _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(It.IsAny<DateTime>(), 3))
             .ReturnsAsync(new List<Agendamento>());
 
+        // Act
         var result = await _sut.GetHojeAsync();
 
+        // Assert
         result.TotalConsultasHoje.Should().Be(1);
         result.TotalAlertasAtivos.Should().Be(1);
     }
@@ -50,6 +53,7 @@ public class DashboardServiceTests
     [Fact]
     public async Task GetAlertasAsync_ComAlertaAtivoEVacinaProximaEm30Dias_RetornaAlertasAtivosEVacinasVencendo()
     {
+        // Arrange
         var proximos30Dias = DateTime.UtcNow.AddDays(15).Date;
         _alertaMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AlertaTemperatura, bool>>>()))
             .ReturnsAsync(new List<AlertaTemperatura>
@@ -62,14 +66,17 @@ public class DashboardServiceTests
                 new() { Id = 5, NmVacina = "Raiva", DtProximaDose = proximos30Dias, NrLote = "L1", DsFabricante = "F", IdEventoClinico = 1, DtCriacao = DateTime.UtcNow }
             });
 
+        // Act
         var result = (await _sut.GetAlertasAsync()).ToList();
 
+        // Assert
         result.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task GetRecentesAsync_RetornaAgendamentosPassadosMapeados_NaoOResumoDeHoje()
     {
+        // Arrange
         var referencia = new DateTime(2026, 7, 20, 10, 0, 0, DateTimeKind.Utc);
         _agendamentoMock.Setup(r => r.GetRecentesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<Agendamento>
@@ -84,8 +91,10 @@ public class DashboardServiceTests
                 }
             });
 
+        // Act
         var result = (await _sut.GetRecentesAsync()).ToList();
 
+        // Assert
         result.Should().HaveCount(1);
         result[0].Id.Should().Be(42);
         result[0].NmPaciente.Should().Be("Rex");

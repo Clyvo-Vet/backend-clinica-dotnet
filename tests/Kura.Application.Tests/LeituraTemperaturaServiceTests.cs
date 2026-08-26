@@ -37,26 +37,32 @@ public class LeituraTemperaturaServiceTests
     [Fact]
     public async Task RegistrarLeituraAsync_DispositivoNaoExiste_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _dispositivoRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((DispositivoIot?)null);
 
+        // Act
         var act = async () => await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {
             IdDispositivoIot = 99L, VlTemperatura = 5.0m, DtLeitura = DateTime.UtcNow
         });
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task RegistrarLeituraAsync_DispositivoInativo_LancaRegraDeNegocio()
     {
+        // Arrange
         SetupDispositivo(1L, false);
 
+        // Act
         var act = async () => await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {
             IdDispositivoIot = 1L, VlTemperatura = 5.0m, DtLeitura = DateTime.UtcNow
         });
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().Be("Dispositivo IoT inativo.");
     }
@@ -64,6 +70,7 @@ public class LeituraTemperaturaServiceTests
     [Fact]
     public async Task RegistrarLeituraAsync_Temperatura95_CriaLeituraEAlerta()
     {
+        // Arrange
         SetupDispositivo(1L);
         AlertaTemperatura? alertaCriado = null;
         _leituraRepoMock.Setup(r => r.AddAsync(It.IsAny<LeituraTemperatura>())).Returns(Task.CompletedTask);
@@ -71,11 +78,13 @@ public class LeituraTemperaturaServiceTests
             .Callback<AlertaTemperatura>(a => alertaCriado = a)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {
             IdDispositivoIot = 1L, VlTemperatura = 9.5m, DtLeitura = DateTime.UtcNow
         });
 
+        // Assert
         _leituraRepoMock.Verify(r => r.AddAsync(It.IsAny<LeituraTemperatura>()), Times.Once);
         _alertaRepoMock.Verify(r => r.AddAsync(It.IsAny<AlertaTemperatura>()), Times.Once);
         alertaCriado!.DsTipoAlerta.Should().Be("ACIMA_LIMITE");
@@ -85,14 +94,17 @@ public class LeituraTemperaturaServiceTests
     [Fact]
     public async Task RegistrarLeituraAsync_Temperatura50_CriaApenasLeitura()
     {
+        // Arrange
         SetupDispositivo(1L);
         _leituraRepoMock.Setup(r => r.AddAsync(It.IsAny<LeituraTemperatura>())).Returns(Task.CompletedTask);
 
+        // Act
         await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {
             IdDispositivoIot = 1L, VlTemperatura = 5.0m, DtLeitura = DateTime.UtcNow
         });
 
+        // Assert
         _leituraRepoMock.Verify(r => r.AddAsync(It.IsAny<LeituraTemperatura>()), Times.Once);
         _alertaRepoMock.Verify(r => r.AddAsync(It.IsAny<AlertaTemperatura>()), Times.Never);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
@@ -101,6 +113,7 @@ public class LeituraTemperaturaServiceTests
     [Fact]
     public async Task RegistrarLeituraAsync_Temperatura1_CriaLeituraEAlertaAbaixoLimite()
     {
+        // Arrange
         SetupDispositivo(1L);
         AlertaTemperatura? alertaCriado = null;
         _leituraRepoMock.Setup(r => r.AddAsync(It.IsAny<LeituraTemperatura>())).Returns(Task.CompletedTask);
@@ -108,11 +121,13 @@ public class LeituraTemperaturaServiceTests
             .Callback<AlertaTemperatura>(a => alertaCriado = a)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.RegistrarLeituraAsync(new LeituraTemperaturaCreateDto
         {
             IdDispositivoIot = 1L, VlTemperatura = 1.0m, DtLeitura = DateTime.UtcNow
         });
 
+        // Assert
         _leituraRepoMock.Verify(r => r.AddAsync(It.IsAny<LeituraTemperatura>()), Times.Once);
         _alertaRepoMock.Verify(r => r.AddAsync(It.IsAny<AlertaTemperatura>()), Times.Once);
         alertaCriado!.DsTipoAlerta.Should().Be("ABAIXO_LIMITE");

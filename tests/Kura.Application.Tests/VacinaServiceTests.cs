@@ -52,6 +52,7 @@ public class VacinaServiceTests
     [Fact]
     public async Task CreateAsync_ResolveIdTipoEventoPorCdTipo_PersisteFkDistintaDeOutrosTipos()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
@@ -60,8 +61,10 @@ public class VacinaServiceTests
             .Callback<Vacina>(v => vacinaAdicionada = v)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto());
 
+        // Assert
         _tipoEventoServiceMock.Verify(t => t.GetIdByCdTipoAsync("VACINA"), Times.Once);
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.EventoClinico.IdTipoEvento.Should().Be(IdTipoEventoVacinaSeed);
@@ -72,14 +75,17 @@ public class VacinaServiceTests
     [Fact]
     public async Task CreateAsync_CdTipoNaoEncontrado_PropagaEntidadeNaoEncontrada()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
         _tipoEventoServiceMock.Setup(t => t.GetIdByCdTipoAsync("VACINA"))
             .ThrowsAsync(new EntidadeNaoEncontradaException("TipoEvento", "VACINA"));
 
+        // Act
         var act = async () => await _sut.CreateAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*TipoEvento*VACINA*");
 
@@ -91,6 +97,7 @@ public class VacinaServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
     {
+        // Arrange
         // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
         // trata VARCHAR2 vazio como NULL — sem o coalesce no service, um payload sem dsObservacao
         // estoura ORA-01400 (500).
@@ -104,8 +111,10 @@ public class VacinaServiceTests
 
         var dto = ValidDto(dsObservacao: dsObservacaoBruta);
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
     }
@@ -113,6 +122,7 @@ public class VacinaServiceTests
     [Fact]
     public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
@@ -123,8 +133,10 @@ public class VacinaServiceTests
 
         var dto = ValidDto(dsObservacao: "Reação leve no local da aplicação");
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.EventoClinico.DsObservacao.Should().Be("Reação leve no local da aplicação");
     }
@@ -134,6 +146,7 @@ public class VacinaServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_DsFabricanteVazioOuWhitespace_ColescaParaSentinela(string dsFabricanteBruto)
     {
+        // Arrange
         // TASK-60: VACINA.DS_FABRICANTE é NOT NULL (V9:170, migration imutável) e o Oracle trata
         // VARCHAR2 vazio como NULL — VacinaCreateValidator só valida NmVacina/NrLote, nunca teve
         // regra para DsFabricante, então um payload sem esse campo passava reto pro INSERT e
@@ -149,8 +162,10 @@ public class VacinaServiceTests
 
         var dto = ValidDto(dsFabricante: dsFabricanteBruto);
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.DsFabricante.Should().Be("Fabricante não informado");
     }
@@ -158,6 +173,7 @@ public class VacinaServiceTests
     [Fact]
     public async Task CreateAsync_DsFabricantePreenchido_NaoSobrescreveComSentinela()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
@@ -166,8 +182,10 @@ public class VacinaServiceTests
             .Callback<Vacina>(v => vacinaAdicionada = v)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto());
 
+        // Assert
         vacinaAdicionada.Should().NotBeNull();
         vacinaAdicionada!.DsFabricante.Should().Be("Zoetis");
     }

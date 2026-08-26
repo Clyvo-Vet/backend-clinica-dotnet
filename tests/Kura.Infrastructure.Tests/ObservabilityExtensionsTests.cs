@@ -59,11 +59,14 @@ public class ObservabilityExtensionsTests
     [Fact]
     public void AddKuraObservability_ServiceCollection_RegistraTracerProviderEMeterProviderNoDI()
     {
+        // Arrange
         var services = new ServiceCollection();
 
+        // Act
         services.AddKuraObservability();
         using var provider = services.BuildServiceProvider();
 
+        // Assert
         provider.GetService<TracerProvider>().Should().NotBeNull(
             "sem TracerProvider no DI, nenhum span sai — silenciosamente, sem erro de compilação nem de runtime");
         provider.GetService<MeterProvider>().Should().NotBeNull(

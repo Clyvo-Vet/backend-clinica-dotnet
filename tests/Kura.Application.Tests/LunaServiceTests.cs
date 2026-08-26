@@ -34,6 +34,7 @@ public class LunaServiceTests
     [Fact]
     public async Task GerarRelatorioAsync_IntervaloValido_RetornaAgregacaoCorreta()
     {
+        // Arrange
         var triagens = new List<TriagemLuna>
         {
             new() { Id = 1, IdClinica = 1, DsNivelUrgencia = "URGENTE", StEncaminhadoVet = true, DtTriagem = Inicio.AddDays(1), StAtiva = true, DsDescricao = "desc" },
@@ -44,8 +45,10 @@ public class LunaServiceTests
         _triagemRepoMock.Setup(r => r.GetByIntervaloAsync(Inicio, Fim))
             .ReturnsAsync(triagens);
 
+        // Act
         var result = await _sut.GerarRelatorioAsync(Inicio, Fim);
 
+        // Assert
         result.Should().NotBeNull();
         result.TotalTriagens.Should().Be(3);
         result.EncaminhadasParaVet.Should().Be(2);
@@ -58,11 +61,14 @@ public class LunaServiceTests
     [Fact]
     public async Task GerarRelatorioAsync_SemTriagensNoPeriodo_RetornaZeros()
     {
+        // Arrange
         _triagemRepoMock.Setup(r => r.GetByIntervaloAsync(Inicio, Fim))
             .ReturnsAsync(new List<TriagemLuna>());
 
+        // Act
         var result = await _sut.GerarRelatorioAsync(Inicio, Fim);
 
+        // Assert
         result.TotalTriagens.Should().Be(0);
         result.EncaminhadasParaVet.Should().Be(0);
         result.PorUrgencia.Should().BeEmpty();
@@ -71,8 +77,10 @@ public class LunaServiceTests
     [Fact]
     public async Task GerarRelatorioAsync_DataFimAnteriorDataInicio_LancaRegraDeNegocio()
     {
+        // Act
         var act = async () => await _sut.GerarRelatorioAsync(Fim, Inicio);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().Be("DataFim não pode ser anterior à DataInicio.");
     }
@@ -80,11 +88,14 @@ public class LunaServiceTests
     [Fact]
     public async Task GerarRelatorioAsync_IntervaloMaiorQue90Dias_LancaRegraDeNegocio()
     {
+        // Arrange
         var inicio = new DateTime(2026, 1, 1);
         var fimFora = inicio.AddDays(91);
 
+        // Act
         var act = async () => await _sut.GerarRelatorioAsync(inicio, fimFora);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().Be("Intervalo máximo de 90 dias.");
     }
@@ -146,6 +157,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarInteracaoAsync_IdTutorInexistente_Lanca404()
     {
+        // Arrange
         _tutorRepoMock.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((Tutor?)null);
 
         var dto = new InteractionRequestDto
@@ -157,14 +169,17 @@ public class LunaServiceTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         var act = async () => await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task RegistrarInteracaoAsync_TutorValido_DerivaIdClinicaDoTutor()
     {
+        // Arrange
         var tutor = TutorClinica42();
         _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
 
@@ -183,8 +198,10 @@ public class LunaServiceTests
             DtRecebimento = new DateTime(2026, 8, 8, 10, 0, 0, DateTimeKind.Utc)
         };
 
+        // Act
         await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         capturada.Should().NotBeNull();
         capturada!.IdClinica.Should().Be(42, "ID_CLINICA é NOT NULL e a Luna nunca envia — só dá pra derivar do tutor");
         capturada.IdTutor.Should().Be(tutor.Id);
@@ -196,6 +213,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarInteracaoAsync_ConteudoMaiorQue4000_TruncaComMarcador()
     {
+        // Arrange
         // DS_CONTEUDO é VARCHAR2(4000) NOT NULL — sem truncar, o Oracle real
         // estouraria (na verdade Oracle trunca com erro ORA-12899, "value too large
         // for column"), não silenciosamente. Truncar aqui evita o 500 completamente.
@@ -221,8 +239,10 @@ public class LunaServiceTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         System.Text.Encoding.UTF8.GetByteCount(capturada!.DsConteudo).Should().BeLessThanOrEqualTo(4000);
         capturada.DsConteudo.Should().EndWith("…[truncado]",
             "Minor-5 da revisão: quem lê a linha depois precisa distinguir mensagem " +
@@ -232,6 +252,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarInteracaoAsync_ConteudoAcentuadoMaiorQue4000Bytes_TruncaPorBytesNaoPorCaracteres()
     {
+        // Arrange
         // TASK-67 fix round 1 — Important-2 da revisão, teste que morde: revertendo
         // TruncarPorBytesUtf8 para um truncamento por CARACTERE (dto.DsConteudo[..4000]),
         // este teste falha (o texto acentuado gerado tem exatamente 4000 caracteres mas
@@ -261,8 +282,10 @@ public class LunaServiceTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         var bytesGravados = System.Text.Encoding.UTF8.GetByteCount(capturada!.DsConteudo);
         bytesGravados.Should().BeLessThanOrEqualTo(4000,
             "VARCHAR2(4000) sem CHAR herda NLS_LENGTH_SEMANTICS=BYTE (default Oracle) — " +
@@ -273,6 +296,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarInteracaoAsync_ConteudoComEmojiNoLimite_NaoQuebraParDeSurrogate()
     {
+        // Arrange
         // Emoji custa 4 bytes UTF-8 e é representado por um par substituto (2 code
         // units) em C#. Um truncamento ingênuo por índice de char podia cortar bem no
         // meio do par, produzindo uma string malformada. TruncarPorBytesUtf8 itera por
@@ -299,8 +323,10 @@ public class LunaServiceTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         // String.IsNormalized não detecta par quebrado de forma confiável — a prova
         // real é: reencodar para UTF-8 e decodificar de volta não pode lançar nem
         // produzir caractere de substituição (U+FFFD), o que aconteceria com um
@@ -314,6 +340,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarInteracaoAsync_ComMetadados_SerializaJsonBrutoNoClob()
     {
+        // Arrange
         var tutor = TutorClinica42();
         _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
 
@@ -334,8 +361,10 @@ public class LunaServiceTests
             DsMetadados = doc.RootElement.Clone()
         };
 
+        // Act
         await _sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         capturada!.DsMetadados.Should().Be("""{"media_id":"abc123"}""");
     }
 
@@ -399,6 +428,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_DescricaoMaiorQue2000_Trunca()
     {
+        // Arrange
         var tutor = TutorClinica42();
         var interacao = InteracaoExistente();
         _tutorRepoMock.Setup(r => r.GetByIdAsync(tutor.Id)).ReturnsAsync(tutor);
@@ -420,8 +450,10 @@ public class LunaServiceTests
             DsRecomendacao = new string('x', 3000)
         };
 
+        // Act
         await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         System.Text.Encoding.UTF8.GetByteCount(capturada!.DsDescricao).Should().BeLessThanOrEqualTo(2000);
         capturada.DsDescricao.Should().EndWith("…[truncado]");
     }
@@ -429,6 +461,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_DescricaoAcentuadaMaiorQue2000Bytes_TruncaPorBytesNaoPorCaracteres()
     {
+        // Arrange
         // Mesmo bug de Important-2, no outro campo que passa pelo mesmo helper
         // (TruncarPorBytesUtf8) — DS_DESCRICAO é VARCHAR2(2000) BYTE.
         var tutor = TutorClinica42();
@@ -455,8 +488,10 @@ public class LunaServiceTests
             DsRecomendacao = recomendacaoAcentuada
         };
 
+        // Act
         await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         System.Text.Encoding.UTF8.GetByteCount(capturada!.DsDescricao).Should().BeLessThanOrEqualTo(2000,
             "DS_DESCRICAO é VARCHAR2(2000) BYTE — o mesmo raciocínio do Important-2 " +
             "se aplica aqui, não só em DS_CONTEUDO");
@@ -465,6 +500,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_InteracaoDeOutraClinica_Lanca422ENaoGrava()
     {
+        // Arrange
         // TASK-67 fix round 1 — Important-3 da revisão, teste que morde: sem a
         // checagem `interacao.IdClinica != tutor.IdClinica`, este teste passaria uma
         // triagem gravável com FK cruzando clínicas (interação da clínica 99 associada
@@ -487,8 +523,10 @@ public class LunaServiceTests
             DsRecomendacao = "levar ao vet"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
         ex.Which.Message.Should().NotContain("42").And.NotContain("99",
             "mensagem sem PII/detalhe interno de propósito — só que a combinação é inválida");
@@ -500,6 +538,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_InteracaoSemClinicaAtribuida_Lanca422()
     {
+        // Arrange
         // TASK-77 (FIX_7): interação gravada com IdClinica null (tutor não identificado
         // no momento da mensagem, ver RegistrarInteracaoAsync) referenciada depois por
         // uma triagem que TEM tutor conhecido (TriageRequestDto.IdTutor não é nullable).
@@ -528,8 +567,10 @@ public class LunaServiceTests
             DsRecomendacao = "levar ao vet"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
         _triagemRepoMock.Verify(r => r.AddAsync(It.IsAny<TriagemLuna>()), Times.Never);
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
@@ -538,6 +579,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_InteracaoDaMesmaClinica_NaoLanca()
     {
+        // Arrange
         // Contraparte "caminho feliz" do teste acima — prova que a checagem nova não
         // é falso-positivo pro caso normal (interação e tutor da mesma clínica).
         var tutor = TutorClinica42();
@@ -556,8 +598,10 @@ public class LunaServiceTests
             DsRecomendacao = "levar ao vet"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         await act.Should().NotThrowAsync();
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
@@ -565,6 +609,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_InteracaoInexistente_Lanca404()
     {
+        // Arrange
         _interacaoRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((InteracaoCanal?)null);
 
         var dto = new TriageRequestDto
@@ -577,8 +622,10 @@ public class LunaServiceTests
             DsRecomendacao = "observar"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>(
             "gravar TriagemLuna.IdInteracao apontando pra uma interação inexistente " +
             "estouraria a FK do Oracle (ORA-02291) se não fosse checado antes — 500");
@@ -587,6 +634,7 @@ public class LunaServiceTests
     [Fact]
     public async Task RegistrarTriagemAsync_TutorInexistente_Lanca404()
     {
+        // Arrange
         var interacao = InteracaoExistente();
         _interacaoRepoMock.Setup(r => r.GetByIdAsync(interacao.Id)).ReturnsAsync(interacao);
         _tutorRepoMock.Setup(r => r.GetByIdAsync(555)).ReturnsAsync((Tutor?)null);
@@ -601,8 +649,10 @@ public class LunaServiceTests
             DsRecomendacao = "observar"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 }

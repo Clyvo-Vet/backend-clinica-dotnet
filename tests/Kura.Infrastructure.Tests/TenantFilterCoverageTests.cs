@@ -117,6 +117,7 @@ public class TenantFilterCoverageTests
     [Fact]
     public async Task FiltroDeTenant_DesligaInteiro_QuandoIdClinicaFiltroEhNull()
     {
+        // Arrange
         // Armadilha conhecida (documentada em CLAUDE.md): o filtro de tenant em
         // ApplyTenantFilters DESLIGA por completo quando IdClinicaFiltro == null
         // (chamada sem contexto de clínica) — ele não nega/filtra para zero linhas,
@@ -127,6 +128,7 @@ public class TenantFilterCoverageTests
         // consciente, não um efeito colateral silencioso.
         var dbName = Guid.NewGuid().ToString();
 
+        // Act
         using (var seedCtx = CreateContext(idClinicaFiltro: null, dbName))
         {
             seedCtx.Clinicas.AddRange(
@@ -182,6 +184,7 @@ public class TenantFilterCoverageTests
             await seedCtx.SaveChangesAsync();
         }
 
+        // Assert
         using var ctxClinicaA = CreateContext(idClinicaFiltro: 1, dbName);
         var vetsClinicaA = await ctxClinicaA.Veterinarios.AsNoTracking().ToListAsync();
         vetsClinicaA.Should().ContainSingle()

@@ -82,6 +82,7 @@ public class ReceituarioDownloadCrossTenantTests : IDisposable
     [Fact]
     public async Task ObterArquivoReceituarioAsync_ReceituarioDaMesmaClinica_RetornaBytes()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
         var conteudo = new byte[] { 1, 2, 3 };
         var caminho = await EscreverArquivoDeTesteAsync("receituario-a.pdf", conteudo);
@@ -112,14 +113,17 @@ public class ReceituarioDownloadCrossTenantTests : IDisposable
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildService(ctxClinicaA);
 
+        // Act
         var resultado = await sut.ObterArquivoReceituarioAsync(10L, 55L);
 
+        // Assert
         resultado.Conteudo.Should().Equal(conteudo);
     }
 
     [Fact]
     public async Task ObterArquivoReceituarioAsync_ReceituarioDeOutraClinica_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         // O evento e o documento pertencem à Clínica B. Um veterinário autenticado na
         // Clínica A não pode baixar os bytes — mesmo sabendo (ou adivinhando) os ids
         // corretos de evento/documento.
@@ -153,8 +157,10 @@ public class ReceituarioDownloadCrossTenantTests : IDisposable
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildService(ctxClinicaA);
 
+        // Act
         var act = async () => await sut.ObterArquivoReceituarioAsync(20L, 66L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>(
             "um veterinário da Clínica A nunca deve conseguir baixar um receituário da Clínica B, " +
             "nem mesmo acertando os ids de evento/documento por adivinhação");

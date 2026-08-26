@@ -12,6 +12,7 @@ public class MultiTenantTests
     [Fact]
     public async Task PetService_CreateAsync_SetaIdClinicaDoContexto()
     {
+        // Arrange
         var clinicaId = 42L;
         var repoMock = new Mock<IPetRepository>();
         var tutorPetMock = new Mock<ITutorPetRepository>();
@@ -39,6 +40,7 @@ public class MultiTenantTests
         var sut = new PetService(repoMock.Object, tutorPetMock.Object,
             especieMock.Object, racaMock.Object, uowMock.Object, ctxMock.Object, tutorRepoMock.Object);
 
+        // Act
         await sut.CreateAsync(new PetCreateDto
         {
             IdEspecie = 1,
@@ -52,6 +54,7 @@ public class MultiTenantTests
             StPrincipal = true
         });
 
+        // Assert
         petCriado.Should().NotBeNull();
         petCriado!.IdClinica.Should().Be(clinicaId);
     }

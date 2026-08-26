@@ -48,6 +48,7 @@ public class TimelineRepositoryTests
     [Fact]
     public async Task GetByPetIdAsync_RetornaEventosOrdenadosPorDataDecrescente_ComDsObservacaoENmVeterinarioCorretos()
     {
+        // Arrange
         var ctx = CreateContext();
 
         ctx.Veterinarios.Add(new Veterinario
@@ -97,8 +98,10 @@ public class TimelineRepositoryTests
 
         var repository = new TimelineRepository(ctx);
 
+        // Act
         var resultado = (await repository.GetByPetIdAsync(1L)).ToList();
 
+        // Assert
         resultado.Should().HaveCount(2);
         // Ordenado por DtEvento decrescente: o evento de 08/05 (vacina) vem antes do de 08/01 (consulta).
         resultado.Select(e => e.DsObservacao).Should().ContainInOrder(
@@ -112,11 +115,14 @@ public class TimelineRepositoryTests
     [Fact]
     public async Task GetByPetIdAsync_PetSemEventosClinicos_RetornaListaVazia()
     {
+        // Arrange
         var ctx = CreateContext();
         var repository = new TimelineRepository(ctx);
 
+        // Act
         var resultado = await repository.GetByPetIdAsync(999L);
 
+        // Assert
         resultado.Should().BeEmpty();
     }
 }

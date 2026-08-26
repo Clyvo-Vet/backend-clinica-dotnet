@@ -20,23 +20,29 @@ public class TipoEventoServiceTests
     [Fact]
     public async Task GetIdByCdTipoAsync_CdTipoExistente_RetornaId()
     {
+        // Arrange
         var tipos = new List<TipoEvento> { new() { Id = 4, CdTipo = "PRESCRICAO", NmTipo = "PRESCRICAO" } };
         _repositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<TipoEvento, bool>>>()))
             .ReturnsAsync(tipos);
 
+        // Act
         var id = await _sut.GetIdByCdTipoAsync("PRESCRICAO");
 
+        // Assert
         id.Should().Be(4L);
     }
 
     [Fact]
     public async Task GetIdByCdTipoAsync_CdTipoInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _repositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<TipoEvento, bool>>>()))
             .ReturnsAsync(Enumerable.Empty<TipoEvento>());
 
+        // Act
         var act = async () => await _sut.GetIdByCdTipoAsync("DESCONHECIDO");
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*TipoEvento*DESCONHECIDO*");
     }

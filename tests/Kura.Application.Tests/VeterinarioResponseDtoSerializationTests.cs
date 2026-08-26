@@ -19,6 +19,7 @@ public class VeterinarioResponseDtoSerializationTests
     [Fact]
     public void Serializacao_UsaNrCRMV_ComCapitalizacaoCorreta()
     {
+        // Arrange
         var dto = new VeterinarioResponseDto
         {
             Id = 1,
@@ -30,9 +31,11 @@ public class VeterinarioResponseDtoSerializationTests
             StAtiva = true
         };
 
+        // Act
         var json = JsonSerializer.Serialize(dto, Options);
         using var doc = JsonDocument.Parse(json);
 
+        // Assert
         doc.RootElement.TryGetProperty("nrCRMV", out var nrCrmvProp).Should().BeTrue(
             "o app mobile espera a chave \"nrCRMV\" (CRMV maiúsculo)");
         nrCrmvProp.GetString().Should().Be("SP-123456");
@@ -44,6 +47,7 @@ public class VeterinarioResponseDtoSerializationTests
     [Fact]
     public void Deserializacao_AceitaNrCRMV_ERoundTripPreservaValor()
     {
+        // Arrange
         const string json = """
         {
             "id": 1,
@@ -56,8 +60,10 @@ public class VeterinarioResponseDtoSerializationTests
         }
         """;
 
+        // Act
         var dto = JsonSerializer.Deserialize<VeterinarioResponseDto>(json, Options);
 
+        // Assert
         dto.Should().NotBeNull();
         dto!.NrCrmv.Should().Be("SP-654321");
     }

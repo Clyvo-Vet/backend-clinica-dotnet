@@ -33,6 +33,7 @@ public class InviteTutorRepositoryTests
     [Fact]
     public async Task GetByTokenAsync_TokenExistente_EncontraOInviteAposConversaoGuidString()
     {
+        // Arrange
         var ctx = CreateContext();
         var token = Guid.NewGuid();
 
@@ -51,8 +52,10 @@ public class InviteTutorRepositoryTests
 
         var repository = new InviteTutorRepository(ctx);
 
+        // Act
         var resultado = await repository.GetByTokenAsync(token);
 
+        // Assert
         resultado.Should().NotBeNull();
         resultado!.NrToken.Should().Be(token);
     }
@@ -60,11 +63,14 @@ public class InviteTutorRepositoryTests
     [Fact]
     public async Task GetByTokenAsync_TokenInexistente_RetornaNull()
     {
+        // Arrange
         var ctx = CreateContext();
         var repository = new InviteTutorRepository(ctx);
 
+        // Act
         var resultado = await repository.GetByTokenAsync(Guid.NewGuid());
 
+        // Assert
         resultado.Should().BeNull();
     }
 }

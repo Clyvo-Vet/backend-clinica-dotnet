@@ -88,6 +88,7 @@ public class MetricsControllerTenantScopeTests
     [Fact]
     public async Task GetMetrics_SemContextoDeClinica_RetornaAgregadoGlobalRotulado()
     {
+        // Arrange
         // Endpoint raiz continua AllowAnonymous — mas agora o agregado global é
         // intencional e explicitamente rotulado, não um vazamento acidental.
         var dbName = Guid.NewGuid().ToString();
@@ -96,8 +97,10 @@ public class MetricsControllerTenantScopeTests
         using var ctx = CreateContext(idClinicaFiltro: null, dbName);
         var controller = new MetricsController(ctx, Mock.Of<IClinicaContext>());
 
+        // Act
         var result = await controller.GetMetrics();
 
+        // Assert
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var body = ok.Value!;
 
@@ -109,6 +112,7 @@ public class MetricsControllerTenantScopeTests
     [Fact]
     public async Task GetMetricsClinica_ComContextoDeClinica_RetornaSoContagemDaquelaClinica()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
         await SeedDuasClinicasAsync(dbName);
 
@@ -117,8 +121,10 @@ public class MetricsControllerTenantScopeTests
         clinicaContext.Setup(x => x.IdClinica).Returns(1);
         var controller = new MetricsController(ctx, clinicaContext.Object);
 
+        // Act
         var result = await controller.GetMetricsClinica();
 
+        // Assert
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var body = ok.Value!;
 
@@ -131,6 +137,7 @@ public class MetricsControllerTenantScopeTests
     [Fact]
     public async Task GetMetricsClinica_SemContextoDeClinica_NaoDevolveContagemGlobalPorAcidente()
     {
+        // Arrange
         // Armadilha da TASK-45: o filtro de tenant do EF desliga inteiro quando
         // IdClinicaFiltro é null. Se o endpoint escopado dependesse silenciosamente
         // desse filtro (em vez de exigir e usar IClinicaContext.IdClinica de forma
@@ -149,8 +156,10 @@ public class MetricsControllerTenantScopeTests
                 "Claim 'clinicaId' ausente ou inválida no token JWT."));
         var controller = new MetricsController(ctx, clinicaContextSemJwt.Object);
 
+        // Act
         Func<Task> act = async () => await controller.GetMetricsClinica();
 
+        // Assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>(
             "sem contexto de clínica o endpoint deve falhar, nunca cair de volta para a " +
             "contagem global do ambiente");

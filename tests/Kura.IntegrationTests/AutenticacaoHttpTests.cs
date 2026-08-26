@@ -23,14 +23,17 @@ public class AutenticacaoHttpTests
     [Fact]
     public async Task Login_com_credenciais_validas_devolve_200_e_token()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             dsEmail = KuraApiFactory.EmailClinica,
             dsSenha = KuraApiFactory.SenhaClinica,
         });
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var corpo = await resposta.Content.ReadFromJsonAsync<TokenResponseDto>();
@@ -72,14 +75,17 @@ public class AutenticacaoHttpTests
     [Fact]
     public async Task Login_com_email_inexistente_devolve_422_com_a_mesma_mensagem_generica()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             dsEmail = "ninguem@kura.test",
             dsSenha = KuraApiFactory.SenhaClinica,
         });
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
 
         using var corpo = JsonDocument.Parse(await resposta.Content.ReadAsStringAsync());
@@ -92,32 +98,41 @@ public class AutenticacaoHttpTests
     [Fact]
     public async Task Endpoint_protegido_sem_token_devolve_401()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Endpoint_protegido_com_token_sintaticamente_invalido_devolve_401()
     {
+        // Arrange
         var client = _factory.CreateClient();
         client.UsarToken("isto-nao-e-um-jwt");
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Endpoint_protegido_com_token_expirado_devolve_401()
     {
+        // Arrange
         var client = _factory.CreateClient();
         client.UsarToken(AutenticacaoHelper.GerarTokenExpirado());
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         // O JwtBearer publica o motivo no header WWW-Authenticate; asserir isso separa
         // "expirou" de "assinatura errada" e impede que o teste passe por acidente.
@@ -131,11 +146,14 @@ public class AutenticacaoHttpTests
     [Fact]
     public async Task Endpoint_protegido_com_assinatura_invalida_devolve_401()
     {
+        // Arrange
         var client = _factory.CreateClient();
         client.UsarToken(AutenticacaoHelper.GerarTokenComAssinaturaInvalida());
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

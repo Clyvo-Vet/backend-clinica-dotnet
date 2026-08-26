@@ -25,6 +25,7 @@ public class NotificacaoServiceTests
     [Fact]
     public async Task GetAllByClinicaAsync_SemFiltroDeLidas_RetornaNotificacoesClinica()
     {
+        // Arrange
         var clinicaId = 10L;
         var lista = new List<Notificacao>
         {
@@ -34,14 +35,17 @@ public class NotificacaoServiceTests
         _repoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Notificacao, bool>>>()))
             .ReturnsAsync(lista);
 
+        // Act
         var result = await _sut.GetAllByClinicaAsync(clinicaId, null);
 
+        // Assert
         result.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task GetAllByClinicaAsync_ApenasNaoLidas_FiltraCorretamente()
     {
+        // Arrange
         var clinicaId = 10L;
         var lista = new List<Notificacao>
         {
@@ -51,8 +55,10 @@ public class NotificacaoServiceTests
         _repoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Notificacao, bool>>>()))
             .ReturnsAsync(lista);
 
+        // Act
         var result = await _sut.GetAllByClinicaAsync(clinicaId, true);
 
+        // Assert
         result.Should().HaveCount(1);
         result.First().StLida.Should().Be(false);
     }
@@ -60,21 +66,27 @@ public class NotificacaoServiceTests
     [Fact]
     public async Task MarcarLidaAsync_NotificacaoNaoExiste_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Notificacao?)null);
 
+        // Act
         var act = async () => await _sut.MarcarLidaAsync(99L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task MarcarLidaAsync_NotificacaoJaLida_LancaRegraDeNegocio()
     {
+        // Arrange
         var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = true, StAtiva = true };
         _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(notificacao);
 
+        // Act
         var act = async () => await _sut.MarcarLidaAsync(1L);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Notificação já foi lida.");
     }
@@ -82,11 +94,14 @@ public class NotificacaoServiceTests
     [Fact]
     public async Task MarcarLidaAsync_CaminhoFeliz_MarcaStLidaS()
     {
+        // Arrange
         var notificacao = new Notificacao { Id = 1, IdClinica = 10L, DsTitulo = "T", DsMensagem = "M", StLida = false, StAtiva = true };
         _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(notificacao);
 
+        // Act
         await _sut.MarcarLidaAsync(1L);
 
+        // Assert
         notificacao.StLida.Should().Be(true);
         notificacao.DtLeitura.Should().NotBeNull();
         _repoMock.Verify(r => r.Update(notificacao), Times.Once);

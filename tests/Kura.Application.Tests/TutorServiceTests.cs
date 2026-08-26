@@ -48,8 +48,10 @@ public class TutorServiceTests
     [Fact]
     public async Task CreateAsync_TutorEInviteCriadosNaMesmaTransacao_CommitUmaVez()
     {
+        // Act
         var result = await _sut.CreateAsync(ValidDto(), 1L);
 
+        // Assert
         _tutorRepoMock.Verify(r => r.AddAsync(It.IsAny<Tutor>()), Times.Once);
         _inviteRepoMock.Verify(r => r.AddAsync(It.IsAny<InviteTutor>()), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
@@ -60,13 +62,16 @@ public class TutorServiceTests
     [Fact]
     public async Task CreateAsync_TokenGerado_EhGuidValidoENaoVazio()
     {
+        // Arrange
         InviteTutor? capturado = null;
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>()))
             .Callback<InviteTutor>(i => capturado = i)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto(), 1L);
 
+        // Assert
         capturado.Should().NotBeNull();
         capturado!.NrToken.Should().NotBe(Guid.Empty);
     }
@@ -74,6 +79,7 @@ public class TutorServiceTests
     [Fact]
     public async Task CreateAsync_DtExpiracao_Sete_DiasApos_DtCriacao()
     {
+        // Arrange
         InviteTutor? capturado = null;
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>()))
             .Callback<InviteTutor>(i => capturado = i)
@@ -84,32 +90,40 @@ public class TutorServiceTests
             .Callback<Tutor>(t => tutorCapturado = t)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto(), 1L);
 
+        // Assert
         capturado!.DtExpiracao.Should().BeCloseTo(tutorCapturado!.DtCriacao.AddDays(7), TimeSpan.FromSeconds(1));
     }
 
     [Fact]
     public async Task CreateAsync_SemCanal_UsaDefaultWhatsapp()
     {
+        // Arrange
         InviteTutor? capturado = null;
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>()))
             .Callback<InviteTutor>(i => capturado = i)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto("WHATSAPP"), 1L);
 
+        // Assert
         capturado!.DsCanal.Should().Be("WHATSAPP");
     }
 
     [Fact]
     public async Task CreateAsync_InviteRepositoryFalha_TutorNaoPersiste()
     {
+        // Arrange
         _inviteRepoMock.Setup(r => r.AddAsync(It.IsAny<InviteTutor>()))
             .ThrowsAsync(new InvalidOperationException("Falha simulada no invite"));
 
+        // Act
         var act = async () => await _sut.CreateAsync(ValidDto(), 1L);
 
+        // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -117,11 +131,14 @@ public class TutorServiceTests
     [Fact]
     public async Task SoftDeleteAsync_TutorExiste_ChamaSoftDeleteECommit()
     {
+        // Arrange
         _tutorRepoMock.Setup(r => r.GetByIdAsync(42L))
             .ReturnsAsync(new Tutor { Id = 42L, NmTutor = "Maria" });
 
+        // Act
         await _sut.SoftDeleteAsync(42L);
 
+        // Assert
         _tutorRepoMock.Verify(r => r.SoftDelete(It.IsAny<Tutor>()), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
@@ -129,10 +146,13 @@ public class TutorServiceTests
     [Fact]
     public async Task SoftDeleteAsync_TutorNaoEncontrado_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _tutorRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Tutor?)null);
 
+        // Act
         var act = async () => await _sut.SoftDeleteAsync(99L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -142,6 +162,7 @@ public class TutorServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_NrTelefoneVazioOuWhitespace_ColescaParaSentinela(string nrTelefoneBruto)
     {
+        // Arrange
         // TASK-60: TUTOR.DS_TELEFONE é NOT NULL (V1:91, migration imutável) e o Oracle trata
         // VARCHAR2 vazio como NULL — TutorCreateValidator só valida NmTutor/NrCpf/DsEmail, nunca
         // teve regra para NrTelefone, então um payload sem esse campo passava reto pro INSERT e
@@ -154,8 +175,10 @@ public class TutorServiceTests
 
         var dto = ValidDto(nrTelefone: nrTelefoneBruto);
 
+        // Act
         await _sut.CreateAsync(dto, 1L);
 
+        // Assert
         tutorAdicionado.Should().NotBeNull();
         tutorAdicionado!.NrTelefone.Should().Be("Não informado");
     }
@@ -163,6 +186,7 @@ public class TutorServiceTests
     [Fact]
     public async Task CreateAsync_NrTelefonePreenchido_NaoSobrescreveComSentinela()
     {
+        // Arrange
         Tutor? tutorAdicionado = null;
         _tutorRepoMock.Setup(r => r.AddAsync(It.IsAny<Tutor>()))
             .Callback<Tutor>(t => tutorAdicionado = t)
@@ -170,8 +194,10 @@ public class TutorServiceTests
 
         var dto = ValidDto(nrTelefone: "11988887777");
 
+        // Act
         await _sut.CreateAsync(dto, 1L);
 
+        // Assert
         tutorAdicionado.Should().NotBeNull();
         tutorAdicionado!.NrTelefone.Should().Be("11988887777");
     }
@@ -181,6 +207,7 @@ public class TutorServiceTests
     [InlineData("   ")]
     public async Task UpdateAsync_NrTelefoneVazioOuWhitespace_ColescaParaSentinela(string nrTelefoneBruto)
     {
+        // Arrange
         // Mesmo gap de TutorCreateDto — TutorUpdateValidator também nunca teve regra para
         // NrTelefone (só NmTutor/NrCpf/DsEmail).
         var tutorExistente = new Tutor { Id = 42L, NmTutor = "Maria", NrTelefone = "11900000000" };
@@ -195,8 +222,10 @@ public class TutorServiceTests
             NrTelefone = nrTelefoneBruto
         };
 
+        // Act
         await _sut.UpdateAsync(42L, dto);
 
+        // Assert
         tutorExistente.NrTelefone.Should().Be("Não informado");
         _tutorRepoMock.Verify(r => r.Update(It.IsAny<Tutor>()), Times.Once);
     }
@@ -204,6 +233,7 @@ public class TutorServiceTests
     [Fact]
     public async Task UpdateAsync_NrTelefonePreenchido_NaoSobrescreveComSentinela()
     {
+        // Arrange
         var tutorExistente = new Tutor { Id = 42L, NmTutor = "Maria", NrTelefone = "11900000000" };
         _tutorRepoMock.Setup(r => r.GetByIdAsync(42L)).ReturnsAsync(tutorExistente);
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
@@ -216,8 +246,10 @@ public class TutorServiceTests
             NrTelefone = "11977776666"
         };
 
+        // Act
         await _sut.UpdateAsync(42L, dto);
 
+        // Assert
         tutorExistente.NrTelefone.Should().Be("11977776666");
     }
 
@@ -226,17 +258,21 @@ public class TutorServiceTests
     [Fact]
     public async Task BuscarContextoPorTelefoneAsync_TelefoneInexistente_RetornaNull()
     {
+        // Arrange
         _tutorRepoMock.Setup(r => r.GetByTelefoneAsync("5511900000000"))
             .ReturnsAsync((Tutor?)null);
 
+        // Act
         var result = await _sut.BuscarContextoPorTelefoneAsync("5511900000000");
 
+        // Assert
         result.Should().BeNull();
     }
 
     [Fact]
     public async Task BuscarContextoPorTelefoneAsync_TutorExiste_RetornaContextoComIdClinicaEPets()
     {
+        // Arrange
         var tutor = new Tutor
         {
             Id = 7,
@@ -257,8 +293,10 @@ public class TutorServiceTests
         _especieRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(especie);
         _racaRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(raca);
 
+        // Act
         var result = await _sut.BuscarContextoPorTelefoneAsync("5511999990000");
 
+        // Assert
         result.Should().NotBeNull();
         result!.IdTutor.Should().Be(7);
         result.NmTutor.Should().Be("Fulano");
@@ -274,12 +312,15 @@ public class TutorServiceTests
     [Fact]
     public async Task BuscarContextoPorTelefoneAsync_TutorSemPets_RetornaListaVazia()
     {
+        // Arrange
         var tutor = new Tutor { Id = 8, IdClinica = 42, NmTutor = "Ciclano", NrTelefone = "5511988887777", StAtiva = true };
         _tutorRepoMock.Setup(r => r.GetByTelefoneAsync("5511988887777")).ReturnsAsync(tutor);
         _tutorPetRepoMock.Setup(r => r.GetByTutorIdAsync(tutor.Id)).ReturnsAsync(new List<TutorPet>());
 
+        // Act
         var result = await _sut.BuscarContextoPorTelefoneAsync("5511988887777");
 
+        // Assert
         result.Should().NotBeNull();
         result!.Pets.Should().BeEmpty();
     }
@@ -287,12 +328,14 @@ public class TutorServiceTests
     [Fact]
     public async Task BuscarContextoPorTelefoneAsync_TutorInexistente_NuncaMencionaONumeroBuscado()
     {
+        // Arrange
         // LGPD: o número de telefone não pode vazar em nenhuma mensagem/exceção que
         // suba até o middleware/log — aqui não há exceção nenhuma (retorna null), o que
         // já é a forma mais segura de "não encontrado" (sem construir mensagem alguma).
         var numeroSensivel = "5511900001234";
         _tutorRepoMock.Setup(r => r.GetByTelefoneAsync(numeroSensivel)).ReturnsAsync((Tutor?)null);
 
+        // Act
         Exception? excecaoCapturada = null;
         try
         {
@@ -303,6 +346,7 @@ public class TutorServiceTests
             excecaoCapturada = ex;
         }
 
+        // Assert
         excecaoCapturada.Should().BeNull("tutor não encontrado é modelado como null, não exceção — nada para vazar");
     }
 }

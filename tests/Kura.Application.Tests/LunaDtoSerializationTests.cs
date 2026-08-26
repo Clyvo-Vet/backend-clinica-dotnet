@@ -24,6 +24,7 @@ public class LunaDtoSerializationTests
     [Fact]
     public void TutorContextoLunaDto_Serializa_ComChavesSnakeCase()
     {
+        // Arrange
         var dto = new TutorContextoLunaDto
         {
             IdTutor = 7,
@@ -33,9 +34,11 @@ public class LunaDtoSerializationTests
             Pets = [new PetResumoLunaDto { IdPet = 3, NmPet = "Rex", NmEspecie = "Cachorro", NmRaca = "Vira-lata" }]
         };
 
+        // Act
         var json = JsonSerializer.Serialize(dto, Options);
         using var doc = JsonDocument.Parse(json);
 
+        // Assert
         doc.RootElement.TryGetProperty("id_tutor", out var idTutor).Should().BeTrue();
         idTutor.GetInt64().Should().Be(7);
         doc.RootElement.TryGetProperty("nm_tutor", out _).Should().BeTrue();
@@ -55,6 +58,7 @@ public class LunaDtoSerializationTests
     [Fact]
     public void InteractionRequestDto_Deserializa_PayloadRealDoPydantic()
     {
+        // Arrange
         // Espelha literalmente dto.model_dump(mode="json") do InteractionRequestDTO real
         // (kura_client.py:83-89).
         const string json = """
@@ -68,8 +72,10 @@ public class LunaDtoSerializationTests
         }
         """;
 
+        // Act
         var dto = JsonSerializer.Deserialize<InteractionRequestDto>(json, Options);
 
+        // Assert
         dto.Should().NotBeNull();
         dto!.IdTutor.Should().Be(7);
         dto.DsCanal.Should().Be("WHATSAPP");
@@ -82,6 +88,7 @@ public class LunaDtoSerializationTests
     [Fact]
     public void InteractionRequestDto_Deserializa_IdTutorNull_SemLancar()
     {
+        // Arrange
         // InteractionRequestDTO.id_tutor é `int | None` no Pydantic — precisa desserializar
         // sem lançar quando null (cenário que LunaService.RegistrarInteracaoAsync trata
         // como 422, não um erro de binding/500).
@@ -96,8 +103,10 @@ public class LunaDtoSerializationTests
         }
         """;
 
+        // Act
         var dto = JsonSerializer.Deserialize<InteractionRequestDto>(json, Options);
 
+        // Assert
         dto.Should().NotBeNull();
         dto!.IdTutor.Should().BeNull();
     }
@@ -105,11 +114,14 @@ public class LunaDtoSerializationTests
     [Fact]
     public void InteractionResponseDto_Serializa_ComoIdInteracaoSnakeCase()
     {
+        // Arrange
         var dto = new InteractionResponseDto { IdInteracao = 123 };
 
+        // Act
         var json = JsonSerializer.Serialize(dto, Options);
         using var doc = JsonDocument.Parse(json);
 
+        // Assert
         // kura_client.py:97 lê resp.json()["id_interacao"] direto — sem essa chave
         // exata, KeyError explode do lado Luna.
         doc.RootElement.TryGetProperty("id_interacao", out var prop).Should().BeTrue();
@@ -119,6 +131,7 @@ public class LunaDtoSerializationTests
     [Fact]
     public void TriageRequestDto_Deserializa_PayloadRealDoPydantic()
     {
+        // Arrange
         const string json = """
         {
             "id_interacao": 100,
@@ -130,8 +143,10 @@ public class LunaDtoSerializationTests
         }
         """;
 
+        // Act
         var dto = JsonSerializer.Deserialize<TriageRequestDto>(json, Options);
 
+        // Assert
         dto.Should().NotBeNull();
         dto!.IdInteracao.Should().Be(100);
         dto.IdTutor.Should().Be(7);
@@ -144,11 +159,14 @@ public class LunaDtoSerializationTests
     [Fact]
     public void TriageResponseDto_Serializa_ComoIdTriagemSnakeCase()
     {
+        // Arrange
         var dto = new TriageResponseDto { IdTriagem = 456 };
 
+        // Act
         var json = JsonSerializer.Serialize(dto, Options);
         using var doc = JsonDocument.Parse(json);
 
+        // Assert
         // kura_client.py:113 lê resp.json()["id_triagem"] direto.
         doc.RootElement.TryGetProperty("id_triagem", out var prop).Should().BeTrue();
         prop.GetInt64().Should().Be(456);

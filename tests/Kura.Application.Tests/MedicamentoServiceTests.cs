@@ -31,11 +31,14 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task ListarAsync_SemFiltro_RetornaPrimeiraPagina()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetAllAsync())
             .ReturnsAsync(BuildList(50));
 
+        // Act
         var result = await _sut.ListarAsync(null, 1, 20);
 
+        // Assert
         result.Total.Should().Be(50);
         result.Items.Should().HaveCount(20);
         result.Page.Should().Be(1);
@@ -45,6 +48,7 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task ListarAsync_ComBusca_FiltraCorretamente()
     {
+        // Arrange
         var items = new List<Medicamento>
         {
             new() { Id = 1, NmMedicamento = "Amoxicilina", DsPrincipioAtivo = "Amoxicilina", DsApresentacao = "Comp" },
@@ -56,8 +60,10 @@ public class MedicamentoServiceTests
                 m.NmMedicamento.ToLower().Contains("amoxi") ||
                 m.DsPrincipioAtivo.ToLower().Contains("amoxi")).ToList());
 
+        // Act
         var result = await _sut.ListarAsync("amoxi", 1, 20);
 
+        // Assert
         result.Total.Should().Be(1);
         result.Items.Should().HaveCount(1);
         result.Items.First().NmMedicamento.Should().Be("Amoxicilina");
@@ -66,11 +72,14 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task ListarAsync_PageSizeMaiorQue100_CapadoEm100()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetAllAsync())
             .ReturnsAsync(BuildList(200));
 
+        // Act
         var result = await _sut.ListarAsync(null, 1, 150);
 
+        // Assert
         result.PageSize.Should().Be(100);
         result.Items.Should().HaveCount(100);
     }
@@ -78,11 +87,14 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task ListarAsync_PageMenorQue1_NormalizadoPara1()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetAllAsync())
             .ReturnsAsync(BuildList(10));
 
+        // Act
         var result = await _sut.ListarAsync(null, -5, 20);
 
+        // Assert
         result.Page.Should().Be(1);
         result.Items.Should().HaveCount(10);
     }
@@ -90,13 +102,16 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task UpdateAsync_MedicamentoExiste_AtualizaCamposECommit()
     {
+        // Arrange
         var medicamento = new Medicamento { Id = 1L, NmMedicamento = "Velho", DsPrincipioAtivo = "Velho", DsApresentacao = "Velho" };
         _repoMock.Setup(r => r.GetByIdAsync(1L)).ReturnsAsync(medicamento);
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
 
         var dto = new MedicamentoUpdateDto { NmMedicamento = "Novo", DsPrincipioAtivo = "NovoPrincipio", DsApresentacao = "Liquido" };
+        // Act
         var result = await _sut.UpdateAsync(1L, dto);
 
+        // Assert
         result.NmMedicamento.Should().Be("Novo");
         result.DsPrincipioAtivo.Should().Be("NovoPrincipio");
         result.DsApresentacao.Should().Be("Liquido");
@@ -107,10 +122,13 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task UpdateAsync_MedicamentoNaoEncontrado_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Medicamento?)null);
 
+        // Act
         var act = async () => await _sut.UpdateAsync(99L, new MedicamentoUpdateDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -118,12 +136,15 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task SoftDeleteAsync_MedicamentoExiste_ChamaSoftDelete()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetByIdAsync(1L))
             .ReturnsAsync(new Medicamento { Id = 1L, NmMedicamento = "Amoxicilina" });
         _uowMock.Setup(u => u.CommitAsync()).ReturnsAsync(1);
 
+        // Act
         await _sut.SoftDeleteAsync(1L);
 
+        // Assert
         _repoMock.Verify(r => r.SoftDelete(It.IsAny<Medicamento>()), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
@@ -131,10 +152,13 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task SoftDeleteAsync_MedicamentoNaoEncontrado_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _repoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Medicamento?)null);
 
+        // Act
         var act = async () => await _sut.SoftDeleteAsync(99L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
@@ -144,6 +168,7 @@ public class MedicamentoServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_DsApresentacaoVaziaOuWhitespace_ColescaParaSentinela(string dsApresentacaoBruta)
     {
+        // Arrange
         // TASK-60: MEDICAMENTO.DS_APRESENTACAO é NOT NULL (V9:78, migration imutável) e o Oracle
         // trata VARCHAR2 vazio como NULL — MedicamentoCreateValidator nunca teve regra para este
         // campo (só NmMedicamento/DsPrincipioAtivo), então um payload sem dsApresentacao passava
@@ -161,8 +186,10 @@ public class MedicamentoServiceTests
             DsApresentacao = dsApresentacaoBruta
         };
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         medicamentoAdicionado.Should().NotBeNull();
         medicamentoAdicionado!.DsApresentacao.Should().Be("Apresentação não informada");
     }
@@ -170,6 +197,7 @@ public class MedicamentoServiceTests
     [Fact]
     public async Task CreateAsync_DsApresentacaoPreenchida_NaoSobrescreveComSentinela()
     {
+        // Arrange
         Medicamento? medicamentoAdicionado = null;
         _repoMock.Setup(r => r.AddAsync(It.IsAny<Medicamento>()))
             .Callback<Medicamento>(m => medicamentoAdicionado = m)
@@ -182,8 +210,10 @@ public class MedicamentoServiceTests
             DsApresentacao = "Comprimido 500mg"
         };
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         medicamentoAdicionado.Should().NotBeNull();
         medicamentoAdicionado!.DsApresentacao.Should().Be("Comprimido 500mg");
     }

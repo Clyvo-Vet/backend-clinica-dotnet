@@ -43,11 +43,14 @@ public class EventoClinicoServiceTests
     [Fact]
     public async Task CreateAsync_PetValido_RetornaVacinaResponseDto()
     {
+        // Arrange
         SetupPet(10L);
         _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>())).Returns(Task.CompletedTask);
 
+        // Act
         var result = await _sut.CreateAsync(ValidDto());
 
+        // Assert
         result.Should().NotBeNull();
         result.IdPet.Should().Be(10L);
         result.NmVacina.Should().Be("Anti-rábica");
@@ -57,6 +60,7 @@ public class EventoClinicoServiceTests
     [Fact]
     public async Task CreateAsync_PetInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((Pet?)null);
         var dto = new VacinaCreateDto
         {
@@ -65,14 +69,17 @@ public class EventoClinicoServiceTests
             NmVacina = "Anti-rábica", NrLote = "L001", DsFabricante = "FabX"
         };
 
+        // Act
         var act = async () => await _sut.CreateAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task CreateAsync_DtProximaDoseAnteriorAplicacao_LancaRegraDeNegocio()
     {
+        // Arrange
         SetupPet(10L);
         var dto = new VacinaCreateDto
         {
@@ -82,19 +89,24 @@ public class EventoClinicoServiceTests
             NmVacina = "Anti-rábica", NrLote = "L001", DsFabricante = "FabX"
         };
 
+        // Act
         var act = async () => await _sut.CreateAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>();
     }
 
     [Fact]
     public async Task CreateAsync_SubtipoVacina_CommitChamadoUmaVez()
     {
+        // Arrange
         SetupPet(10L);
         _vacinaRepoMock.Setup(r => r.AddAsync(It.IsAny<Vacina>())).Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto());
 
+        // Assert
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 }

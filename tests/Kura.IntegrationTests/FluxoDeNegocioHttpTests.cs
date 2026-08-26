@@ -30,10 +30,13 @@ public class FluxoDeNegocioHttpTests
     [Fact]
     public async Task Listar_veterinarios_autenticado_devolve_200_com_o_veterinario_da_clinica()
     {
+        // Arrange
         var client = await ClienteAutenticadoAsync();
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.OK);
         resposta.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
 
@@ -54,10 +57,13 @@ public class FluxoDeNegocioHttpTests
     [Fact]
     public async Task Buscar_veterinario_por_id_devolve_200_com_o_recurso()
     {
+        // Arrange
         var client = await ClienteAutenticadoAsync();
 
+        // Act
         var resposta = await client.GetAsync($"/api/v1/veterinarios/{KuraApiFactory.IdVeterinarioSemeado}");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var veterinario = await resposta.Content.ReadFromJsonAsync<VeterinarioResponseDto>();
@@ -89,8 +95,10 @@ public class FluxoDeNegocioHttpTests
     [Fact]
     public async Task Criar_veterinario_devolve_201_com_Location_e_o_recurso_fica_consultavel()
     {
+        // Arrange
         var client = await ClienteAutenticadoAsync();
 
+        // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/veterinarios", new
         {
             idClinica = KuraApiFactory.IdClinicaSemeada,
@@ -100,6 +108,7 @@ public class FluxoDeNegocioHttpTests
             nrTelefone = "11988887777",
         });
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.Created);
         resposta.Headers.Location.Should().NotBeNull();
 
@@ -118,8 +127,10 @@ public class FluxoDeNegocioHttpTests
     [Fact]
     public async Task Criar_veterinario_com_payload_invalido_devolve_400_de_validacao()
     {
+        // Arrange
         var client = await ClienteAutenticadoAsync();
 
+        // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/veterinarios", new
         {
             idClinica = KuraApiFactory.IdClinicaSemeada,
@@ -129,6 +140,7 @@ public class FluxoDeNegocioHttpTests
             nrTelefone = "11988887777",
         });
 
+        // Assert
         // Caminho de erro DIFERENTE do 422/404 acima: aqui quem responde é a validação
         // automática do [ApiController] + FluentValidation, antes de o controller rodar —
         // ou seja, o ValidationProblemDetails do ASP.NET, não o middleware de exceção.
@@ -141,10 +153,13 @@ public class FluxoDeNegocioHttpTests
     [Fact]
     public async Task Rota_inexistente_devolve_404_sem_derrubar_o_pipeline()
     {
+        // Arrange
         var client = await ClienteAutenticadoAsync();
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/rota-que-nao-existe");
 
+        // Assert
         resposta.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }
