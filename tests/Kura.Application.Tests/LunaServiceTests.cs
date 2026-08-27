@@ -142,7 +142,9 @@ public class LunaServiceTests
             .Callback<InteracaoCanal>(i => capturada = i)
             .Returns(Task.CompletedTask);
 
+        // Act
         var act = async () => await _sut.RegistrarInteracaoAsync(dto);
+        // Assert
         await act.Should().NotThrowAsync();
 
         capturada.Should().NotBeNull();
@@ -412,7 +414,9 @@ public class LunaServiceTests
             DsRecomendacao = "Levar ao veterinário em até 2 horas"
         };
 
+        // Act
         var act = async () => await _sut.RegistrarTriagemAsync(dto);
+        // Assert
         await act.Should().NotThrowAsync();
 
         capturada.Should().NotBeNull();

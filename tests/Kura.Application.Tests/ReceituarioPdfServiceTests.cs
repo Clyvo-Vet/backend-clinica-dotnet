@@ -319,18 +319,15 @@ public class ReceituarioPdfServiceTests : IDisposable
     [Fact]
     public async Task ObterArquivoReceituarioAsync_CaminhoAbsolutoForaDoBasePath_LancaEntidadeNaoEncontrada()
     {
-        // Arrange
         // Mesmo cenário do teste anterior, mas com um caminho absoluto totalmente fora
         // de Storage:BasePath (ex.: registro corrompido apontando para outro diretório
         // do sistema de arquivos).
         _eventoRepoMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(Evento());
 
-        // Act
         var caminhoForaDoBasePath = Path.Combine(
             Path.GetTempPath(), "kura-fora-do-storage-" + Guid.NewGuid().ToString("N") + ".pdf");
         await File.WriteAllBytesAsync(caminhoForaDoBasePath, new byte[] { 9, 9 });
 
-        // Assert
         try
         {
             var documento = new Documento
