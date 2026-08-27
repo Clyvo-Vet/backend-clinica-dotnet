@@ -221,21 +221,29 @@ Oracle que você controle — o XE local do `DevOps-Cloud` (`localhost:9092/XEPD
 esperado. Para subir o ecossistema completo (Oracle XE + .NET + Java + Luna), use o
 `docker compose` do repositório `DevOps-Cloud`, não este.
 
-> 🔴 **Limitação conhecida deste `docker-compose.yml`: ele não repassa 3 variáveis que o
-> `.env.example` traz** — `Luna__BaseUrl`, `Luna__InboundApiKey` e `Storage__BasePath`.
-> Preencher o `.env` **não basta**: o bloco `environment:` do serviço não as declara, então elas
-> não chegam ao container (verificável com
-> `docker compose --env-file .env config | grep -c Luna__BaseUrl` → **0**).
+> 🔴 **Limitação conhecida deste `docker-compose.yml`: o `.env.example` traz 3 valores que o
+> compose nunca repassa ao container** — `LUNA_BASE_URL`, `LUNA_INBOUND_API_KEY` e
+> `STORAGE_BASE_PATH`, que a aplicação leria como `Luna__BaseUrl`, `Luna__InboundApiKey` e
+> `Storage__BasePath`.
 >
-> **Consequência concreta:** o container sobe, mas `GET /health` responde **`500`** com
-> `Luna:BaseUrl not configured.` — o mesmo sintoma descrito em
-> [Health Checks](#health-checks-observabilidade-e-monitoramento), aqui por omissão do compose e
-> não por erro de quem configurou. A transcrição de áudio (`Luna__InboundApiKey`) falha na
-> primeira chamada pela mesma razão; `Storage__BasePath` é opcional e cai no default.
+> ⚠️ Repare nos **dois** sistemas de nome: o `.env` usa `LUNA_BASE_URL`; a aplicação .NET lê
+> `Luna__BaseUrl`. É o bloco `environment:` do serviço que liga um ao outro — e para estes 3 ele
+> simplesmente **não tem a linha**. Por isso preencher o `.env` **não basta**. Medido:
+> `docker compose --env-file .env config | grep -c Luna__BaseUrl` → **0**
+> (contra **1** para `Luna__ApiKey` e `Daily__ApiKey`, que é o controle positivo de que o
+> comando enxergaria a variável se ela estivesse lá).
 >
-> **Saídas:** acrescente as variáveis ao bloco `environment:` do serviço, **ou** use o
-> `docker compose` do `DevOps-Cloud`, que já as injeta. Este README **não** afirma que o
-> compose daqui entrega um `/health` verde — porque ele não entrega.
+> **Consequência esperada — inferida do código, não medida** (ninguém subiu este container com a
+> imagem atual): o container sobe e `GET /health` responde **`500`** com
+> `Luna:BaseUrl not configured.`, o mesmo sintoma descrito em
+> [Health Checks](#health-checks-observabilidade-e-monitoramento) — aqui por omissão do compose,
+> não por erro de quem configurou. A transcrição de áudio quebraria pela mesma razão, embora a
+> exceção que aparece seja sempre a de `Luna:BaseUrl`: as duas chaves são lidas no mesmo
+> registro, e essa é a primeira. `Storage__BasePath` é opcional e cai no default.
+>
+> **Saídas:** acrescente as 3 linhas ao bloco `environment:` do serviço, **ou** use o
+> `docker compose` do `DevOps-Cloud`, que já as injeta. Este README **não** afirma que o compose
+> daqui entrega um `/health` verde — porque ele não entrega.
 
 ---
 
