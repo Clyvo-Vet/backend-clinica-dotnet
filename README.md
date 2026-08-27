@@ -130,7 +130,7 @@ Crie `src/Kura.Api/appsettings.Development.json`:
     "Key": "<YOUR_JWT_SECRET_MIN_32_CHARS>",
     "Issuer": "kura-api",
     "Audience": "kura-client",
-    "ExpiresInHours": 8
+    "ExpiryHours": 8
   },
   "IoT": { "ApiKey": "<YOUR_IOT_API_KEY>" },
   "Luna": {
@@ -220,6 +220,22 @@ Este compose sobe **apenas a API**; ele não inclui banco. Aponte `ORACLE_DATA_S
 Oracle que você controle — o XE local do `DevOps-Cloud` (`localhost:9092/XEPDB1`) é o alvo
 esperado. Para subir o ecossistema completo (Oracle XE + .NET + Java + Luna), use o
 `docker compose` do repositório `DevOps-Cloud`, não este.
+
+> 🔴 **Limitação conhecida deste `docker-compose.yml`: ele não repassa 3 variáveis que o
+> `.env.example` traz** — `Luna__BaseUrl`, `Luna__InboundApiKey` e `Storage__BasePath`.
+> Preencher o `.env` **não basta**: o bloco `environment:` do serviço não as declara, então elas
+> não chegam ao container (verificável com
+> `docker compose --env-file .env config | grep -c Luna__BaseUrl` → **0**).
+>
+> **Consequência concreta:** o container sobe, mas `GET /health` responde **`500`** com
+> `Luna:BaseUrl not configured.` — o mesmo sintoma descrito em
+> [Health Checks](#health-checks-observabilidade-e-monitoramento), aqui por omissão do compose e
+> não por erro de quem configurou. A transcrição de áudio (`Luna__InboundApiKey`) falha na
+> primeira chamada pela mesma razão; `Storage__BasePath` é opcional e cai no default.
+>
+> **Saídas:** acrescente as variáveis ao bloco `environment:` do serviço, **ou** use o
+> `docker compose` do `DevOps-Cloud`, que já as injeta. Este README **não** afirma que o
+> compose daqui entrega um `/health` verde — porque ele não entrega.
 
 ---
 
@@ -613,7 +629,7 @@ Esta seção mapeia cada artefato técnico avaliável à sua localização exata
 
 Consulte `.env.example` na raiz do repositório para o template completo.
 
-Lista derivada das **10 chaves que o código realmente lê** (`src/`), não do que já se
+Lista derivada das **11 chaves que o código realmente lê** (`src/`), não do que já se
 documentou antes.
 
 | Variável | Descrição | Falta dela quebra |
@@ -622,6 +638,7 @@ documentou antes.
 | `Jwt__Key` | Chave de assinatura JWT (mínimo 32 caracteres) | **O startup** — é a única lida de forma ansiosa, e a app não sobe sem ela |
 | `Jwt__Issuer` | Emissor do token JWT | Validação do token |
 | `Jwt__Audience` | Audiência do token JWT | Validação do token |
+| `Jwt__ExpiryHours` | Validade do token, em horas. **Opcional** | Nada — o default é **8** (`AuthService`) |
 | `IoT__ApiKey` | Autenticação dos dispositivos ESP32 | Os endpoints `/iot/*`, na 1ª chamada |
 | `Luna__ApiKey` | Autenticação **de entrada** da Luna (header `X-Api-Key`) | Os 3 endpoints consumidos pela Luna, na 1ª chamada |
 | `Luna__BaseUrl` | URL da Luna — usada pelo **health check** e pelo client de transcrição | **`GET /health` devolve `500`** (medido) |

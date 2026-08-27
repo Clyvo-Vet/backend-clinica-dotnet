@@ -34,6 +34,6 @@
     "Key": "<GERE_COM_openssl_rand_base64_48>",
     "Issuer": "kura-api",
     "Audience": "kura-client",
-    "ExpiresInHours": 8
+    "ExpiryHours": 8
   }
 }
