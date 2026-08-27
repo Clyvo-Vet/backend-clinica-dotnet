@@ -26,8 +26,14 @@ dotnet test KuraApi.slnx --filter "Categoria=Integracao"    # só integração
 dotnet test KuraApi.slnx --filter "Categoria!=Integracao"   # só unitários
 ```
 
-Contagens medidas (branch `s3d-07-collection-fixtures`): **304** sem filtro · **19** com
-`Categoria=Integracao` · **285** com `Categoria!=Integracao`. **19 + 285 = 304.**
+Contagens medidas em `main` (`570eece`, S3D-09): **305** sem filtro · **20** com
+`Categoria=Integracao` · **285** com `Categoria!=Integracao`. **20 + 285 = 305.**
+
+> ⚠️ Este parágrafo dizia **304 / 19 / 285** e estava errado. A contagem estática de
+> `[Fact]`/`[Theory]` no projeto de integração dá **20** tanto em `7b75d70` (a própria
+> S3D-07) quanto em `570eece`, e o projeto não tem `[Theory]`/`InlineData` — ou seja, o
+> `19` já não correspondia ao código quando foi escrito. Corrigido por medição direta
+> dos 3 recortes.
 
 ⚠️ O segundo filtro funciona porque o `!=` do VSTest casa **também** teste que não declara a
 propriedade. É por isso que os ~40 arquivos unitários não precisaram ser anotados um a um — e é
