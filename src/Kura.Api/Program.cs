@@ -7,7 +7,6 @@ using FluentValidation.AspNetCore;
 using Microsoft.OpenApi;
 using Kura.Api.Extensions;
 using Kura.Infrastructure.Persistence;
-using Oracle.ManagedDataAccess.Client;
 
 // QuestPDF (geração de receituário, TASK-15): licença Community — gratuita para
 // organizações com receita anual < US$1M (não é mais MIT puro desde 2023.12,
@@ -90,25 +89,28 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Validação de migrations pendentes — apenas aviso, NÃO aplica nada (schema é responsabilidade do Flyway)
-// Retry com backoff exponencial para aguardar o serviço XEPDB1 registrar-se no listener Oracle
-// S3D-05: o bloco abaixo abre conexão real com o Oracle no startup, o que inviabiliza
+// Validação de migrations pendentes — apenas AVISO, não aplica nada: o schema é
+// responsabilidade do Flyway (MIGRATIONS_POLICY.md) e as migrations EF são só evidência.
+//
+// ⚠️ S3D-10 REESCREVEU ESTE COMENTÁRIO. A versão anterior descrevia, em detalhe, o
+// comportamento de uma allowlist de códigos Oracle que NÃO EXISTE MAIS aqui — e várias das
+// afirmações dela já eram falsas antes de a allowlist sair (ver abaixo). Deixá-la seria
+// reproduzir o padrão "documentação que garante o que o código não faz", que é motivo de
+// reprovação neste projeto.
+//
+// O que era FALSO na redação antiga, e vale registrar porque explica o Critical:
+//   - ela afirmava que o retry "não executa" nos caminhos medidos, e tratava isso como
+//     curiosidade. Não era curiosidade: era o defeito. Se o catch não casa, a exceção
+//     ESCAPA e o processo MORRE. Medido na revisão do G4: HTTP 000 por 139s seguidos e
+//     RestartCount=7, com o Oracle inalcançável na partida.
+//   - ela creditava a convergência do cold start à restart policy do Docker. Verdade — mas
+//     a razão é que a API estava em crash loop, não que o loop fosse inofensivo.
+// Hoje a verificação vive em MigrationEvidenceExtensions e NUNCA lança. Ver o XML de lá.
+//
+// S3D-05: a chamada abaixo abre conexão real com o Oracle no startup, o que inviabiliza
 // subir o host num teste de integração (WebApplicationFactory<Program>). Não é questão de
-// lentidão: sem este guard, o processo de teste MORRE no startup, com exceção não tratada
-// — medido por mutação (reverter este arquivo para a versão sem o guard derruba a probe).
-// As 10 tentativas nunca chegam a acontecer: a PRIMEIRA já derruba o processo.
-// O filtro do catch compara ex.Number com o código EXTERNO. Nas duas falhas de conexão
-// MEDIDAS neste repo (listener ausente; serviço não registrado no listener), o driver lança
-// ORA-50201 e o código real de rede (ORA-12541 / ORA-12514) só aparece DOIS níveis abaixo,
-// em NetworkException — que nem é OracleException, então não tem .Number para comparar.
-// Logo o "when" não casa e o retry não roda nesses caminhos. Os outros 2 códigos da lista
-// (1109, 17002) nunca foram exercitados — nada se afirma sobre eles.
-// No cold start do compose isso foi observado como 0 linhas "Oracle não disponível (ORA-…)"
-// e RestartCount 10: quem faz a stack convergir ali é a restart policy do Docker, não este
-// loop (observação de raspão, ainda sem G0 dedicado). Consequência para quem for escrever
-// documentação: NÃO credite o cold-start ao retry deste bloco — nos caminhos medidos, ele
-// não executa.
-// Fora do ambiente "Testing" nada muda: o bloco roda exatamente como antes.
+// lentidão: sem este guard de ambiente, a suíte encosta no Oracle de verdade — medido, 57
+// linhas ORA- nascendo exatamente na linha do GetPendingMigrationsAsync.
 // ⚠️ O guard só dispara se quem sobe o host pedir o ambiente explicitamente. O
 // WebApplicationFactory usa "Development" por PADRÃO — a factory da suíte de integração
 // PRECISA declarar UseEnvironment("Testing"), senão este bloco roda e carrega
