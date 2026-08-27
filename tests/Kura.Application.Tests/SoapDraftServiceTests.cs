@@ -42,6 +42,7 @@ public class SoapDraftServiceTests
     [Fact]
     public async Task EnviarTranscricaoAsync_ComSucessoNaLuna_SalvaDraftNaoConfirmado()
     {
+        // Arrange
         var evento = EventoSemDraft();
         _repositoryMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(evento);
         _lunaTranscricaoServiceMock
@@ -52,9 +53,11 @@ public class SoapDraftServiceTests
                 Soap = new SoapDraftDto { S = "s", O = "o", A = "a", P = "p" }
             });
 
+        // Act
         using var stream = new MemoryStream();
         var result = await _sut.EnviarTranscricaoAsync(10L, stream, "audio.mp3", "audio/mpeg");
 
+        // Assert
         result.DsTranscricao.Should().Be("paciente apresenta febre");
         result.Soap.S.Should().Be("s");
         result.Soap.O.Should().Be("o");
@@ -69,15 +72,18 @@ public class SoapDraftServiceTests
     [Fact]
     public async Task EnviarTranscricaoAsync_LunaFalha_SalvaDraftVazioSemCrashENaoConfirmado()
     {
+        // Arrange
         var evento = EventoSemDraft();
         _repositoryMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(evento);
         _lunaTranscricaoServiceMock
             .Setup(l => l.TranscreverAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new TranscricaoResultDto());
 
+        // Act
         using var stream = new MemoryStream();
         var result = await _sut.EnviarTranscricaoAsync(10L, stream, "audio.mp3", "audio/mpeg");
 
+        // Assert
         result.DsTranscricao.Should().BeNull();
         result.Soap.S.Should().BeNull();
         result.Soap.O.Should().BeNull();
@@ -91,11 +97,14 @@ public class SoapDraftServiceTests
     [Fact]
     public async Task EnviarTranscricaoAsync_EventoInexistente_LancaEntidadeNaoEncontradaSemChamarLuna()
     {
+        // Arrange
         _repositoryMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((EventoClinico?)null);
 
+        // Act
         using var stream = new MemoryStream();
         var act = async () => await _sut.EnviarTranscricaoAsync(99L, stream, "audio.mp3", "audio/mpeg");
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _lunaTranscricaoServiceMock.Verify(
             l => l.TranscreverAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
@@ -107,6 +116,7 @@ public class SoapDraftServiceTests
     [Fact]
     public async Task ConfirmarSoapAsync_ComDraftSoapPendente_GravaTextoRevisadoEMarcaConfirmado()
     {
+        // Arrange
         var evento = EventoSemDraft();
         evento.DsSoapS = "draft s";
         evento.DsSoapO = "draft o";
@@ -115,8 +125,10 @@ public class SoapDraftServiceTests
         _repositoryMock.Setup(r => r.GetByIdAsync(10L)).ReturnsAsync(evento);
 
         var dto = new SoapConfirmarDto { S = "final s", O = "final o", A = "final a", P = "final p" };
+        // Act
         var result = await _sut.ConfirmarSoapAsync(10L, dto);
 
+        // Assert
         result.Soap.S.Should().Be("final s");
         result.Soap.O.Should().Be("final o");
         result.Soap.A.Should().Be("final a");
@@ -130,10 +142,13 @@ public class SoapDraftServiceTests
     [Fact]
     public async Task ConfirmarSoapAsync_EventoInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _repositoryMock.Setup(r => r.GetByIdAsync(99L)).ReturnsAsync((EventoClinico?)null);
 
+        // Act
         var act = async () => await _sut.ConfirmarSoapAsync(99L, new SoapConfirmarDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }

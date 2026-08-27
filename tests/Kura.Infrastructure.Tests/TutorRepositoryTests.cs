@@ -90,6 +90,7 @@ public class TutorRepositoryTests
     [Fact]
     public async Task GetByTelefoneAsync_DoisTutoresAtivosClinicasDiferentesMesmoTelefone_RetornaNull()
     {
+        // Arrange
         const string telefoneColidente = "5511999990000";
         var dbName = Guid.NewGuid().ToString();
 
@@ -105,8 +106,10 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(telefoneColidente);
 
+        // Assert
         resultado.Should().BeNull(
             "telefone ambíguo entre clínicas diferentes tem que ser tratado como não " +
             "encontrado — devolver qualquer um dos dois tutores vazaria dado da clínica " +
@@ -116,6 +119,7 @@ public class TutorRepositoryTests
     [Fact]
     public async Task MesmaClinica_DoisTutoresMesmoTelefone_RetornaNull()
     {
+        // Arrange
         // Rodada de fix 1 (revisão G2, Ataque 1/Important-1): a condição implementada
         // é candidatos.Count > 1 QUALQUER, não só cross-clínica — este teste pina o
         // caso INTRA-clínica (ex.: casal com o telefone da casa), que nenhum teste
@@ -141,8 +145,10 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(telefoneDaCasa);
 
+        // Assert
         resultado.Should().BeNull(
             "colisão INTRA-clínica (dois tutores ATIVOS da MESMA clínica com o mesmo " +
             "telefone) também tem que ser tratada como não encontrado — devolver um " +
@@ -153,6 +159,7 @@ public class TutorRepositoryTests
     [Fact]
     public async Task GetByTelefoneAsync_TresTutoresAtivosMesmoTelefone_RetornaNull()
     {
+        // Arrange
         // Reforça que a checagem é "mais de um", não "exatamente dois" — não é um caso
         // especial de par.
         const string telefoneColidente = "5511988880000";
@@ -171,14 +178,17 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(telefoneColidente);
 
+        // Assert
         resultado.Should().BeNull();
     }
 
     [Fact]
     public async Task GetByTelefoneAsync_UmUnicoTutorAtivoComTelefone_RetornaEsseTutor()
     {
+        // Arrange
         // Controle positivo: o fix não pode transformar o caso normal (sem colisão) em
         // "não encontrado". O id esperado (7) é plantado no seed, independente do
         // caminho de produção — não é o mesmo id que a query devolveria "por acidente".
@@ -195,8 +205,10 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(telefone);
 
+        // Assert
         resultado.Should().NotBeNull();
         resultado!.Id.Should().Be(7);
         resultado.IdClinica.Should().Be(1);
@@ -205,6 +217,7 @@ public class TutorRepositoryTests
     [Fact]
     public async Task GetByTelefoneAsync_NenhumTutorComTelefone_RetornaNull()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         using (var seedCtx = CreateContext(dbName))
@@ -217,14 +230,17 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync("5511900001111");
 
+        // Assert
         resultado.Should().BeNull();
     }
 
     [Fact]
     public async Task GetByTelefoneAsync_TutorInativoComTelefoneColidenteComAtivo_RetornaOAtivo()
     {
+        // Arrange
         // Soft delete (StAtiva=false) não deve contar como colisão: o HasQueryFilter
         // global já exclui tutores inativos da query, então só o tutor ativo é
         // considerado — nenhuma ambiguidade real aqui.
@@ -243,8 +259,10 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(telefone);
 
+        // Assert
         resultado.Should().NotBeNull();
         resultado!.Id.Should().Be(40);
     }
@@ -252,6 +270,7 @@ public class TutorRepositoryTests
     [Fact]
     public async Task GetByTelefoneAsync_SentinelaNaoInformadoComColisao_RetornaNull()
     {
+        // Arrange
         // TASK-79: avaliado e concluído que este caminho NÃO é alcançável pela IA Luna
         // (ela sempre chega com o número real do remetente Twilio, nunca com o literal
         // "Não informado" que TutorService.CreateAsync/UpdateAsync usam como coalesce
@@ -276,8 +295,10 @@ public class TutorRepositoryTests
         using var ctx = CreateContext(dbName);
         var repo = new TutorRepository(ctx, NullLogger<TutorRepository>.Instance);
 
+        // Act
         var resultado = await repo.GetByTelefoneAsync(sentinela);
 
+        // Assert
         resultado.Should().BeNull();
     }
 }

@@ -76,8 +76,10 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     [Fact]
     public void Host_sobe_no_ambiente_Testing()
     {
+        // Act
         var ambiente = _factory.Services.GetRequiredService<IHostEnvironment>();
 
+        // Assert
         ambiente.EnvironmentName.Should().Be("Testing");
         ambiente.IsDevelopment().Should().BeFalse();
         ambiente.IsProduction().Should().BeFalse();
@@ -91,9 +93,11 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     [Fact]
     public void Persistencia_dos_testes_usa_InMemory_e_nao_Oracle()
     {
+        // Act
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<KuraDbContext>();
 
+        // Assert
         db.Database.ProviderName.Should().Be("Microsoft.EntityFrameworkCore.InMemory");
         db.Database.ProviderName.Should().NotContain("Oracle");
     }
@@ -105,9 +109,11 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     [Fact]
     public void Connection_string_do_host_de_teste_e_inerte()
     {
+        // Act
         var config = _factory.Services.GetRequiredService<IConfiguration>();
         var conexao = config.GetConnectionString("DefaultConnection");
 
+        // Assert
         conexao.Should().NotBeNullOrWhiteSpace();
         conexao.Should().NotContain("fiap", "a suíte nunca pode discar para a infraestrutura da FIAP");
         conexao.Should().NotContain("RM562999");
@@ -132,10 +138,13 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     [Fact]
     public async Task Rota_de_health_esta_mapeada_com_o_writer_customizado()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var resposta = await client.GetAsync("/health");
 
+        // Assert
         resposta.StatusCode.Should().NotBe(HttpStatusCode.NotFound);
 
         var corpo = await resposta.Content.ReadAsStringAsync();
@@ -179,10 +188,13 @@ public class AmbienteEFiacaoDoHostTests : IClassFixture<KuraApiFactory>
     [Fact]
     public async Task Host_sobe_e_o_pipeline_responde_401_sem_excecao_de_startup()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var resposta = await client.GetAsync("/api/v1/veterinarios");
 
+        // Assert
         // 401 (e não uma exceção de startup) já prova que o pipeline inteiro subiu.
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

@@ -40,11 +40,14 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_EmailNotFound_ThrowsRegraDeNegocio()
     {
+        // Arrange
         _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
             .ReturnsAsync(Enumerable.Empty<Clinica>());
 
+        // Act
         var act = () => _sut.LoginAsync(new LoginDto { DsEmail = "x@x.com", DsSenha = "pass" });
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Email ou senha inválidos.");
     }
@@ -52,14 +55,17 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_WrongPassword_ThrowsRegraDeNegocio()
     {
+        // Arrange
         var hash = BCrypt.Net.BCrypt.HashPassword("correct");
         var clinica = new Clinica { Id = 1, DsEmailAcesso = "a@a.com", DsSenhaHash = hash, StAtiva = true };
 
         _repoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
             .ReturnsAsync(new[] { clinica });
 
+        // Act
         var act = () => _sut.LoginAsync(new LoginDto { DsEmail = "a@a.com", DsSenha = "wrong" });
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Email ou senha inválidos.");
     }
@@ -67,6 +73,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_ValidCredentials_ReturnsToken()
     {
+        // Arrange
         var hash = BCrypt.Net.BCrypt.HashPassword("secret");
         var clinica = new Clinica { Id = 5, DsEmailAcesso = "vet@clinic.com", DsSenhaHash = hash, StAtiva = true };
         var veterinario = new Veterinario { Id = 42, IdClinica = 5, NmVeterinario = "Dr. Ana", NrCrmv = "SP-123", DsEmail = "vet@clinic.com", NrTelefone = "11999999999" };
@@ -76,8 +83,10 @@ public class AuthServiceTests
         _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(5))
             .ReturnsAsync(new[] { veterinario });
 
+        // Act
         var result = await _sut.LoginAsync(new LoginDto { DsEmail = "vet@clinic.com", DsSenha = "secret" });
 
+        // Assert
         result.AccessToken.Should().NotBeNullOrWhiteSpace();
         result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
         result.Usuario.Should().NotBeNull();
@@ -91,6 +100,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_ClinicaSemVeterinario_LancaRegraDeNegocioException()
     {
+        // Arrange
         var hash = BCrypt.Net.BCrypt.HashPassword("secret");
         var clinica = new Clinica { Id = 7, DsEmailAcesso = "semvet@clinic.com", DsSenhaHash = hash, StAtiva = true };
 
@@ -99,8 +109,10 @@ public class AuthServiceTests
         _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(7))
             .ReturnsAsync(Enumerable.Empty<Veterinario>());
 
+        // Act
         var act = () => _sut.LoginAsync(new LoginDto { DsEmail = "semvet@clinic.com", DsSenha = "secret" });
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Clínica sem veterinário responsável cadastrado.");
     }
@@ -108,6 +120,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_SemVetComEmailIgual_UsaPrimeiroVeterinarioOrdenadoPorId()
     {
+        // Arrange
         var hash = BCrypt.Net.BCrypt.HashPassword("secret");
         var clinica = new Clinica { Id = 9, DsEmailAcesso = "acesso@clinic.com", DsSenhaHash = hash, StAtiva = true };
         var vetOutro = new Veterinario { Id = 20, IdClinica = 9, NmVeterinario = "Dr. Outro", NrCrmv = "1", DsEmail = "outro@clinic.com" };
@@ -118,8 +131,10 @@ public class AuthServiceTests
         _vetRepoMock.Setup(r => r.GetAllByClinicaIdAsync(9))
             .ReturnsAsync(new[] { vetOutro, vetPrimeiro });
 
+        // Act
         var result = await _sut.LoginAsync(new LoginDto { DsEmail = "acesso@clinic.com", DsSenha = "secret" });
 
+        // Assert
         result.Usuario.Id.Should().Be(10);
         GetClaim(result.AccessToken, "veterinarioId").Should().Be("10");
     }
@@ -129,6 +144,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_ValidDto_RetornaResponseComIdPreenchido()
     {
+        // Arrange
         _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
         _repoMock.Setup(r => r.ExisteComEmailAcessoAsync(It.IsAny<string>())).ReturnsAsync(false);
         _repoMock.Setup(r => r.AddAsync(It.IsAny<Clinica>())).Returns(Task.CompletedTask);
@@ -148,8 +164,10 @@ public class AuthServiceTests
             NrCRMV = "SP-000111"
         };
 
+        // Act
         var result = await _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         result.Should().NotBeNull();
         result.NmClinica.Should().Be("Clínica Teste");
         result.DsEmailAcesso.Should().Be("admin@teste.com");
@@ -158,6 +176,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_ValidDto_CriaVeterinarioERetornaTokenEUsuario()
     {
+        // Arrange
         Veterinario? veterinarioSalvo = null;
 
         _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -183,8 +202,10 @@ public class AuthServiceTests
             NrCRMV = "SP-000111"
         };
 
+        // Act
         var result = await _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         veterinarioSalvo.Should().NotBeNull();
         veterinarioSalvo!.IdClinica.Should().Be(100);
         veterinarioSalvo.NmVeterinario.Should().Be("Dr. Admin");
@@ -206,6 +227,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_SemTelefone_NaoAplicaFallbackParaStringVazia()
     {
+        // Arrange
         // TASK-36 (E-4): dto.NrTelefone ?? string.Empty foi removido — Oracle trata
         // VARCHAR2 vazio como NULL na escrita de qualquer forma, então a "garantia"
         // de string.Empty era falsa e mascarava um NULL real. O comportamento correto
@@ -235,8 +257,10 @@ public class AuthServiceTests
             NrCRMV = "SP-000222"
         };
 
+        // Act
         var result = await _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         veterinarioSalvo.Should().NotBeNull();
         veterinarioSalvo!.NrTelefone.Should().BeNull("null é o valor correto para telefone não informado, não \"\"");
         result.Usuario.NrTelefone.Should().BeNull("a resposta HTTP não deve mascarar o NULL como string vazia");
@@ -245,6 +269,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_CnpjDuplicado_LancaRegraDeNegocioException()
     {
+        // Arrange
         _repoMock.Setup(r => r.ExisteComCnpjAsync("12.345.678/0001-99")).ReturnsAsync(true);
 
         var dto = new RegisterClinicaDto
@@ -255,8 +280,10 @@ public class AuthServiceTests
             DsSenha = "Senha@2026"
         };
 
+        // Act
         var act = () => _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Já existe uma clínica cadastrada com este CNPJ.");
     }
@@ -264,6 +291,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_EmailDuplicado_LancaRegraDeNegocioException()
     {
+        // Arrange
         _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
         _repoMock.Setup(r => r.ExisteComEmailAcessoAsync("admin@teste.com")).ReturnsAsync(true);
 
@@ -275,8 +303,10 @@ public class AuthServiceTests
             DsSenha = "Senha@2026"
         };
 
+        // Act
         var act = () => _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Já existe uma clínica cadastrada com este e-mail de acesso.");
     }
@@ -284,8 +314,10 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_DtoDeResponseViaReflection_SenhaNaoRetornadaNoResponse()
     {
+        // Act
         var tipo = typeof(RegisterClinicaResponseDto);
 
+        // Assert
         tipo.GetProperty("DsSenhaHash").Should().BeNull("hash nunca deve ser exposto no DTO de resposta");
         tipo.GetProperty("DsSenha").Should().BeNull("senha em texto puro nunca deve ser exposta no DTO de resposta");
     }
@@ -293,6 +325,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterClinicaAsync_SenhaSalvaComoHash_NaoIgualTextoPuro()
     {
+        // Arrange
         Clinica? clinicaSalva = null;
 
         _repoMock.Setup(r => r.ExisteComCnpjAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -311,8 +344,10 @@ public class AuthServiceTests
             DsSenha = "Senha@2026"
         };
 
+        // Act
         await _sut.RegisterClinicaAsync(dto);
 
+        // Assert
         clinicaSalva.Should().NotBeNull();
         clinicaSalva!.DsSenhaHash.Should().NotBe("Senha@2026");
         BCrypt.Net.BCrypt.Verify("Senha@2026", clinicaSalva.DsSenhaHash).Should().BeTrue();

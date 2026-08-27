@@ -76,12 +76,15 @@ public class InteracaoCanalTenantIsolationTests
     [Fact]
     public async Task ComContextoDeClinica_FiltroIsolaPorClinica_RetornaApenasInteracoesDaquelaClinica()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
         await SeedDuasClinicasAsync(dbName);
 
+        // Act
         using var ctx = CreateContext(idClinicaFiltro: 1, dbName);
         var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
 
+        // Assert
         interacoes.Should().ContainSingle()
             .Which.IdClinica.Should().Be(1);
     }
@@ -89,6 +92,7 @@ public class InteracaoCanalTenantIsolationTests
     [Fact]
     public async Task SemContextoDeClinica_FiltroDesligaInteiro_RetornaAsDuasClinicas()
     {
+        // Arrange
         // Este é o caso REAL dos 3 endpoints da Luna: chamada por API Key, sem JWT ⇒
         // IdClinicaFiltro é sempre null aqui. O query filter, sozinho, NÃO isola nada
         // nesse cenário. O que compensa: ID_CLINICA da linha escrita vem sempre do
@@ -100,9 +104,11 @@ public class InteracaoCanalTenantIsolationTests
         var dbName = Guid.NewGuid().ToString();
         await SeedDuasClinicasAsync(dbName);
 
+        // Act
         using var ctx = CreateContext(idClinicaFiltro: null, dbName);
         var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
 
+        // Assert
         interacoes.Should().HaveCount(2,
             "sem contexto de clínica o filtro desliga inteiro (não nega) — comportamento " +
             "documentado, não bug. A compensação real vem da derivação de ID_CLINICA a " +
@@ -112,6 +118,7 @@ public class InteracaoCanalTenantIsolationTests
     [Fact]
     public async Task SemJwt_InteracaoSemClinica_SempreAparece()
     {
+        // Arrange
         // TASK-77 (FIX_7): interação de tutor não identificado grava com IdClinica
         // null. Sem JWT de clínica (IdClinicaFiltro null — o caso real dos 3 endpoints
         // da Luna, autenticados por API Key), o filtro desliga inteiro, exatamente como
@@ -130,9 +137,11 @@ public class InteracaoCanalTenantIsolationTests
             await seedCtx.SaveChangesAsync();
         }
 
+        // Act
         using var ctx = CreateContext(idClinicaFiltro: null, dbName);
         var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
 
+        // Assert
         interacoes.Should().HaveCount(3,
             "sem JWT o filtro desliga inteiro — a interação sem clínica atribuída deve " +
             "aparecer junto com as duas de clínica conhecida");
@@ -143,6 +152,7 @@ public class InteracaoCanalTenantIsolationTests
     [Fact]
     public async Task ComJwt_InteracaoSemClinica_NuncaAparece()
     {
+        // Arrange
         // TASK-77 (FIX_7) — este é o comportamento que precisava ser PROVADO, não
         // assumido: com IdClinicaFiltro preenchido (JWT de clínica real, hoje só usado
         // por leitura futura desta tabela — os 3 endpoints da Luna não passam JWT), a
@@ -164,9 +174,11 @@ public class InteracaoCanalTenantIsolationTests
             await seedCtx.SaveChangesAsync();
         }
 
+        // Act
         using var ctx = CreateContext(idClinicaFiltro: 1, dbName);
         var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
 
+        // Assert
         interacoes.Should().ContainSingle()
             .Which.IdClinica.Should().Be(1,
                 "com JWT de clínica 1, a interação sem clínica atribuída (Id=3) NÃO pode " +
@@ -177,6 +189,7 @@ public class InteracaoCanalTenantIsolationTests
     [Fact]
     public async Task StAtivaFalse_NuncaAparece_MesmoSemContextoDeClinica()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
         using (var seedCtx = CreateContext(idClinicaFiltro: null, dbName))
         {
@@ -194,9 +207,11 @@ public class InteracaoCanalTenantIsolationTests
             await seedCtx.SaveChangesAsync();
         }
 
+        // Act
         using var ctx = CreateContext(idClinicaFiltro: null, dbName);
         var interacoes = await ctx.InteracoesCanal.AsNoTracking().ToListAsync();
 
+        // Assert
         interacoes.Should().BeEmpty("StAtiva=false é soft delete — a parte StAtiva do filtro continua valendo mesmo sem contexto de clínica");
     }
 }

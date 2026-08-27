@@ -26,6 +26,7 @@ public class ReadOnlyInterceptorTests
     [Fact]
     public async Task Add_ContaTutor_LancaInvalidOperationException()
     {
+        // Arrange
         var ctx = CreateContext();
         ctx.ContasTutor.Add(new ContaTutor
         {
@@ -36,8 +37,10 @@ public class ReadOnlyInterceptorTests
             DtCadastro = DateTime.UtcNow
         });
 
+        // Act
         var act = async () => await ctx.SaveChangesAsync();
 
+        // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*ContaTutor*");
     }
@@ -45,6 +48,7 @@ public class ReadOnlyInterceptorTests
     [Fact]
     public async Task Modify_Consentimento_LancaInvalidOperationException()
     {
+        // Arrange
         var ctx = CreateContext();
         var consentimento = new Consentimento
         {
@@ -58,8 +62,10 @@ public class ReadOnlyInterceptorTests
         ctx.Consentimentos.Attach(consentimento);
         ctx.Entry(consentimento).State = EntityState.Modified;
 
+        // Act
         var act = async () => await ctx.SaveChangesAsync();
 
+        // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Consentimento*");
     }
@@ -67,20 +73,26 @@ public class ReadOnlyInterceptorTests
     [Fact]
     public async Task Query_AsNoTracking_ContaTutor_FuncionaNormalmente()
     {
+        // Arrange
         var ctx = CreateContext();
 
+        // Act
         var act = async () => await ctx.ContasTutor.AsNoTracking().ToListAsync();
 
+        // Assert
         await act.Should().NotThrowAsync();
     }
 
     [Fact]
     public async Task SaveChanges_SemMudancas_FuncionaNormalmente()
     {
+        // Arrange
         var ctx = CreateContext();
 
+        // Act
         var act = async () => await ctx.SaveChangesAsync();
 
+        // Assert
         await act.Should().NotThrowAsync();
     }
 }

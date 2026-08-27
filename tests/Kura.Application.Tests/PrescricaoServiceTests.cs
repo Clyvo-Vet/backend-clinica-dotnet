@@ -50,13 +50,16 @@ public class PrescricaoServiceTests
     [Fact]
     public async Task CreateAsync_ResolveIdTipoEventoPorCdTipo_PersisteFkDistintaDeOutrosTipos()
     {
+        // Arrange
         Prescricao? prescricaoAdicionada = null;
         _prescricaoRepoMock.Setup(r => r.AddAsync(It.IsAny<Prescricao>()))
             .Callback<Prescricao>(p => prescricaoAdicionada = p)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto());
 
+        // Assert
         _tipoEventoServiceMock.Verify(t => t.GetIdByCdTipoAsync("PRESCRICAO"), Times.Once);
         prescricaoAdicionada.Should().NotBeNull();
         prescricaoAdicionada!.EventoClinico.IdTipoEvento.Should().Be(IdTipoEventoPrescricaoSeed);
@@ -67,11 +70,14 @@ public class PrescricaoServiceTests
     [Fact]
     public async Task CreateAsync_CdTipoNaoEncontrado_PropagaEntidadeNaoEncontrada()
     {
+        // Arrange
         _tipoEventoServiceMock.Setup(t => t.GetIdByCdTipoAsync("PRESCRICAO"))
             .ThrowsAsync(new EntidadeNaoEncontradaException("TipoEvento", "PRESCRICAO"));
 
+        // Act
         var act = async () => await _sut.CreateAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*TipoEvento*PRESCRICAO*");
 
@@ -83,6 +89,7 @@ public class PrescricaoServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
     {
+        // Arrange
         // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
         // trata VARCHAR2 vazio como NULL — reproduzido ao vivo contra o compose real com o payload
         // exato de receituario/[idPet].tsx:217-227 (sem dsObservacao) → HTTP 500 antes do fix.
@@ -93,8 +100,10 @@ public class PrescricaoServiceTests
 
         var dto = ValidDto(dsObservacao: dsObservacaoBruta);
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         prescricaoAdicionada.Should().NotBeNull();
         prescricaoAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
     }
@@ -102,6 +111,7 @@ public class PrescricaoServiceTests
     [Fact]
     public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
     {
+        // Arrange
         Prescricao? prescricaoAdicionada = null;
         _prescricaoRepoMock.Setup(r => r.AddAsync(It.IsAny<Prescricao>()))
             .Callback<Prescricao>(p => prescricaoAdicionada = p)
@@ -109,8 +119,10 @@ public class PrescricaoServiceTests
 
         var dto = ValidDto(dsObservacao: "Administrar após as refeições");
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         prescricaoAdicionada.Should().NotBeNull();
         prescricaoAdicionada!.EventoClinico.DsObservacao.Should().Be("Administrar após as refeições");
     }

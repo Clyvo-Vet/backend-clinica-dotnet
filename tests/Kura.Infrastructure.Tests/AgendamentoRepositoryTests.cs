@@ -25,6 +25,7 @@ public class AgendamentoRepositoryTests
     [Fact]
     public async Task GetRecentesAsync_RetornaApenasAgendamentosAnterioresAReferencia_OrdenadosDoMaisRecenteAoMaisAntigo_RespeitandoOLimite()
     {
+        // Arrange
         var ctx = CreateContext();
         var referencia = new DateTime(2026, 7, 20, 12, 0, 0, DateTimeKind.Utc);
 
@@ -37,8 +38,10 @@ public class AgendamentoRepositoryTests
 
         var repository = new AgendamentoRepository(ctx);
 
+        // Act
         var resultado = (await repository.GetRecentesAsync(referencia, 2)).ToList();
 
+        // Assert
         resultado.Should().HaveCount(2);
         resultado.Select(a => a.NmPaciente).Should().ContainInOrder("Passado-1dia", "Passado-2dias");
         resultado.Should().NotContain(a => a.NmPaciente == "Futuro");

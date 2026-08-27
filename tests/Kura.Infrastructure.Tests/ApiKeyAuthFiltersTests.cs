@@ -46,55 +46,69 @@ public class ApiKeyAuthFiltersTests
     [Fact]
     public void LunaApiKeyAuthFilter_ChaveCorreta_Autoriza()
     {
+        // Arrange
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext("segredo-luna");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeNull("chave correta deve deixar a requisição passar (sem Result setado)");
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ChaveErrada_Retorna401()
     {
+        // Arrange
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext("chave-errada");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_HeaderAusente_Retorna401()
     {
+        // Arrange
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext(headerValue: null);
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ChaveDeOutroHeader_NaoAutoriza()
     {
+        // Arrange
         // Confirma que o filtro lê especificamente X-Api-Key, não qualquer header.
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext(headerValue: "segredo-luna", headerName: "Authorization");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ConfigAusente_LancaNaConstrucao()
     {
+        // Act
         // Fail-fast: sem Luna:ApiKey configurado, o filtro nem deveria ser construído
         // silenciosamente (mesmo comportamento de ApiKeyAuthFilter para IoT:ApiKey).
         var act = () => new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", null));
 
+        // Assert
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("Luna:ApiKey not configured.");
     }
@@ -104,6 +118,7 @@ public class ApiKeyAuthFiltersTests
     [Fact]
     public void LunaApiKeyAuthFilter_ChaveErradaDeMesmoTamanho_Retorna401()
     {
+        // Arrange
         // "chave-errada" e "segredo-luna" têm ambas 12 caracteres — exercita o
         // caminho de ApiKeyComparer.IsMatch em que os tamanhos batem e a diferença
         // só aparece no conteúdo (é o caminho que precisa ser constant-time de
@@ -111,14 +126,17 @@ public class ApiKeyAuthFiltersTests
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext("chave-errada");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ChaveErradaDeTamanhoDiferente_Retorna401()
     {
+        // Arrange
         // CryptographicOperations.FixedTimeEquals (usado por ApiKeyComparer) retorna
         // false imediatamente quando os tamanhos diferem — não é constant-time
         // quanto ao tamanho, só quanto ao conteúdo (limitação declarada no XML doc
@@ -127,28 +145,34 @@ public class ApiKeyAuthFiltersTests
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", "segredo-luna"));
         var context = CreateContext("curta");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ConfigVazia_HeaderAusente_Retorna401()
     {
+        // Arrange
         // Luna:ApiKey configurado como string vazia (não null — não dispara o
         // fail-fast do construtor) + header ausente: já rejeitado pelo
         // TryGetValue antes de chegar em ApiKeyComparer.
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", ""));
         var context = CreateContext(headerValue: null);
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void LunaApiKeyAuthFilter_ConfigVazia_HeaderVazio_AutorizaHoje_ComportamentoPreExistente()
     {
+        // Arrange
         // ACHADO desta task, NÃO corrigido aqui (fora do escopo do fix de timing):
         // com Luna:ApiKey configurado como "" (string vazia) e o header enviado com
         // valor também "", o filtro AUTORIZA — "" == "" é um match válido para
@@ -167,8 +191,10 @@ public class ApiKeyAuthFiltersTests
         var filter = new LunaApiKeyAuthFilter(ConfigWith("Luna:ApiKey", ""));
         var context = CreateContext("");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeNull(
             "documenta o comportamento ATUAL (pré-existente, não introduzido por " +
             "esta task): config vazia + header vazio autoriza. Se este teste " +
@@ -181,11 +207,14 @@ public class ApiKeyAuthFiltersTests
     [Fact]
     public void ApiKeyAuthFilter_IoT_ChaveCorreta_ContinuaAutorizando()
     {
+        // Arrange
         var filter = new ApiKeyAuthFilter(ConfigWith("IoT:ApiKey", "segredo-iot"));
         var context = CreateContext("segredo-iot");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeNull(
             "IotController depende deste comportamento continuar idêntico — TASK-67 não " +
             "tocou ApiKeyAuthFilter, criou um sibling (LunaApiKeyAuthFilter) para não " +
@@ -195,24 +224,30 @@ public class ApiKeyAuthFiltersTests
     [Fact]
     public void ApiKeyAuthFilter_IoT_ChaveErrada_ContinuaRetornando401()
     {
+        // Arrange
         var filter = new ApiKeyAuthFilter(ConfigWith("IoT:ApiKey", "segredo-iot"));
         var context = CreateContext("chave-errada");
 
+        // Act
         filter.OnAuthorization(context);
 
+        // Assert
         context.Result.Should().BeOfType<UnauthorizedResult>();
     }
 
     [Fact]
     public void ApiKeyAuthFilter_NaoAceitaChaveDoLuna_SaoConfigsIndependentes()
     {
+        // Arrange
         // Prova que os dois filtros leem chaves de config diferentes — uma chave válida
         // para Luna não autentica no IoT e vice-versa (nenhum acoplamento indevido).
         var filterIot = new ApiKeyAuthFilter(ConfigWith("IoT:ApiKey", "segredo-iot"));
         var contextComChaveLuna = CreateContext("segredo-luna");
 
+        // Act
         filterIot.OnAuthorization(contextComChaveLuna);
 
+        // Assert
         contextComChaveLuna.Result.Should().BeOfType<UnauthorizedResult>();
     }
 }

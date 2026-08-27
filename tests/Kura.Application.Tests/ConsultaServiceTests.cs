@@ -49,14 +49,17 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_DadosValidos_CriaDoisRegistrosAtomicamente()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
         _vetRepoMock.Setup(r => r.GetByIdAsync(10L))
             .ReturnsAsync(new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" });
 
+        // Act
         var result = await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         result.Should().NotBeNull();
         result.IdPet.Should().Be(5);
         result.IdVeterinario.Should().Be(10);
@@ -71,6 +74,7 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_ResolveIdTipoEventoPorCdTipo_PersisteFkCorreta()
     {
+        // Arrange
         // Regressão: IdTipoEvento não pode mais vir de um const hardcoded (id 4 inexistente na seed
         // antiga), e sim ser resolvido via CD_TIPO='CONSULTA' no TIPO_EVENTO — evitando o 500 por
         // violação de FK que ocorria antes.
@@ -85,8 +89,10 @@ public class ConsultaServiceTests
             .Callback<Consulta>(c => consultaAdicionada = c)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         _tipoEventoServiceMock.Verify(t => t.GetIdByCdTipoAsync("CONSULTA"), Times.Once);
         consultaAdicionada.Should().NotBeNull();
         consultaAdicionada!.EventoClinico.IdTipoEvento.Should().Be(IdTipoEventoConsultaSeed);
@@ -95,6 +101,7 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_CdTipoNaoEncontrado_PropagaEntidadeNaoEncontrada()
     {
+        // Arrange
         // Se o TIPO_EVENTO 'CONSULTA' não estiver seedado, o erro deve ser um 404 de domínio
         // (EntidadeNaoEncontradaException), nunca mais um 500 de violação de FK no banco.
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
@@ -106,8 +113,10 @@ public class ConsultaServiceTests
         _tipoEventoServiceMock.Setup(t => t.GetIdByCdTipoAsync("CONSULTA"))
             .ThrowsAsync(new EntidadeNaoEncontradaException("TipoEvento", "CONSULTA"));
 
+        // Act
         var act = async () => await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*TipoEvento*CONSULTA*");
 
@@ -117,11 +126,14 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_PetInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync((Pet?)null);
 
+        // Act
         var act = async () => await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*Pet*5*");
     }
@@ -129,14 +141,17 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_VeterinarioInexistente_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
         _vetRepoMock.Setup(r => r.GetByIdAsync(10L))
             .ReturnsAsync((Veterinario?)null);
 
+        // Act
         var act = async () => await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*Veterinario*10*");
     }
@@ -144,14 +159,17 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_PetEVeterinarioValidos_CommitChamadoUmaVez()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
         _vetRepoMock.Setup(r => r.GetByIdAsync(10L))
             .ReturnsAsync(new Veterinario { Id = 10, NmVeterinario = "Dr. Ana", IdClinica = 1, NrCrmv = "1234" });
 
+        // Act
         await _sut.CriarConsultaAsync(ValidDto());
 
+        // Assert
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
@@ -160,6 +178,7 @@ public class ConsultaServiceTests
     [InlineData("   ")]
     public async Task CriarConsultaAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
     {
+        // Arrange
         // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
         // trata VARCHAR2 vazio como NULL — o form SOAP do app (S/O/A/P) permite "Plano" vazio
         // legitimamente, então quem satisfaz a restrição de armazenamento é o service, não um
@@ -177,8 +196,10 @@ public class ConsultaServiceTests
 
         var dto = ValidDto(dsObservacao: dsObservacaoBruta);
 
+        // Act
         await _sut.CriarConsultaAsync(dto);
 
+        // Assert
         consultaAdicionada.Should().NotBeNull();
         consultaAdicionada!.EventoClinico.DsObservacao.Should().Be("Sem observações");
     }
@@ -186,6 +207,7 @@ public class ConsultaServiceTests
     [Fact]
     public async Task CriarConsultaAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
     {
+        // Arrange
         _petRepoMock.Setup(r => r.GetByIdAsync(5L))
             .ReturnsAsync(new Pet { Id = 5, NmPet = "Rex", IdClinica = 1, IdEspecie = 1, IdRaca = 1, DtNascimento = DateTime.UtcNow, SgSexo = 'M', SgPorte = 'M' });
 
@@ -199,8 +221,10 @@ public class ConsultaServiceTests
 
         var dto = ValidDto(dsObservacao: "Plano: retorno em 15 dias");
 
+        // Act
         await _sut.CriarConsultaAsync(dto);
 
+        // Assert
         consultaAdicionada.Should().NotBeNull();
         consultaAdicionada!.EventoClinico.DsObservacao.Should().Be("Plano: retorno em 15 dias");
     }

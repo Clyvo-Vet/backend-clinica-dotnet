@@ -64,6 +64,7 @@ public class ExceptionHandlerMiddlewareLgpdTests
     [Fact]
     public async Task GetTelefone_ExcecaoNoEndpoint_TelefoneNaoApareceNoLogFormatado()
     {
+        // Arrange
         var (middleware, logger) = CreateSut(new InvalidOperationException("falha simulada de infraestrutura"));
 
         var httpContext = new DefaultHttpContext();
@@ -71,8 +72,10 @@ public class ExceptionHandlerMiddlewareLgpdTests
         httpContext.Request.Method = "GET";
         httpContext.Response.Body = new MemoryStream();
 
+        // Act
         await middleware.InvokeAsync(httpContext);
 
+        // Assert
         logger.MensagensFormatadas.Should().ContainSingle();
         logger.MensagensFormatadas[0].Should().NotContain(TelefoneSensivel,
             "GET /tutores/telefone/{numero} carrega o telefone no PATH — o middleware " +
@@ -83,9 +86,11 @@ public class ExceptionHandlerMiddlewareLgpdTests
     [Fact]
     public void RedigirPathSensivel_RotaTelefone_RedigeApenasONumero()
     {
+        // Act
         var resultado = ExceptionHandlerMiddleware.RedigirPathSensivel(
             new PathString($"/api/v1/tutores/telefone/{TelefoneSensivel}"));
 
+        // Assert
         resultado.Should().Be("/api/v1/tutores/telefone/{redacted}");
         resultado.Should().NotContain(TelefoneSensivel);
     }
@@ -93,17 +98,20 @@ public class ExceptionHandlerMiddlewareLgpdTests
     [Fact]
     public void RedigirPathSensivel_OutraRota_PassaIntocada()
     {
+        // Act
         // Prova que a redação é escopada — não é um "apague tudo que parece PII"
         // genérico que degradaria a utilidade do log pras outras 20+ rotas do repo.
         var resultado = ExceptionHandlerMiddleware.RedigirPathSensivel(
             new PathString("/api/v1/tutores/42/pets"));
 
+        // Assert
         resultado.Should().Be("/api/v1/tutores/42/pets");
     }
 
     [Fact]
     public async Task OutroEndpoint_ExcecaoQualquer_PathContinuaCompletoNoLog()
     {
+        // Arrange
         // Regressão: a correção do Important-1 não pode apagar path útil de todo o
         // resto da API — só do segmento comprovadamente sensível.
         var (middleware, logger) = CreateSut(new InvalidOperationException("erro qualquer"));
@@ -113,14 +121,17 @@ public class ExceptionHandlerMiddlewareLgpdTests
         httpContext.Request.Method = "GET";
         httpContext.Response.Body = new MemoryStream();
 
+        // Act
         await middleware.InvokeAsync(httpContext);
 
+        // Assert
         logger.MensagensFormatadas[0].Should().Contain("/api/v1/pets/42");
     }
 
     [Fact]
     public async Task GetTelefone_ExcecaoNoEndpoint_CorpoDaRespostaTambemNaoContemTelefone()
     {
+        // Arrange
         // O corpo (RFC 7807) só expõe ex.Message — mas prova de verdade em vez de
         // assumir, já que é o outro lugar por onde PII poderia escapar.
         var (middleware, _) = CreateSut(new InvalidOperationException("falha simulada"));
@@ -131,12 +142,14 @@ public class ExceptionHandlerMiddlewareLgpdTests
         var responseBody = new MemoryStream();
         httpContext.Response.Body = responseBody;
 
+        // Act
         await middleware.InvokeAsync(httpContext);
 
         responseBody.Position = 0;
         using var reader = new StreamReader(responseBody);
         var corpo = await reader.ReadToEndAsync();
 
+        // Assert
         corpo.Should().NotContain(TelefoneSensivel);
     }
 }

@@ -19,8 +19,10 @@ public class EntidadeBaseTests
     [Fact]
     public void NovaEntidade_NasceAtiva_RefletindoOPadraoDeSoftDelete()
     {
+        // Act
         var entidade = new EntidadeDeTeste();
 
+        // Assert
         entidade.StAtiva.Should().BeTrue(
             "toda entidade deve nascer ativa; a inativação ocorre via soft delete (ST_ATIVA = 'N'), nunca DELETE físico");
     }
@@ -28,10 +30,13 @@ public class EntidadeBaseTests
     [Fact]
     public void NovaEntidade_AoSerCriada_PreencheDtCriacaoAutomaticamenteProximoDeAgora()
     {
+        // Arrange
         var antes = DateTime.UtcNow;
 
+        // Act
         var entidade = new EntidadeDeTeste();
 
+        // Assert
         var depois = DateTime.UtcNow;
         entidade.DtCriacao.Should().BeOnOrAfter(antes).And.BeOnOrBefore(depois);
     }
@@ -39,8 +44,10 @@ public class EntidadeBaseTests
     [Fact]
     public void NovaEntidade_AoSerCriada_NaoTemDtAtualizacaoAteSerModificada()
     {
+        // Act
         var entidade = new EntidadeDeTeste();
 
+        // Assert
         entidade.DtAtualizacao.Should().BeNull();
     }
 }

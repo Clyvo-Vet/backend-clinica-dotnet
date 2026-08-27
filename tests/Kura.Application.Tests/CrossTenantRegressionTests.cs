@@ -62,6 +62,7 @@ public class CrossTenantRegressionTests
     [Fact]
     public async Task SearchAsync_ClinicaA_NaoRetornaTutoresDaClinicaB()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         // Seed: usa um contexto sem filtro de clínica (simula bypass administrativo de seed).
@@ -76,8 +77,10 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildTutorService(ctxClinicaA, ClinicaA);
 
+        // Act
         var resultado = await sut.SearchAsync(busca: null);
 
+        // Assert
         resultado.Should().ContainSingle();
         resultado.Should().OnlyContain(t => t.NmTutor == "Maria Silva");
         resultado.Should().NotContain(t => t.NmTutor == "João Souza");
@@ -86,6 +89,7 @@ public class CrossTenantRegressionTests
     [Fact]
     public async Task SearchAsync_ComBusca_ClinicaA_NaoRetornaTutorDaClinicaBMesmoQuandoTextoBate()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -100,8 +104,10 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildTutorService(ctxClinicaA, ClinicaA);
 
+        // Act
         var resultado = await sut.SearchAsync(busca: "Carlos");
 
+        // Assert
         resultado.Should().ContainSingle();
         resultado.Single().NrCpf.Should().Be("33333333333");
     }
@@ -109,6 +115,7 @@ public class CrossTenantRegressionTests
     [Fact]
     public async Task GetByIdAsync_TutorDeOutraClinica_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -120,14 +127,17 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildTutorService(ctxClinicaA, ClinicaA);
 
+        // Act
         var act = async () => await sut.GetByIdAsync(2L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task GetByIdAsync_TutorDaMesmaClinica_RetornaNormalmente()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -139,14 +149,17 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildTutorService(ctxClinicaA, ClinicaA);
 
+        // Act
         var resultado = await sut.GetByIdAsync(1L);
 
+        // Assert
         resultado.NmTutor.Should().Be("Maria Silva");
     }
 
     [Fact]
     public async Task GetPetsAsync_TutorDeOutraClinica_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -158,10 +171,12 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = BuildTutorService(ctxClinicaA, ClinicaA);
 
+        // Act
         // Antes da TASK-21, isto vazava a lista de pets (e, por consequência, o vínculo com o
         // tutor da clínica B) para qualquer clínica autenticada.
         var act = async () => await sut.GetPetsAsync(2L);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
@@ -210,6 +225,7 @@ public class CrossTenantRegressionTests
     [Fact]
     public async Task AgendaService_AtualizarStatus_AgendamentoDeOutraClinica_LancaEntidadeNaoEncontrada()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -237,14 +253,17 @@ public class CrossTenantRegressionTests
             new UnitOfWork(ctxClinicaA));
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 1 };
+        // Act
         var act = async () => await sut.AtualizarStatusAsync(10L, dto);
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
     }
 
     [Fact]
     public async Task AgendaService_AtualizarStatus_AgendamentoDaMesmaClinica_AtualizaNormalmente()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -272,8 +291,10 @@ public class CrossTenantRegressionTests
             new UnitOfWork(ctxClinicaA));
 
         var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 1 };
+        // Act
         var result = await sut.AtualizarStatusAsync(20L, dto);
 
+        // Assert
         result.DsStatus.Should().Be("REALIZADO");
     }
 
@@ -289,6 +310,7 @@ public class CrossTenantRegressionTests
     [Fact]
     public async Task TimelineRepository_GetByPetIdAsync_EventoDeOutraClinica_NaoAparece()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         // Mesmo ID_PET (1) reaproveitado por duas clínicas distintas de propósito — prova que o
@@ -317,14 +339,17 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = new TimelineRepository(ctxClinicaA);
 
+        // Act
         var resultado = await sut.GetByPetIdAsync(1L);
 
+        // Assert
         resultado.Should().BeEmpty();
     }
 
     [Fact]
     public async Task TimelineRepository_GetByPetIdAsync_EventoDaMesmaClinica_RetornaNormalmente()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
 
         await using (var seedCtx = CreateContext(dbName, idClinicaFiltro: null))
@@ -348,8 +373,10 @@ public class CrossTenantRegressionTests
         await using var ctxClinicaA = CreateContext(dbName, idClinicaFiltro: ClinicaA);
         var sut = new TimelineRepository(ctxClinicaA);
 
+        // Act
         var resultado = (await sut.GetByPetIdAsync(1L)).ToList();
 
+        // Assert
         resultado.Should().ContainSingle();
         resultado.Single().DsObservacao.Should().Be("Evento normal da Clínica A");
     }

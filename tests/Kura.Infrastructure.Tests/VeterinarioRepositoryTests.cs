@@ -37,6 +37,7 @@ public class VeterinarioRepositoryTests
     [Fact]
     public async Task SalvarELer_VeterinarioSemTelefone_NaoLancaERetornaNull()
     {
+        // Arrange
         var dbName = Guid.NewGuid().ToString();
         var ctx = CreateContext(dbName);
 
@@ -74,10 +75,12 @@ public class VeterinarioRepositoryTests
         // do "banco", não do change tracker do contexto que gravou.
         var ctx2 = CreateContext(dbName);
 
+        // Act
         Func<Task<Veterinario?>> act = () => ctx2.Veterinarios
             .AsNoTracking()
             .FirstOrDefaultAsync(v => v.Id == veterinario.Id);
 
+        // Assert
         var lido = await act.Should().NotThrowAsync();
         lido.Subject.Should().NotBeNull();
         lido.Subject!.NrTelefone.Should().BeNull("o fallback para string.Empty foi removido — NULL é o valor honesto");

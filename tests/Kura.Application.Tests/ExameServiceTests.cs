@@ -50,13 +50,16 @@ public class ExameServiceTests
     [Fact]
     public async Task CreateAsync_ResolveIdTipoEventoPorCdTipo_PersisteFkDistintaDeOutrosTipos()
     {
+        // Arrange
         Exame? exameAdicionado = null;
         _exameRepoMock.Setup(r => r.AddAsync(It.IsAny<Exame>()))
             .Callback<Exame>(e => exameAdicionado = e)
             .Returns(Task.CompletedTask);
 
+        // Act
         await _sut.CreateAsync(ValidDto());
 
+        // Assert
         _tipoEventoServiceMock.Verify(t => t.GetIdByCdTipoAsync("EXAME"), Times.Once);
         exameAdicionado.Should().NotBeNull();
         exameAdicionado!.EventoClinico.IdTipoEvento.Should().Be(IdTipoEventoExameSeed);
@@ -67,11 +70,14 @@ public class ExameServiceTests
     [Fact]
     public async Task CreateAsync_CdTipoNaoEncontrado_PropagaEntidadeNaoEncontrada()
     {
+        // Arrange
         _tipoEventoServiceMock.Setup(t => t.GetIdByCdTipoAsync("EXAME"))
             .ThrowsAsync(new EntidadeNaoEncontradaException("TipoEvento", "EXAME"));
 
+        // Act
         var act = async () => await _sut.CreateAsync(ValidDto());
 
+        // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>()
             .WithMessage("*TipoEvento*EXAME*");
 
@@ -83,6 +89,7 @@ public class ExameServiceTests
     [InlineData("   ")]
     public async Task CreateAsync_DsObservacaoVaziaOuWhitespace_ColescaParaSentinela(string dsObservacaoBruta)
     {
+        // Arrange
         // TASK-56: EVENTO_CLINICO.DS_OBSERVACAO é NOT NULL (V9:58, migration imutável) e o Oracle
         // trata VARCHAR2 vazio como NULL — sem o coalesce no service, o payload real do app
         // (mobile-clinica-rn/src/app/(app)/receituario/[idPet].tsx) não manda dsObservacao e o
@@ -94,8 +101,10 @@ public class ExameServiceTests
 
         var dto = ValidDto(dsObservacao: dsObservacaoBruta);
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         exameAdicionado.Should().NotBeNull();
         exameAdicionado!.EventoClinico.DsObservacao.Should().Be("Sem observações");
     }
@@ -103,6 +112,7 @@ public class ExameServiceTests
     [Fact]
     public async Task CreateAsync_DsObservacaoPreenchida_NaoSobrescreveComSentinela()
     {
+        // Arrange
         Exame? exameAdicionado = null;
         _exameRepoMock.Setup(r => r.AddAsync(It.IsAny<Exame>()))
             .Callback<Exame>(e => exameAdicionado = e)
@@ -110,8 +120,10 @@ public class ExameServiceTests
 
         var dto = ValidDto(dsObservacao: "Coleta realizada em jejum");
 
+        // Act
         await _sut.CreateAsync(dto);
 
+        // Assert
         exameAdicionado.Should().NotBeNull();
         exameAdicionado!.EventoClinico.DsObservacao.Should().Be("Coleta realizada em jejum");
     }

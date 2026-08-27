@@ -40,6 +40,7 @@ public class LgpdNaoVazamentoTests
     [Fact]
     public async Task RegistrarInteracaoAsync_IdTutorNull_NaoLancaENaoVazaDsConteudoEmExcecao()
     {
+        // Arrange
         // Reescrito na TASK-77 (FIX_7): id_tutor null deixou de lançar
         // RegraDeNegocioException — a interação passa a ser GRAVADA com IdClinica/IdTutor
         // nulos (decisão de produto, ver LunaService.RegistrarInteracaoAsync). O teste
@@ -71,8 +72,10 @@ public class LgpdNaoVazamentoTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         var act = async () => await sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         await act.Should().NotThrowAsync(
             "não há mais rejeição para id_tutor null — se este teste lançar, é regressão " +
             "da decisão de produto da TASK-77, não um comportamento LGPD válido");
@@ -85,6 +88,7 @@ public class LgpdNaoVazamentoTests
     [Fact]
     public async Task RegistrarInteracaoAsync_TutorInexistente_MensagemDeExcecaoNaoContemDsConteudo()
     {
+        // Arrange
         var tutorRepo = new Mock<ITutorRepository>();
         tutorRepo.Setup(r => r.GetByIdAsync(It.IsAny<long>())).ReturnsAsync((Tutor?)null);
 
@@ -103,8 +107,10 @@ public class LgpdNaoVazamentoTests
             DtRecebimento = DateTime.UtcNow
         };
 
+        // Act
         var act = async () => await sut.RegistrarInteracaoAsync(dto);
 
+        // Assert
         var ex = await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
         ex.Which.Message.Should().NotContain(ConteudoSensivel);
     }
@@ -112,6 +118,7 @@ public class LgpdNaoVazamentoTests
     [Fact]
     public async Task BuscarContextoPorTelefoneAsync_TutorNaoEncontrado_RetornaNullSemLancarNadaComOTelefone()
     {
+        // Arrange
         var tutorRepo = new Mock<ITutorRepository>();
         tutorRepo.Setup(r => r.GetByTelefoneAsync(TelefoneSensivel)).ReturnsAsync((Tutor?)null);
 
@@ -124,11 +131,13 @@ public class LgpdNaoVazamentoTests
             Mock.Of<IUnitOfWork>(),
             Mock.Of<IClinicaContext>());
 
+        // Act
         // "Não encontrado" é modelado como null, nunca como exceção — a forma mais
         // segura possível de reportar ausência sem correr risco de interpolar o
         // telefone numa mensagem que sobe até o middleware/log.
         var result = await sut.BuscarContextoPorTelefoneAsync(TelefoneSensivel);
 
+        // Assert
         result.Should().BeNull();
     }
 }
