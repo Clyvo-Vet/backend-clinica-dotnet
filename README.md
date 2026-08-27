@@ -377,8 +377,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tutores
 
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/metrics` | Contagens **de negócio** do ambiente inteiro (`escopo: "ambiente"`), não métricas de desempenho | Público |
-| GET | `/metrics/clinica` | As mesmas contagens **escopadas pela clínica do JWT** | JWT |
+| GET | `/metrics` | Contagens do ambiente inteiro (`escopo: "ambiente"`) + `uptimeSeconds`. **Não** são as métricas de desempenho do OTel | Público |
+| GET | `/metrics/clinica` | Pets, eventos e triagens **da clínica do JWT** | JWT |
 | GET | `/health` | Health check real — 3 checks (`self`, `oracle`, `luna`) | Público |
 
 > `/metrics` e as métricas do OpenTelemetry são **coisas diferentes com nomes parecidos** —
@@ -564,10 +564,14 @@ Nomes parecidos, coisas diferentes:
 
 | | `GET /metrics` | Métricas do OpenTelemetry |
 |---|---|---|
-| O que é | **Contagens de negócio** (tutores, pets, eventos…) | **Desempenho** (duração de requisição, contagem por status) |
+| O que é | Sobretudo **contagens de negócio** — `ambienteTotalClinicas`, `ambienteTotalPets`, `ambienteTotalEventos`, `ambienteTotalTriagensLuna` — mais `uptimeSeconds` e o nome do `ambiente` | **Desempenho por requisição**: duração e contagem por status, geradas pela instrumentação |
+| O que **não** é | Não traz latência, throughput nem percentil algum | Não traz contagem de entidade de domínio |
 | Onde sai | Corpo JSON da resposta HTTP | **stdout** do processo, via exporter Console |
 | Quem serve | `MetricsController` | SDK do OpenTelemetry |
-| Escopo | `/metrics` é do **ambiente inteiro** (`escopo: "ambiente"`); `/metrics/clinica` é escopado pelo JWT | Processo |
+| Escopo | `/metrics` é do **ambiente inteiro** (`escopo: "ambiente"`, campos `ambiente*`); `/metrics/clinica` conta pets/eventos/triagens da clínica do JWT | Processo |
+
+`uptimeSeconds` é a única coisa em `/metrics` que se parece com sinal de runtime, e vem de
+`Environment.TickCount64` — não do OpenTelemetry.
 
 ---
 
