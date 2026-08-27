@@ -5,6 +5,9 @@
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 ![Azure](https://img.shields.io/badge/Azure-VM%20Linux-0078D4?logo=microsoftazure&logoColor=white)
 ![xUnit](https://img.shields.io/badge/Testes-xUnit%20%2B%20Moq-green)
+![Testes](https://img.shields.io/badge/Testes-305%20(285%20unit%20%C2%B7%2020%20integra%C3%A7%C3%A3o)-brightgreen)
+![Health](https://img.shields.io/badge/Health%20Checks-self%20%C2%B7%20oracle%20%C2%B7%20luna-informational)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-tracing%20%2B%20m%C3%A9tricas%20(Console)-blueviolet)
 
 Hub clínico do ecossistema **Clyvo Vet** — sistema integrado de gestão veterinária desenvolvido como Challenge FIAP 2026. Expõe a API RESTful responsável pelo domínio clínico: prontuários, eventos, agenda, IoT de temperatura e integração com a IA Luna de triagem.
 
@@ -19,9 +22,11 @@ Hub clínico do ecossistema **Clyvo Vet** — sistema integrado de gestão veter
 5. [Execução via Docker](#execução-via-docker)
 6. [Autenticação](#autenticação)
 7. [Índice de Endpoints](#índice-de-endpoints)
-8. [Índice de Artefatos — Avaliadores FIAP](#índice-de-artefatos--avaliadores-fiap)
-9. [Variáveis de Ambiente](#variáveis-de-ambiente)
-10. [Equipe](#equipe)
+8. [Health Checks, Observabilidade e Monitoramento](#health-checks-observabilidade-e-monitoramento)
+9. [Testes](#testes)
+10. [Índice de Artefatos — Avaliadores FIAP](#índice-de-artefatos--avaliadores-fiap)
+11. [Variáveis de Ambiente](#variáveis-de-ambiente)
+12. [Equipe](#equipe)
 
 ---
 
@@ -73,7 +78,13 @@ graph TD
 |---|---|
 | .NET SDK | 10.0 |
 | Docker + Docker Compose | 24.x |
-| Acesso Oracle FIAP | `oracle.fiap.com.br:1521/orcl` |
+| Oracle alcançável | Oracle XE local do `DevOps-Cloud` (`localhost:9092/XEPDB1`) |
+
+> 🔴 **Não aponte a aplicação para `oracle.fiap.com.br`.** É infraestrutura **compartilhada e
+> viva**: credencial errada gera `ORA-01017` a cada tentativa e, com o `restart` do container
+> repetindo isso em laço, `ORA-01017` repetido vira `ORA-28000` (**conta bloqueada**) — já
+> aconteceu neste projeto e travou a conta de toda a equipe. Use o Oracle XE local do
+> `DevOps-Cloud`. Os exemplos deste README usam `localhost:9092/XEPDB1` por esse motivo.
 
 ### Clonar o repositório
 
@@ -93,13 +104,17 @@ cd backend-clinica-dotnet
 ```bash
 dotnet user-secrets init --project src/Kura.Api
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
-  "User Id=RM562999;Password=<YOUR_ORACLE_PASSWORD>;Data Source=oracle.fiap.com.br:1521/orcl" \
+  "User Id=<YOUR_ORACLE_USER>;Password=<YOUR_ORACLE_PASSWORD>;Data Source=localhost:9092/XEPDB1" \
   --project src/Kura.Api
 dotnet user-secrets set "Jwt:Key" "<YOUR_JWT_SECRET_MIN_32_CHARS>" --project src/Kura.Api
 dotnet user-secrets set "Jwt:Issuer" "kura-api" --project src/Kura.Api
 dotnet user-secrets set "Jwt:Audience" "kura-client" --project src/Kura.Api
 dotnet user-secrets set "IoT:ApiKey" "<YOUR_IOT_API_KEY>" --project src/Kura.Api
 dotnet user-secrets set "Luna:ApiKey" "<YOUR_LUNA_API_KEY>" --project src/Kura.Api
+# Obrigatória para GET /health responder — sem ela o endpoint devolve 500 (ver §Testes/§Health).
+dotnet user-secrets set "Luna:BaseUrl" "http://localhost:8000" --project src/Kura.Api
+dotnet user-secrets set "Luna:InboundApiKey" "<YOUR_LUNA_INBOUND_API_KEY>" --project src/Kura.Api
+dotnet user-secrets set "Daily:ApiKey" "<YOUR_DAILY_CO_API_KEY>" --project src/Kura.Api
 ```
 
 ### Opção B — `appsettings.Development.json` (local, nunca versionado)
@@ -109,7 +124,7 @@ Crie `src/Kura.Api/appsettings.Development.json`:
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "User Id=RM562999;Password=<YOUR_ORACLE_PASSWORD>;Data Source=oracle.fiap.com.br:1521/orcl"
+    "DefaultConnection": "User Id=<YOUR_ORACLE_USER>;Password=<YOUR_ORACLE_PASSWORD>;Data Source=localhost:9092/XEPDB1"
   },
   "Jwt": {
     "Key": "<YOUR_JWT_SECRET_MIN_32_CHARS>",
@@ -118,9 +133,19 @@ Crie `src/Kura.Api/appsettings.Development.json`:
     "ExpiresInHours": 8
   },
   "IoT": { "ApiKey": "<YOUR_IOT_API_KEY>" },
-  "Luna": { "ApiKey": "<YOUR_LUNA_API_KEY>" }
+  "Luna": {
+    "ApiKey": "<YOUR_LUNA_API_KEY>",
+    "BaseUrl": "http://localhost:8000",
+    "InboundApiKey": "<YOUR_LUNA_INBOUND_API_KEY>"
+  },
+  "Daily": { "ApiKey": "<YOUR_DAILY_CO_API_KEY>" }
 }
 ```
+
+> `Luna:BaseUrl` é lida pelo health check da Luna e pelo client de transcrição. **Se faltar,
+> a aplicação sobe normalmente e é `GET /health` que passa a devolver `500`** com
+> `InvalidOperationException: Luna:BaseUrl not configured.` — medido. Ver
+> [Health Checks](#health-checks-observabilidade-e-monitoramento).
 
 ### Opção C — `.env` para Docker Compose
 
@@ -137,30 +162,64 @@ cp .env.example .env
 dotnet restore
 dotnet build
 dotnet run --project src/Kura.Api
-# Swagger UI: http://localhost:5000/swagger  (apenas ambiente Development)
-# Health:     http://localhost:5000/health
-# Metrics:    http://localhost:5000/metrics
+# Swagger UI: http://localhost:5162/swagger  (apenas ambiente Development)
+# Health:     http://localhost:5162/health
+# Metrics:    http://localhost:5162/metrics
 ```
 
-### Testes
+A porta vem do perfil `http` de `src/Kura.Api/Properties/launchSettings.json`
+(`applicationUrl: http://localhost:5162`); o perfil `https` sobe também em `7112`. Para ignorar
+os perfis e escolher a porta explicitamente, use
+`dotnet run --no-launch-profile --project src/Kura.Api` com `ASPNETCORE_URLS`.
 
-```bash
-dotnet test                                                        # todos os projetos
-dotnet test --filter "FullyQualifiedName~NomeDoServico"            # filtrar por classe
+> ⚠️ `launchSettings.json` força `ASPNETCORE_ENVIRONMENT=Development`, e em `Development` o
+> `Program.cs` executa o bloco de validação de migrations, que **abre conexão real** com o
+> Oracle da connection string configurada. Confira para onde ela aponta **antes** de rodar —
+> é exatamente esse caminho que já bloqueou a conta institucional.
+
+🔴 **`dotnet run` exige um Oracle alcançável — não é opcional, e a falha não é graciosa.**
+Medido nesta máquina, com a connection string apontada para uma porta morta: o processo
+**termina no startup** com exceção não tratada e **nunca chega a escutar na porta**.
+
 ```
+Unhandled exception. Oracle.ManagedDataAccess.Client.OracleException (0x80004005): ORA-50201: ...
+ ---> OracleInternal.Network.NetworkException (0x80004005): ORA-50201: ...
+ ---> OracleInternal.Network.NetworkException (0x80004005): ORA-12541: TNS: não há listener
+   at Program.<Main>$(String[] args) in src/Kura.Api/Program.cs:line 136
+```
+
+Repare que o bloco de retry **não re-tentou**: nenhuma linha `"Oracle não disponível (ORA-…)"`
+foi emitida. O motivo está detalhado em
+[Cold start](#cold-start-no-compose--o-que-é-esperado-e-o-que-não-é-verdade) — o `.Number`
+comparado pelo `when` pertence à `OracleException` externa (`ORA-50201`), e o código de rede
+real vem numa `NetworkException` dois níveis abaixo.
+
+Se você só quer rodar a **suíte de testes**, não precisa de Oracle nenhum — veja
+[Testes](#testes).
 
 ---
 
 ## Execução via Docker
 
 ```bash
+cp .env.example .env      # obrigatório: preencha os valores antes de subir
 docker-compose up --build
 # Swagger UI: http://localhost:8080/swagger
 # Health:     http://localhost:8080/health
 # Metrics:    http://localhost:8080/metrics
 ```
 
-A API conecta ao Oracle externo da FIAP. Nenhum banco de dados local é necessário.
+> 🔴 **O `cp .env.example .env` não é opcional.** Todas as variáveis do `docker-compose.yml`
+> usam a forma `${VAR:?mensagem}`: sem o `.env` preenchido o Compose **aborta** com a mensagem
+> da variável que faltou, em vez de subir o container com valor vazio. Isso é deliberado — a
+> versão anterior deste arquivo renderizava `Password=;Data Source=oracle.fiap.com.br`, ou
+> seja, usuário real e host vivo com senha vazia, que é o laço de `ORA-01017` que bloqueia a
+> conta.
+
+Este compose sobe **apenas a API**; ele não inclui banco. Aponte `ORACLE_DATA_SOURCE` para um
+Oracle que você controle — o XE local do `DevOps-Cloud` (`localhost:9092/XEPDB1`) é o alvo
+esperado. Para subir o ecossistema completo (Oracle XE + .NET + Java + Luna), use o
+`docker compose` do repositório `DevOps-Cloud`, não este.
 
 ---
 
@@ -173,7 +232,8 @@ A API conecta ao Oracle externo da FIAP. Nenhum banco de dados local é necessá
 | IA Luna (Python) | API Key — `X-Api-Key: {key}` | Chatbot de triagem |
 
 > A linha "IA Luna" acima documenta o par `Luna:ApiKey`/`LUNA_API_KEY` — a chave que a
-> Luna manda (`Authorization: Bearer` hoje, migrando para `X-Api-Key` na TASK-68) para
+> Luna manda no header **`X-Api-Key`** (a migração prevista na TASK-68 **já foi concluída**;
+> `LunaApiKeyAuthFilter` lê `X-Api-Key` e nada mais) para
 > autenticar suas chamadas *para* este backend (`GET /tutores/telefone/{numero}`,
 > `POST /luna/interactions`, `POST /luna/triage` — TASK-67). **Não confundir** com
 > `Luna:InboundApiKey`/`LUNA_INBOUND_API_KEY`, usada na direção oposta (este backend →
@@ -317,8 +377,197 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/tutores
 
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET | `/metrics` | Métricas operacionais para acompanhamento de SLO | Público |
-| GET | `/health` | Health check da API | Público |
+| GET | `/metrics` | Contagens **de negócio** do ambiente inteiro (`escopo: "ambiente"`), não métricas de desempenho | Público |
+| GET | `/metrics/clinica` | As mesmas contagens **escopadas pela clínica do JWT** | JWT |
+| GET | `/health` | Health check real — 3 checks (`self`, `oracle`, `luna`) | Público |
+
+> `/metrics` e as métricas do OpenTelemetry são **coisas diferentes com nomes parecidos** —
+> ver [Health Checks, Observabilidade e Monitoramento](#health-checks-observabilidade-e-monitoramento).
+
+---
+
+## Testes
+
+**Pré-requisito: nenhum.** A suíte inteira roda **sem Oracle, sem Docker e sem variável de
+ambiente nenhuma** — medido com `env -u ASPNETCORE_ENVIRONMENT -u
+ConnectionStrings__DefaultConnection`. A suíte de integração sobe o `Program.cs` real com o
+`DbContext` substituído por InMemory e uma connection string inerte.
+
+```bash
+dotnet test                                                   # tudo
+dotnet test KuraApi.slnx --filter "Categoria=Integracao"      # só integração
+dotnet test KuraApi.slnx --filter "Categoria!=Integracao"     # só unitários
+dotnet test --filter "FullyQualifiedName~NomeDoServico"       # por classe
+```
+
+Contagens **medidas nesta revisão** (`8 + 71 + 206 + 20`):
+
+| Recorte | Testes | Projetos |
+|---|---|---|
+| Tudo | **305** | os 4 |
+| `Categoria=Integracao` | **20** | `Kura.IntegrationTests` |
+| `Categoria!=Integracao` | **285** | `Kura.Domain.Tests` · `Kura.Application.Tests` · `Kura.Infrastructure.Tests` |
+
+`20 + 285 = 305`. ⚠️ O filtro `!=` do VSTest casa **também** o teste que não declara a
+propriedade — é por isso que os arquivos unitários não precisaram ser anotados um a um, e é
+por isso que uma classe de integração que **esqueça** o `[Trait]` cairia silenciosamente no
+balde unitário. `ConvencaoDeTestesCoverageTests` existe para impedir exatamente isso.
+
+| Projeto | Recorte | O que cobre |
+|---|---|---|
+| `tests/Kura.Domain.Tests` | Unit | Regras de domínio, em processo |
+| `tests/Kura.Application.Tests` | Unit | Services com dependências dubladas |
+| `tests/Kura.Infrastructure.Tests` | Unit | Políticas de persistência, EF InMemory, sem host HTTP |
+| `tests/Kura.IntegrationTests` | **Integration** | Sobe o `Program.cs` real e faz requisições HTTP ponta a ponta |
+
+Detalhe da convenção, das fixtures e das restrições de quem for acrescentar teste:
+[`tests/README.md`](tests/README.md).
+
+---
+
+## Health Checks, Observabilidade e Monitoramento
+
+### `GET /health` — o que é, e o que cada campo significa
+
+Rota **pública** (não exige JWT nem API key), registrada em `Program.cs` por
+`app.MapKuraHealthChecks("/health")`. Substituiu o antigo `HealthController`, que devolvia
+`200` incondicional sem consultar nada.
+
+O corpo é escrito pelo `ResponseWriter` customizado em
+`src/Kura.Api/Extensions/HealthCheckExtensions.cs`:
+
+| Campo | Significado |
+|---|---|
+| `status` | Estado **agregado** — o pior entre os 3 checks |
+| `timestamp` | Instante da apuração, UTC (ISO 8601) |
+| `checks[].name` | `self` · `oracle` · `luna` |
+| `checks[].status` | `Healthy` · `Degraded` · `Unhealthy` |
+| `checks[].description` | Texto do check. **Pode ser `null`** — o check `oracle` vem do pacote oficial e não define descrição |
+| `checks[].durationMs` | Duração **daquele** check, em milissegundos |
+
+Corpo real, medido nesta suíte com o Oracle apontado para uma porta morta e a Luna ausente
+(recorte formatado para leitura; o serviço emite em linha única):
+
+```json
+{
+  "status": "Unhealthy",
+  "timestamp": "2026-08-27T02:56:24.1171552Z",
+  "checks": [
+    { "name": "self",   "status": "Healthy",   "description": "API respondendo.", "durationMs": 0.0294 },
+    { "name": "oracle", "status": "Unhealthy", "description": null,               "durationMs": 2034.9751 },
+    { "name": "luna",   "status": "Degraded",  "description": "Luna indisponível ou não respondeu a tempo.", "durationMs": 2037.0647 }
+  ]
+}
+```
+
+### Os 3 checks
+
+| Check | O que verifica | Falha vira | Por quê |
+|---|---|---|---|
+| `self` | Que o delegate executou — ou seja, que o pipeline HTTP está de pé e servindo | nunca falha | É o sinal de vida do processo |
+| `oracle` | Conectividade com o banco, via `AddDbContextCheck<KuraDbContext>` (pacote oficial da Microsoft) | **`Unhealthy`** | Oracle fora do ar **é** falha real desta API |
+| `luna` | `GET {Luna:BaseUrl}/health`, `HttpClient` dedicado com timeout de **3s** | **`Degraded`**, nunca `Unhealthy` | A API da clínica é 100% operacional sem a Luna — só as 2 FEATs que dependem dela ficam indisponíveis |
+
+### Status agregado → código HTTP
+
+| `status` | HTTP | Leitura do operador |
+|---|---|---|
+| `Healthy` | **200** | Tudo no ar |
+| `Degraded` | **200** | Serviço **atendendo**; uma dependência de terceiro (Luna) caiu |
+| `Unhealthy` | **503** | Banco inacessível — a API não consegue cumprir a função |
+
+🔴 **`Degraded` mapear para `200` é decisão, não descuido.** O healthcheck do container
+`kura-api` é `curl -sf .../health`: se `Degraded` virasse `503`, a Luna fora do ar deixaria o
+`kura-api` `unhealthy`, e como o serviço `luna-ai` declara
+`depends_on: kura-api: condition: service_healthy`, o resultado seria uma **dependência
+circular de disponibilidade** — a Luna nunca subiria porque a Luna está fora do ar. Não
+"corrija" isso sem ler o XML de `LunaHealthCheck`.
+
+### Os checks rodam em PARALELO — o pior caso é o máximo, não a soma
+
+Medido na mesma requisição do corpo acima: `oracle` **2034,98 ms** + `luna` **2037,06 ms**,
+com **2042,99 ms** de wall total da requisição. Se fossem sequenciais o total seria ~4072 ms.
+
+Isso importa por causa de uma margem estreita: o healthcheck do container em
+`DevOps-Cloud/docker-compose.yml` é `interval: 30s`, **`timeout: 5s`**, `retries: 5`,
+`start_period: 60s`, e o pior caso já medido do `/health` é **~4,1s** — sobra **~0,9s**.
+**Qualquer mudança que acrescente latência por requisição precisa ser medida antes e depois:**
+comida a margem, o `kura-api` fica `unhealthy` e a Luna não sobe.
+
+### Cold start no compose — o que é esperado e o que NÃO é verdade
+
+Durante a subida do ecossistema, o Oracle XE demora (o `start_period` dele é de **180s**), e é
+**esperado** que o `kura-api` reporte o check `oracle` como indisponível nesse intervalo. Isso
+não é bug.
+
+⚠️ **O que este README não afirma, porque foi medido e é falso:** que a convergência venha do
+retry com backoff do `Program.cs`. Nas **duas** falhas de conexão medidas neste repositório
+(listener ausente; serviço não registrado no listener) o driver lança **`ORA-50201`**, e o
+código de rede real (`ORA-12514`/`ORA-12541`) aparece **dois níveis abaixo**, numa
+`NetworkException` — que **não é `OracleException` e não expõe `.Number`**. O filtro
+`when (retriableErrors.Contains(ex.Number))` não casa, e o bloco **não re-tenta** nesses
+caminhos: observou-se **0 linhas** `"Oracle não disponível (ORA-…)"` e `RestartCount 10`. Quem
+faz a stack convergir ali é a **restart policy do Docker**.
+
+*Limite honesto desta afirmação:* só os 2 códigos de falha de conexão acima foram exercitados.
+Os outros 2 da lista (`1109`, `17002`) **nunca foram**, e nada se afirma sobre eles.
+
+### Frequência de polling sugerida
+
+| Consumidor | Intervalo | Observação |
+|---|---|---|
+| Healthcheck do container | **30s** (já configurado) | `timeout: 5s` — ver a margem acima |
+| Monitor externo / uptime | 30–60s | Abaixo de 30s não agrega: o check `luna` sozinho pode custar ~2s |
+
+### Runbook — o que fazer quando cai
+
+| Sintoma | Causa provável | Ação |
+|---|---|---|
+| `503`, `oracle` `Unhealthy` | Banco fora do ar, credencial errada ou `Data Source` errado | Confira o container do Oracle e a connection string. 🔴 **Não** fique re-tentando contra `oracle.fiap.com.br`: `ORA-01017` repetido vira `ORA-28000` e bloqueia a conta |
+| `200`, `luna` `Degraded` | Luna fora do ar ou lenta (timeout de 3s) | A clínica segue operando. Verifique o serviço `luna-ai`; só transcrição e triagem ficam indisponíveis |
+| `500` com `Luna:BaseUrl not configured.` | Config faltando | **Não é indisponibilidade** — é configuração. Defina `Luna:BaseUrl` (`Luna__BaseUrl`). Medido: a app sobe e só o `/health` quebra |
+| `404` em `/health` | `MapKuraHealthChecks` não foi chamado | Regressão de fiação em `Program.cs`; coberta por teste de integração |
+
+### OpenTelemetry — onde ver spans e métricas
+
+Configurado em `src/Kura.Api/Extensions/ObservabilityExtensions.cs`, com **exporter Console**
+(decisão travada: nunca Application Insights, por custo e pela regra *free-first*). Spans e
+métricas saem no **stdout do processo** — em container:
+
+```bash
+docker compose logs -f kura-api
+```
+
+Recurso declarado uma única vez, válido para as duas pilhas: `service.name = Kura.Api`,
+`service.version = 1.0.0`. Sem isso a SDK cairia no fallback `unknown_service:Kura.Api`.
+
+| Instrumentação | Cobre |
+|---|---|
+| `AddAspNetCoreInstrumentation` | Borda de **entrada**: um span por requisição HTTP, e as métricas de duração/contagem por status |
+| `AddHttpClientInstrumentation` | Borda de **saída**: chamadas via `HttpClient` (inclui o próprio health check da Luna) |
+| `AddSource(KuraActivitySource.NomeFonte)` | Hierarquia **pai/filho entre as camadas do projeto** (`Kura.CrossCutting.Observability`) |
+
+O `ActivitySource` próprio instrumenta **deliberadamente um fluxo representativo**, não o
+projeto inteiro: `AgendaService.GetAgendaAsync` → `AgendaReadRepository.GetByIntervaloAsync`.
+
+**Ausências deliberadas, para não parecerem esquecimento:**
+
+- `OpenTelemetry.Instrumentation.EntityFrameworkCore` — **toda** a série publicada é
+  prerelease; não existe tag estável. Além disso produziria span de *comando SQL*, não de
+  fronteira arquitetural.
+- `OpenTelemetry.Exporter.Prometheus.AspNetCore` — mesma razão (só prerelease). E a rota
+  `/metrics` já é ocupada pelo `MetricsController`.
+
+### 🔴 `/metrics` **não** são as métricas do OpenTelemetry
+
+Nomes parecidos, coisas diferentes:
+
+| | `GET /metrics` | Métricas do OpenTelemetry |
+|---|---|---|
+| O que é | **Contagens de negócio** (tutores, pets, eventos…) | **Desempenho** (duração de requisição, contagem por status) |
+| Onde sai | Corpo JSON da resposta HTTP | **stdout** do processo, via exporter Console |
+| Quem serve | `MetricsController` | SDK do OpenTelemetry |
+| Escopo | `/metrics` é do **ambiente inteiro** (`escopo: "ambiente"`); `/metrics/clinica` é escopado pelo JWT | Processo |
 
 ---
 
@@ -339,10 +588,15 @@ Esta seção mapeia cada artefato técnico avaliável à sua localização exata
 | **Fluent API — Mapeamento de Entidades** | `src/Kura.Infrastructure/Persistence/Configurations/` |
 | **Interceptors (Read-only, Concorrência)** | `src/Kura.Infrastructure/Persistence/Interceptors/` |
 | **Conversor Bool → CHAR(1)** | `src/Kura.Infrastructure/Persistence/Converters/BoolToSimNaoConverter.cs` |
-| **Histórico de Migrations EF Core (V1–V9)** | `src/Kura.Infrastructure/Migrations/` |
+| **Histórico de Migrations EF Core** (17 migrations; **evidência apenas** — o DDL é aplicado pelo Flyway) | `src/Kura.Infrastructure/Migrations/` |
+| **Health Checks** (registro, writer JSON e check da Luna) | `src/Kura.Api/Extensions/HealthCheckExtensions.cs` · `src/Kura.Api/HealthChecks/LunaHealthCheck.cs` |
+| **Observabilidade — OpenTelemetry** | `src/Kura.Api/Extensions/ObservabilityExtensions.cs` |
+| **`ActivitySource` de tracing entre camadas** | `src/Kura.CrossCutting/Observability/` |
 | **Testes de Unidade — Application** | `tests/Kura.Application.Tests/` |
 | **Testes de Domínio** | `tests/Kura.Domain.Tests/` |
 | **Testes de Política — Infrastructure** | `tests/Kura.Infrastructure.Tests/` |
+| **Testes de Integração (HTTP, host real)** | `tests/Kura.IntegrationTests/` |
+| **Convenção de testes Unit × Integration** | `tests/README.md` |
 | **Configuração local (não versionada)** | `src/Kura.Api/appsettings.Development.json` |
 | **Provisionamento Docker** | `Dockerfile` · `docker-compose.yml` |
 | **Scripts de Deploy Azure (VM Linux)** | `docs/deploy/deploy-kura-vm.sh` |
@@ -355,15 +609,31 @@ Esta seção mapeia cada artefato técnico avaliável à sua localização exata
 
 Consulte `.env.example` na raiz do repositório para o template completo.
 
-| Variável | Descrição |
-|---|---|
-| `ConnectionStrings__DefaultConnection` | String de conexão Oracle 19c |
-| `Jwt__Key` | Chave secreta para assinatura JWT (mínimo 32 caracteres) |
-| `Jwt__Issuer` | Emissor do token JWT |
-| `Jwt__Audience` | Audiência do token JWT |
-| `IoT__ApiKey` | Chave de autenticação dos dispositivos ESP32 |
-| `Luna__ApiKey` | Chave de autenticação do chatbot Luna (Python) |
-| `ASPNETCORE_ENVIRONMENT` | `Development` (local) · `Production` (Azure) |
+Lista derivada das **10 chaves que o código realmente lê** (`src/`), não do que já se
+documentou antes.
+
+| Variável | Descrição | Falta dela quebra |
+|---|---|---|
+| `ConnectionStrings__DefaultConnection` | String de conexão Oracle | Acesso a dados |
+| `Jwt__Key` | Chave de assinatura JWT (mínimo 32 caracteres) | **O startup** — é a única lida de forma ansiosa, e a app não sobe sem ela |
+| `Jwt__Issuer` | Emissor do token JWT | Validação do token |
+| `Jwt__Audience` | Audiência do token JWT | Validação do token |
+| `IoT__ApiKey` | Autenticação dos dispositivos ESP32 | Os endpoints `/iot/*`, na 1ª chamada |
+| `Luna__ApiKey` | Autenticação **de entrada** da Luna (header `X-Api-Key`) | Os 3 endpoints consumidos pela Luna, na 1ª chamada |
+| `Luna__BaseUrl` | URL da Luna — usada pelo **health check** e pelo client de transcrição | **`GET /health` devolve `500`** (medido) |
+| `Luna__InboundApiKey` | Chave **de saída** (.NET → Luna, transcrição) — direção oposta à `Luna__ApiKey` | A transcrição, na 1ª chamada |
+| `Daily__ApiKey` | Chave da Daily.co (teleconsulta) | A teleconsulta, na 1ª chamada |
+| `Storage__BasePath` | Pasta dos PDFs de receituário. **Opcional** | Nada — cai no default `<dir da app>/storage/documentos` |
+| `ASPNETCORE_ENVIRONMENT` | `Development` · `Production` · `Testing` | Ver aviso abaixo |
+
+> ⚠️ Exceto `Jwt__Key`, as chaves acima são lidas **preguiçosamente** (dentro de lambdas de
+> `AddHttpClient`/filtros): a aplicação **sobe** sem elas e falha só quando o recurso
+> correspondente é exercitado pela primeira vez. É por isso que um `/health` com `500` é um
+> sintoma de **configuração**, não de indisponibilidade.
+
+> `ASPNETCORE_ENVIRONMENT=Testing` faz o `Program.cs` **pular** o bloco de validação de
+> migrations do startup — é o que permite subir o host num teste de integração sem abrir
+> conexão com o Oracle.
 
 **URL de produção (Azure App Service):** `https://kura-api-fiap.azurewebsites.net`
 
