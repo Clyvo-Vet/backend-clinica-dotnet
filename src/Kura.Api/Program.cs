@@ -126,35 +126,17 @@ if (!app.Environment.IsEnvironment("Testing"))
     {
         var context = scope.ServiceProvider.GetRequiredService<KuraDbContext>();
 
-        const int maxAttempts = 10;
-        int[] retriableErrors = [12514, 1109, 12541, 17002];
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-                if (pendingMigrations.Any())
-                {
-                    app.Logger.LogWarning(
-                        "Existem {Count} migrations pendentes no EF Core. " +
-                        "ATENÇÃO: schema é aplicado pelo Flyway. Migrations EF servem apenas como evidência. " +
-                        "Migrations pendentes: {Migrations}",
-                        pendingMigrations.Count(),
-                        string.Join(", ", pendingMigrations));
-                }
-                break;
-            }
-            catch (OracleException ex) when (retriableErrors.Contains(ex.Number) && attempt < maxAttempts)
-            {
-                var delaySecs = Math.Min(Math.Pow(2, attempt - 1), 60);
-                app.Logger.LogWarning(
-                    "Oracle não disponível (ORA-{ErrorCode}) — tentativa {Attempt}/{MaxAttempts}. " +
-                    "Aguardando {Delay}s antes de nova tentativa...",
-                    ex.Number, attempt, maxAttempts, delaySecs);
-                await Task.Delay(TimeSpan.FromSeconds(delaySecs));
-            }
-        }
+        // S3D-10: a lógica saiu daqui para MigrationEvidenceExtensions e passou a ser NÃO-FATAL.
+        // Antes, este bloco capturava apenas uma allowlist escrita à mão de 4 códigos Oracle
+        // ([12514, 1109, 12541, 17002]) que, medida contra o ambiente real, acerta ZERO dos 3
+        // modos de falha que de fato ocorrem (12154/12545 no stop, 50000 no pause). Consequência
+        // medida: com o Oracle inalcançável NA PARTIDA a exceção escapava, o processo morria e,
+        // com `restart: unless-stopped`, virava crash loop — HTTP 000 por 139s, RestartCount=7.
+        // A API precisa SUBIR e reportar o banco por GET /health; processo morto não reporta nada.
+        // Ver o XML da classe para o achado completo e para a aritmética das 5 tentativas.
+        await MigrationEvidenceExtensions.RegistrarMigrationsPendentesAsync(
+            async () => await context.Database.GetPendingMigrationsAsync(),
+            app.Logger);
     }
 }
 
