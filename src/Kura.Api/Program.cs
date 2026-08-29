@@ -1,4 +1,4 @@
-using Serilog;
+﻿using Serilog;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -59,7 +59,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
         };
     });
-builder.Services.AddAuthorization();
+// FD-04: primeira politica de autorizacao deste backend. Ver
+// Extensions/AuthorizationExtensions.cs para por que RequireClaim (e nao Roles=) e
+// por que a politica falha FECHADA para token pre-FD-03, que nao tem a claim `perfil`.
+builder.Services.AddKuraAuthorization();
 
 // Swagger with JWT Bearer scheme
 builder.Services.AddSwaggerGen(c =>

@@ -14,4 +14,8 @@ public class VeterinarioRepository : Repository<Veterinario>, IVeterinarioReposi
     {
         return await _dbSet.Where(v => v.IdClinica == idClinica).ToListAsync();
     }
+
+    /// <inheritdoc />
+    public Task<Veterinario?> BuscarPorIdIgnorandoFiltrosAsync(long id) =>
+        _dbSet.IgnoreQueryFilters().FirstOrDefaultAsync(v => v.Id == id);
 }

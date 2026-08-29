@@ -215,6 +215,12 @@ public class AuthServiceTransacaoTests
         public void Update(Veterinario entity) { }
 
         public void SoftDelete(Veterinario entity) => entity.StAtiva = false;
+
+        // FD-04: este fake nao tem query filter nenhum, entao "ignorando filtros" e o mesmo
+        // que GetByIdAsync aqui. Implementado so para satisfazer a interface -- nenhum teste
+        // desta classe exercita o caminho de vinculo de veterinario.
+        public Task<Veterinario?> BuscarPorIdIgnorandoFiltrosAsync(long id) =>
+            Task.FromResult(_store.FirstOrDefault(v => v.Id == id));
     }
 
     /// <summary>
@@ -235,6 +241,29 @@ public class AuthServiceTransacaoTests
 
         public Task<UsuarioClinica?> GetByIdAsync(long id) =>
             Task.FromResult(_store.FirstOrDefault(u => u.Id == id));
+
+        // ── FD-04 ────────────────────────────────────────────────────────────────────────
+        // Membros novos da interface, implementados sobre o mesmo _store. NENHUM teste desta
+        // classe os exercita: o CRUD da FD-04 e provado contra o repositorio REAL sobre
+        // KuraDbContext InMemory em UsuarioClinicaServiceTests, justamente para nao trocar a
+        // prova do predicado de tenant por uma reimplementacao de fake.
+        public Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(long idClinica) =>
+            Task.FromResult<IReadOnlyList<UsuarioClinica>>(
+                _store.Where(u => u.IdClinica == idClinica && u.StAtiva)
+                      .OrderBy(u => u.DsEmail).ToList());
+
+        public Task<UsuarioClinica?> BuscarPorIdNaClinicaAsync(long id, long idClinica) =>
+            Task.FromResult(_store.FirstOrDefault(u => u.Id == id && u.IdClinica == idClinica));
+
+        public Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(long idClinica, string email) =>
+            Task.FromResult(
+                _store.FirstOrDefault(u => u.IdClinica == idClinica && u.DsEmail == email));
+
+        public Task<int> ContarGestoresAtivosAsync(long idClinica, long? excetoId = null) =>
+            Task.FromResult(_store.Count(u => u.IdClinica == idClinica
+                                           && u.StAtiva
+                                           && u.TpPerfil == PerfisUsuarioClinica.Gestor
+                                           && (excetoId == null || u.Id != excetoId)));
 
         public Task<IEnumerable<UsuarioClinica>> GetAllAsync() =>
             Task.FromResult<IEnumerable<UsuarioClinica>>(_store.ToList());

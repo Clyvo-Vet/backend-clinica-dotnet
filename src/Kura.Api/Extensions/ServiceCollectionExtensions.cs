@@ -43,6 +43,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeituraTemperaturaService, LeituraTemperaturaService>();
         services.AddScoped<IAlertaTemperaturaService, AlertaTemperaturaService>();
         services.AddScoped<IAuthService, AuthService>();
+        // FD-04: CRUD de USUARIO_CLINICA, protegido pela politica SomenteGestor.
+        services.AddScoped<IUsuarioClinicaService, UsuarioClinicaService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAgendaService, AgendaService>();
         services.AddScoped<ILunaService, LunaService>();
