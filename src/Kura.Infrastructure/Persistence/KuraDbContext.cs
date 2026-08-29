@@ -36,6 +36,7 @@ public class KuraDbContext : DbContext
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
     public DbSet<InteracaoCanal> InteracoesCanal => Set<InteracaoCanal>();
+    public DbSet<UsuarioClinica> UsuariosClinica => Set<UsuarioClinica>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
     public DbSet<ContaTutor> ContasTutor => Set<ContaTutor>();
     public DbSet<Consentimento> Consentimentos => Set<Consentimento>();
@@ -146,6 +147,29 @@ public class KuraDbContext : DbContext
         // HasQueryFilter() para a mesma entidade NÃO se combinam com AND no EF Core 10:
         // a última registrada no pipeline de OnModelCreating substitui inteiramente a anterior.
         modelBuilder.Entity<Tutor>()
+            .HasQueryFilter(e => e.StAtiva &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        // FD-02 (ciclo FIN): USUARIO_CLINICA é a identidade individual do lado clínico
+        // (V17__usuario_clinica.sql, repo Java). ID_CLINICA é NOT NULL — não existe
+        // usuário sem tenant —, então o predicado é a forma simples das 8 anteriores,
+        // sem a guarda de null que InteracaoCanal precisa.
+        //
+        // Este é o ÚNICO lugar onde o filtro desta entidade pode viver:
+        // UsuarioClinicaConfiguration deliberadamente NÃO declara HasQueryFilter,
+        // porque duas chamadas para a mesma entidade não se combinam com AND no EF
+        // Core 10 — a segunda substitui a primeira (foi como Tutor perdeu o
+        // isolamento até a TASK-21, ver comentário acima).
+        //
+        // Vale de novo a armadilha documentada em TenantFilterCoverageTests: com
+        // IdClinicaFiltro null o filtro DESLIGA inteiro (não nega). Para esta tabela
+        // isso importa mais que para as outras — quem lê USUARIO_CLINICA sem JWT é
+        // justamente o login (FD-03), que ainda não tem clínica no contexto quando
+        // resolve o usuário. A FD-03 precisa escopar a busca por (clínica, e-mail)
+        // explicitamente no LINQ; este filtro não vai fazer isso por ela.
+        // Comportamento provado em UsuarioClinicaTenantIsolationTests.
+        modelBuilder.Entity<UsuarioClinica>()
             .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
