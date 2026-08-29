@@ -4,6 +4,7 @@ using FluentAssertions;
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
 using Kura.Infrastructure.Persistence;
+using Kura.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 
@@ -270,18 +271,32 @@ public class UsuarioClinicaTenantIsolationTests
             .Should().Be(256, "coluna menor que a origem truncaria o hash em silêncio na conversão da V17");
         entityType.FindProperty(nameof(UsuarioClinica.TpPerfil))!.GetMaxLength()
             .Should().Be(20, "VARCHAR2(20) dimensiona papéis futuros sem ALTER de tipo");
+
+        // F3 (fix wave pós-G2) — lacuna medida pela revisão: trocar o nome da sequence
+        // por SEQ_ERRADA_QUE_NAO_EXISTE deixava a suíte 318/318 verde. O provider
+        // InMemory gera as PKs sozinho e NUNCA lê esta expressão; quem quebra é o
+        // Oracle, com ORA-02289, em runtime. Enquanto não houver gate contra Oracle
+        // real (FD-12), esta asserção é a única coisa entre um typo aqui e a produção.
+        entityType.FindProperty(nameof(UsuarioClinica.Id))!.GetDefaultValueSql()
+            .Should().Be("SEQ_USUARIO_CLINICA.NEXTVAL",
+                "a V17 declara DEFAULT SEQ_USUARIO_CLINICA.NEXTVAL na PK, e o padrão " +
+                ".NET-owned deste projeto é sequence (V12/V12-pk-strategy-map.md) — " +
+                "nome divergente vira ORA-02289 no primeiro INSERT contra Oracle");
     }
 
     [Fact]
-    public void QueryFilter_EhDeclaradoUmaVezSo_NoApplyTenantFilters()
+    public void QueryFilter_DoModeloCompleto_TemTenantESoftDelete_EmUmFiltroSo()
     {
         // Arrange
-        // Armadilha real deste repo: duas chamadas HasQueryFilter() para a MESMA
-        // entidade NÃO se combinam com AND no EF Core 10 — a segunda SUBSTITUI a
-        // primeira. Foi assim que Tutor ficou sem isolamento de tenant até a TASK-21
-        // (tinha HasQueryFilter(StAtiva) em TutorConfiguration e o de tenant no
-        // contexto). Se alguém acrescentar um HasQueryFilter em
-        // UsuarioClinicaConfiguration, este teste denuncia.
+        // Este teste olha o modelo COMPLETO (configuração + ApplyTenantFilters). Ele
+        // prova o que o filtro efetivo faz — e NÃO é capaz de denunciar um filtro
+        // anônimo duplicado na configuração, porque esse já teria sido substituído
+        // antes de chegar aqui. Essa outra guarda é
+        // Configuracao_NaoDeclaraQueryFilterProprio, abaixo. A versão anterior desta
+        // classe prometia as duas coisas num teste só e entregava uma — foi o achado F1
+        // da revisão G2, e é a classe de defeito mais repetida deste projeto ("check que
+        // nunca executou é intenção, não cobertura"), desta vez dentro de um teste
+        // escrito para preveni-la.
         using var ctx = CreateContext(idClinicaFiltro: null, Guid.NewGuid().ToString());
 
         // Act
@@ -289,11 +304,66 @@ public class UsuarioClinicaTenantIsolationTests
             .GetDeclaredQueryFilters();
 
         // Assert
+        // Count == 1 morde o caso "dois filtros NOMEADOS", que (medido em EF Core
+        // 10.0.7) coexistem e combinam com AND em vez de se substituírem.
+        filtros.Should().HaveCount(1,
+            "o isolamento desta entidade tem que ser legível num predicado só; mais de " +
+            "um filtro declarado significa que alguém passou a usar filtros nomeados e " +
+            "a regra de composição mudou — decisão consciente, não efeito colateral");
+
         var texto = string.Join(" | ", filtros.Select(f => f.Expression?.ToString() ?? string.Empty));
         texto.Should().Contain("IdClinicaFiltro",
             "o filtro precisa isolar por tenant, não só por StAtiva");
         texto.Should().Contain("StAtiva",
-            "e precisa manter o soft delete — se um segundo HasQueryFilter tiver " +
-            "substituído o do ApplyTenantFilters, uma das duas metades some daqui");
+            "e precisa manter o soft delete — as duas metades vivem no mesmo predicado");
+    }
+
+    [Fact]
+    public void Configuracao_NaoDeclaraQueryFilterProprio()
+    {
+        // Arrange
+        // F1 (fix wave pós-G2). A guarda que o teste anterior PROMETIA e não cumpria.
+        //
+        // Medido na revisão G2 (EF Core 10.0.7): dois filtros ANÔNIMOS para a mesma
+        // entidade não se combinam nem lançam — o segundo SUBSTITUI o primeiro em
+        // silêncio. Como ApplyConfigurationsFromAssembly roda ANTES de
+        // ApplyTenantFilters, um filtro anônimo declarado em UsuarioClinicaConfiguration
+        // é apagado pelo do contexto e fica INVISÍVEL em qualquer inspeção do modelo
+        // completo. (Consequência boa: o isolamento não sumiria. Consequência ruim: o
+        // repo passaria a carregar código morto que parece proteger algo.)
+        //
+        // A única forma de enxergá-lo é montar um modelo com a configuração SOZINHA,
+        // sem o ApplyTenantFilters — que é o que ContextoSoComAConfiguracao faz.
+        using var ctx = new ContextoSoComAConfiguracao();
+
+        // Act
+        var filtros = ctx.Model.FindEntityType(typeof(UsuarioClinica))!
+            .GetDeclaredQueryFilters();
+
+        // Assert
+        var texto = string.Join(" | ", filtros.Select(f => f.Expression?.ToString() ?? string.Empty));
+        filtros.Should().BeEmpty(
+            "UsuarioClinicaConfiguration não pode declarar HasQueryFilter: o filtro desta " +
+            "entidade vive só em KuraDbContext.ApplyTenantFilters. Um filtro anônimo aqui " +
+            "seria silenciosamente substituído por aquele (a configuração roda antes) e " +
+            "viraria código morto; um filtro NOMEADO aqui derruba o build do modelo com " +
+            "\"Both anonymous and named query filters cannot be applied simultaneously\". " +
+            $"Filtro(s) encontrado(s): {texto}");
+    }
+
+    /// <summary>
+    /// Contexto mínimo que aplica <b>apenas</b> <see cref="UsuarioClinicaConfiguration"/>
+    /// — sem <c>ApplyConfigurationsFromAssembly</c> e, sobretudo, sem
+    /// <c>ApplyTenantFilters</c>. Existe para que
+    /// <see cref="Configuracao_NaoDeclaraQueryFilterProprio"/> consiga observar um filtro
+    /// que, no modelo real, já teria sido substituído antes de qualquer asserção.
+    /// </summary>
+    private sealed class ContextoSoComAConfiguracao : DbContext
+    {
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            => optionsBuilder.UseInMemoryDatabase($"config-only-{Guid.NewGuid()}");
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.ApplyConfiguration(new UsuarioClinicaConfiguration());
     }
 }

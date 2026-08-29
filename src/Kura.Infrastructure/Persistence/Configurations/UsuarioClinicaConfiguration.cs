@@ -12,11 +12,24 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 /// <c>MIGRATIONS_POLICY.md</c>; o EF nunca executa DDL contra o Oracle). Cada
 /// dimensão abaixo foi copiada daquele <c>CREATE TABLE</c>, não inferida.</para>
 ///
-/// <para>⚠️ <b>Nenhum <c>HasQueryFilter</c> aqui, de propósito.</b> Duas chamadas
-/// <c>HasQueryFilter()</c> para a mesma entidade NÃO se combinam com AND no EF
-/// Core 10 — a última registrada SUBSTITUI a anterior inteira. Foi assim que
-/// <c>Tutor</c> perdeu o isolamento de tenant até a TASK-21. O filtro desta
+/// <para>⚠️ <b>Nenhum <c>HasQueryFilter</c> aqui, de propósito.</b> O filtro desta
 /// entidade vive num lugar só: <c>KuraDbContext.ApplyTenantFilters</c>.</para>
+///
+/// <para><b>A regra, como foi MEDIDA na revisão G2 da FD-02 (EF Core 10.0.7)</b> — e
+/// não como circulava antes neste repo, que era uma generalização falsa: dois filtros
+/// <b>anônimos</b> para a mesma entidade produzem <b>substituição silenciosa</b> (sobra
+/// 1, sem erro); anônimo + <b>nomeado</b> lança
+/// <c>InvalidOperationException: "Both anonymous and named query filters cannot be
+/// applied simultaneously"</c>; e dois <b>nomeados</b> coexistem e combinam com AND.
+/// Todos os filtros deste projeto são anônimos, então o caso que vale aqui é o
+/// primeiro — o que não avisa.</para>
+///
+/// <para>Como <c>ApplyConfigurationsFromAssembly</c> roda ANTES de
+/// <c>ApplyTenantFilters</c>, um filtro anônimo declarado aqui seria <b>apagado</b> pelo
+/// do contexto: código morto e enganoso, não um vazamento. A guarda contra isso é
+/// <c>UsuarioClinicaTenantIsolationTests.Configuracao_NaoDeclaraQueryFilterProprio</c>,
+/// que monta um modelo só com esta configuração — nenhum teste sobre o modelo completo
+/// consegue enxergar um filtro que já foi substituído.</para>
 /// </summary>
 public class UsuarioClinicaConfiguration : IEntityTypeConfiguration<UsuarioClinica>
 {

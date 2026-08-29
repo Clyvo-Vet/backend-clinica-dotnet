@@ -156,11 +156,35 @@ public class KuraDbContext : DbContext
         // usuário sem tenant —, então o predicado é a forma simples das 8 anteriores,
         // sem a guarda de null que InteracaoCanal precisa.
         //
-        // Este é o ÚNICO lugar onde o filtro desta entidade pode viver:
-        // UsuarioClinicaConfiguration deliberadamente NÃO declara HasQueryFilter,
-        // porque duas chamadas para a mesma entidade não se combinam com AND no EF
-        // Core 10 — a segunda substitui a primeira (foi como Tutor perdeu o
-        // isolamento até a TASK-21, ver comentário acima).
+        // Este é o ÚNICO lugar onde o filtro desta entidade vive:
+        // UsuarioClinicaConfiguration deliberadamente NÃO declara HasQueryFilter.
+        //
+        // A REGRA, COMO ELA FOI MEDIDA (EF Core 10.0.7, revisão G2 da FD-02). A
+        // formulação antiga que circulava neste arquivo — "duas chamadas
+        // HasQueryFilter não se combinam com AND no EF Core 10" — é verdadeira só para
+        // filtros ANÔNIMOS, e falsa como regra geral. As 3 combinações, medidas:
+        //   • dois ANÔNIMOS     → substituição SILENCIOSA; sobra 1, sem erro nenhum.
+        //   • anônimo + NOMEADO → InvalidOperationException: "Both anonymous and named
+        //                         query filters cannot be applied simultaneously".
+        //   • dois NOMEADOS     → coexistem e combinam com AND.
+        // Todo filtro deste arquivo é anônimo, então o primeiro caso é o que vale
+        // aqui — e é o perigoso, justamente porque não avisa.
+        //
+        // ⚠️ NÃO carregue adiante a narrativa histórica que acompanhava aquela frase: a
+        // revisão G2 mediu que o `Tutor` da TASK-21 NÃO foi um caso de filtro
+        // substituído — ele não tinha filtro de tenant nenhum (o comentário da TASK-21
+        // logo acima está correto ao dizer isso). Por que a TASK-21 consolidou o filtro
+        // aqui não foi medido nesta task, e por isso não é afirmado.
+        //
+        // O QUE A MEDIÇÃO MOSTROU SOBRE ESTE DESENHO: como
+        // ApplyConfigurationsFromAssembly roda ANTES de ApplyTenantFilters, num choque
+        // de dois anônimos quem SOBREVIVE é o filtro deste arquivo — ou seja, o
+        // isolamento não sumiria. Manter o filtro só aqui continua certo, mas pelo
+        // motivo certo: um filtro duplicado na configuração seria código morto e
+        // enganoso, não um vazamento. A guarda está em
+        // UsuarioClinicaTenantIsolationTests.Configuracao_NaoDeclaraQueryFilterProprio,
+        // que monta um modelo SÓ com a configuração — a única forma de enxergar um
+        // filtro que o ApplyTenantFilters depois apagaria.
         //
         // Vale de novo a armadilha documentada em TenantFilterCoverageTests: com
         // IdClinicaFiltro null o filtro DESLIGA inteiro (não nega). Para esta tabela
