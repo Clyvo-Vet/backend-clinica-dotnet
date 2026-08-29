@@ -158,16 +158,21 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         if (!string.Equals(email, usuario.DsEmail, StringComparison.Ordinal))
             await GarantirEmailDisponivelAsync(idClinica, email);
 
+        await GarantirVeterinarioDaClinicaAsync(dto.IdVeterinario, idClinica);
+
         // Invariante do último gestor: só é consultado quando a mudança de fato REMOVE um
-        // gestor ativo do quadro. Um usuário já desativado não conta como gestor ativo, então
-        // rebaixá-lo não pode zerar contagem nenhuma — checar ali daria 422 sem motivo.
+        // gestor ativo do quadro. Um usuário já desativado não conta como gestor ativo — e
+        // desde a fix wave pós-G2 ele nem chega aqui (GarantirUsuarioAtivo, acima).
+        //
+        // ⚠️ A-4 (fix wave pós-G2): esta checagem é, DE PROPÓSITO, a ÚLTIMA leitura antes da
+        // escrita — antes ela vinha ANTES da validação do vínculo com veterinário, o que
+        // deixava um round trip de banco inteiro dentro da janela entre CONTAR e GRAVAR.
+        // Isso ENCURTA a janela; NÃO fecha a corrida. Ver GarantirQueSobraGestorAsync.
         if (usuario.TpPerfil == PerfisUsuarioClinica.Gestor
             && perfil != PerfisUsuarioClinica.Gestor)
         {
             await GarantirQueSobraGestorAsync(idClinica, usuario.Id);
         }
-
-        await GarantirVeterinarioDaClinicaAsync(dto.IdVeterinario, idClinica);
 
         usuario.DsEmail = email;
         usuario.TpPerfil = perfil;
@@ -360,6 +365,74 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
     /// Invariante do último gestor — ver o argumento completo na documentação da classe.
     /// A contagem exclui o próprio alvo porque ele é quem está prestes a sair do quadro de
     /// gestores ativos (por rebaixamento ou por desativação).
+    ///
+    /// <para>🔴 <b>A-4 (revisão G2) — ISTO É UM TOCTOU, E ELE CONTINUA ABERTO.</b> Não há
+    /// transação, lock nem versão em volta do par <i>contar gestores</i> → <i>gravar</i>. A
+    /// interleaving concreta que quebra o invariante, com a clínica tendo exatamente 2
+    /// gestores ativos G1 e G2:</para>
+    ///
+    /// <list type="number">
+    ///   <item><description>Requisição <b>A</b> desativa G1: conta gestores ativos excluindo
+    ///   G1 → enxerga G2 → <b>1</b> → passa.</description></item>
+    ///   <item><description>Requisição <b>B</b> desativa G2: conta gestores ativos excluindo
+    ///   G2 → enxerga G1 (A ainda não gravou, ou gravou e não commitou) → <b>1</b> →
+    ///   passa.</description></item>
+    ///   <item><description>As duas gravam. A clínica fica com <b>ZERO</b> gestor
+    ///   ativo — o estado que este método existe para impedir.</description></item>
+    /// </list>
+    ///
+    /// <para><b>O que foi avaliado como mitigação, e por que NADA disso foi implementado:</b></para>
+    ///
+    /// <list type="bullet">
+    ///   <item><description><b>Transação explícita</b> (<c>IUnitOfWork.BeginTransactionAsync</c>,
+    ///   que já existe e é usada por <c>AuthService.RegisterClinicaAsync</c>): <b>não fecha</b>.
+    ///   Sob READ COMMITTED — o padrão do Oracle — a transação de B não enxerga a escrita não
+    ///   commitada de A, então B continua contando 1. Além disso a escrita já é de uma linha
+    ///   só, logo a transação não acrescentaria nem atomicidade. Implementá-la seria
+    ///   <b>teatro</b>: código que parece proteção e não protege.</description></item>
+    ///   <item><description><b><c>NR_VERSION</c> / optimistic locking no padrão de
+    ///   <c>AGENDAMENTO</c></b>: <b>não se aplica</b>, e por um motivo estrutural, não por
+    ///   custo. Optimistic locking protege <b>uma linha</b> de escritas concorrentes; esta
+    ///   corrida acontece entre <b>linhas DIFERENTES</b> (G1 e G2). Com <c>NR_VERSION</c> em
+    ///   <c>USUARIO_CLINICA</c>, A e B continuariam gravando linhas distintas e as duas
+    ///   passariam. Versionar a linha de <c>CLINICA</c> serializaria de fato — ao custo de
+    ///   transformar toda escrita de usuário num ponto de contenção do tenant inteiro — e
+    ///   exigiria coluna nova, ou seja, <b>migration Flyway no repo Java</b>, que está fora do
+    ///   escopo desta task por ruling.</description></item>
+    ///   <item><description><b>Revalidar dentro do <c>SaveChanges</c></b> (interceptor ou
+    ///   override): <b>não fecha</b> pelo mesmo motivo do primeiro item — a releitura acontece
+    ///   na mesma transação e continua cega para a escrita não commitada da outra.</description></item>
+    ///   <item><description><b><c>SELECT … FOR UPDATE</c></b> sobre as linhas de gestor ativo
+    ///   da clínica: é a correção <b>de verdade</b>, e a única avaliada que fecha a corrida.
+    ///   Exige SQL cru, que o provider <b>InMemory não executa</b> — adotá-la agora quebraria
+    ///   toda a suíte deste caminho e deixaria a própria guarda <b>sem nenhuma verificação em
+    ///   CI</b>. Fica como o caminho recomendado para quem tiver Oracle.</description></item>
+    /// </list>
+    ///
+    /// <para><b>O que MUDOU na fix wave, e é só isto:</b> a chamada foi movida para ser a
+    /// última leitura antes de <c>CommitAsync</c> em <c>AtualizarAsync</c> (antes havia um
+    /// round trip de banco — a validação do vínculo com veterinário — entre contar e gravar).
+    /// Isso <b>encurta</b> a janela. <b>Não a fecha.</b> Não confunda uma coisa com a outra.</para>
+    ///
+    /// <para>⚠️ <b>NÃO EXISTE REDE NO BANCO PARA ESTE INVARIANTE</b>, e é o que o separa da
+    /// unicidade de e-mail: lá, se a checagem do service perder a corrida, o
+    /// <c>UK_USUARIO_CLINICA_EMAIL</c> ainda barra a linha (feio — <c>ORA-00001</c>/500 — mas
+    /// o dado não corrompe). Aqui não há <c>CHECK</c> capaz de expressar "a clínica tem ≥ 1
+    /// gestor ativo": se a corrida acontecer, a clínica <b>fica sem administrador</b> e o
+    /// banco não reclama.</para>
+    ///
+    /// <para><b>Risco residual, dimensionado com honestidade:</b> a janela é de milissegundos,
+    /// a operação é administrativa (rara, e feita por um humano), e o raio é de <b>uma</b>
+    /// clínica. Mas é real, e o estado resultante é <b>irrecuperável dentro do produto</b> —
+    /// pelo mesmo motivo que motivou o invariante (sem recuperação de senha, sem convite, sem
+    /// super-admin).</para>
+    ///
+    /// <para>🔴 <b>ISTO NÃO ESTÁ RESOLVIDO.</b> E não é possível provar NEM refutar aqui: o
+    /// provider InMemory não modela isolamento transacional nem concorrência de banco, então
+    /// qualquer teste "de concorrência" escrito contra ele mediria o <c>Task.WhenAll</c> do
+    /// runtime, não o comportamento do Oracle — um verde que não significaria nada. A
+    /// verificação real só existe contra Oracle de verdade, e está registrada como dívida da
+    /// <b><c>FD-12</c></b>.</para>
     /// </summary>
     private async Task GarantirQueSobraGestorAsync(long idClinica, long idAlvo)
     {
