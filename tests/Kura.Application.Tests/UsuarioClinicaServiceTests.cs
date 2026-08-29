@@ -575,6 +575,195 @@ public class UsuarioClinicaServiceTests
         BCrypt.Net.BCrypt.Verify(SenhaValida, gravado.DsSenhaHash).Should().BeFalse();
     }
 
+    // -----------------------------------------------------------------------------------
+    // A-1 (fix wave pos-G2) - o verbo que faltava no conjunto de escopo de tenant
+    // -----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Atualizar_usuario_de_outra_clinica_devolve_nao_encontrado()
+    {
+        // A revisao G2 mediu que este caminho ja devolvia 404, mas NAO havia teste - os outros
+        // 3 verbos tinham. Cobertura que existe so porque alguem mediu uma vez apodrece na
+        // primeira refatoracao.
+        using var ctx = CriarContexto(nameof(Atualizar_usuario_de_outra_clinica_devolve_nao_encontrado));
+        Semear(ctx, 1, ClinicaA, "a1@kura.test");
+        var alheio = Semear(ctx, 2, ClinicaB, "b1@kura.test");
+        var sut = CriarService(ctx, ClinicaA);
+
+        var act = () => sut.AtualizarAsync(alheio.Id, new UsuarioClinicaUpdateDto
+        {
+            DsEmail = "invadido@kura.test",
+            TpPerfil = PerfisUsuarioClinica.Veterinario,
+        });
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+        // A escrita nao pode ter acontecido pela metade: o usuario alheio segue intocado.
+        var intocado = await ctx.UsuariosClinica.IgnoreQueryFilters()
+            .SingleAsync(u => u.Id == alheio.Id);
+        intocado.DsEmail.Should().Be("b1@kura.test");
+        intocado.TpPerfil.Should().Be(PerfisUsuarioClinica.Gestor);
+        // Controle positivo: o MESMO verbo, com id da propria clinica, funciona.
+        (await sut.AtualizarAsync(1, new UsuarioClinicaUpdateDto
+        {
+            DsEmail = "a1@kura.test",
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+        })).IdClinica.Should().Be(ClinicaA);
+    }
+
+    // -----------------------------------------------------------------------------------
+    // A-3 (fix wave pos-G2) - nada de sucesso silencioso sobre usuario desativado
+    // -----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Atualizar_usuario_DESATIVADO_e_recusado_em_vez_de_gravar_em_silencio()
+    {
+        // 🔴 Antes desta correcao isto devolvia 200: a alteracao era GRAVADA e o usuario
+        // continuava sem conseguir entrar (o login filtra ST_ATIVA). Sucesso sem efeito
+        // observavel - a classe de defeito da TASK-69.
+        using var ctx = CriarContexto(nameof(Atualizar_usuario_DESATIVADO_e_recusado_em_vez_de_gravar_em_silencio));
+        Semear(ctx, 1, ClinicaA, "gestor-a@kura.test");
+        var inativo = Semear(ctx, 2, ClinicaA, "inativo@kura.test",
+            PerfisUsuarioClinica.Veterinario, ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var act = () => sut.AtualizarAsync(inativo.Id, new UsuarioClinicaUpdateDto
+        {
+            DsEmail = "renomeado@kura.test",
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+        });
+
+        (await act.Should().ThrowAsync<RegraDeNegocioException>())
+            .Which.Message.Should().Be(UsuarioClinicaService.MensagemUsuarioDesativado);
+
+        // A prova que separa "recusou" de "recusou mas gravou assim mesmo".
+        var depois = await ctx.UsuariosClinica.IgnoreQueryFilters()
+            .SingleAsync(u => u.Id == inativo.Id);
+        depois.DsEmail.Should().Be("inativo@kura.test");
+        depois.TpPerfil.Should().Be(PerfisUsuarioClinica.Veterinario);
+    }
+
+    [Fact]
+    public async Task Definir_senha_de_usuario_DESATIVADO_e_recusada_em_vez_de_gravar_em_silencio()
+    {
+        using var ctx = CriarContexto(nameof(Definir_senha_de_usuario_DESATIVADO_e_recusada_em_vez_de_gravar_em_silencio));
+        Semear(ctx, 1, ClinicaA, "gestor-a@kura.test");
+        var inativo = Semear(ctx, 2, ClinicaA, "inativo@kura.test",
+            PerfisUsuarioClinica.Veterinario, ativo: false);
+        var hashOriginal = inativo.DsSenhaHash;
+        var sut = CriarService(ctx, ClinicaA);
+
+        var act = () => sut.DefinirSenhaAsync(inativo.Id, new UsuarioClinicaSenhaUpdateDto
+        {
+            DsSenha = "SenhaQueNaoValeria#2026",
+        });
+
+        await act.Should().ThrowAsync<RegraDeNegocioException>();
+        (await ctx.UsuariosClinica.IgnoreQueryFilters().SingleAsync(u => u.Id == inativo.Id))
+            .DsSenhaHash.Should().Be(hashOriginal);
+    }
+
+    [Fact]
+    public async Task Reativar_devolve_o_usuario_ao_quadro_e_ao_alcance_do_PUT()
+    {
+        // O ciclo completo da porta que deixou de ser de mao unica: desativa -> PUT recusado
+        // -> reativa -> PUT funciona. E tambem a prova do `excetoId`: o e-mail que a
+        // reativacao encontra na clinica e o DELE MESMO, e ele nao pode colidir consigo.
+        using var ctx = CriarContexto(nameof(Reativar_devolve_o_usuario_ao_quadro_e_ao_alcance_do_PUT));
+        Semear(ctx, 1, ClinicaA, "gestor-a@kura.test");
+        var alvo = Semear(ctx, 2, ClinicaA, "volta@kura.test", PerfisUsuarioClinica.Veterinario);
+        var sut = CriarService(ctx, ClinicaA);
+
+        await sut.DesativarAsync(alvo.Id);
+        var enquantoInativo = () => sut.AtualizarAsync(alvo.Id, new UsuarioClinicaUpdateDto
+        {
+            DsEmail = "volta@kura.test",
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+        });
+        await enquantoInativo.Should().ThrowAsync<RegraDeNegocioException>();
+
+        var reativado = await sut.ReativarAsync(alvo.Id);
+
+        reativado.StAtiva.Should().BeTrue();
+        (await sut.ListarAsync()).Should().Contain(u => u.Id == alvo.Id);
+        var depois = await sut.AtualizarAsync(alvo.Id, new UsuarioClinicaUpdateDto
+        {
+            DsEmail = "volta@kura.test",
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+        });
+        depois.TpPerfil.Should().Be(PerfisUsuarioClinica.Gestor);
+    }
+
+    [Fact]
+    public async Task Reativar_usuario_ja_ativo_e_idempotente()
+    {
+        using var ctx = CriarContexto(nameof(Reativar_usuario_ja_ativo_e_idempotente));
+        var alvo = Semear(ctx, 1, ClinicaA, "ja-ativo@kura.test");
+        var sut = CriarService(ctx, ClinicaA);
+
+        var resultado = await sut.ReativarAsync(alvo.Id);
+
+        resultado.StAtiva.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Reativar_com_o_email_ocupado_por_OUTRO_usuario_e_recusado()
+    {
+        // Estado que a UK do Oracle NAO impede sozinha em base herdada (ela nao distingue
+        // ativo de inativo, mas dado anterior a esta task pode ter duplicata). Reativar as
+        // cegas devolveria ORA-00001 (500) ou deixaria o login ambiguo dentro da clinica.
+        using var ctx = CriarContexto(nameof(Reativar_com_o_email_ocupado_por_OUTRO_usuario_e_recusado));
+        Semear(ctx, 1, ClinicaA, "disputado@kura.test");
+        var inativo = Semear(ctx, 2, ClinicaA, "disputado@kura.test",
+            PerfisUsuarioClinica.Veterinario, ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var act = () => sut.ReativarAsync(inativo.Id);
+
+        (await act.Should().ThrowAsync<RegraDeNegocioException>())
+            .Which.Message.Should().Be(UsuarioClinicaService.MensagemReativacaoComEmailOcupado);
+        (await ctx.UsuariosClinica.IgnoreQueryFilters().SingleAsync(u => u.Id == inativo.Id))
+            .StAtiva.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Reativar_usuario_de_outra_clinica_devolve_nao_encontrado()
+    {
+        using var ctx = CriarContexto(nameof(Reativar_usuario_de_outra_clinica_devolve_nao_encontrado));
+        Semear(ctx, 1, ClinicaA, "a1@kura.test");
+        Semear(ctx, 2, ClinicaB, "b-gestor@kura.test");
+        var alheio = Semear(ctx, 3, ClinicaB, "b-inativo@kura.test",
+            PerfisUsuarioClinica.Veterinario, ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var act = () => sut.ReativarAsync(alheio.Id);
+
+        await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+        (await ctx.UsuariosClinica.IgnoreQueryFilters().SingleAsync(u => u.Id == alheio.Id))
+            .StAtiva.Should().BeFalse("o usuario da outra clinica nao pode ter sido reativado");
+    }
+
+    [Fact]
+    public async Task Reativar_gestor_desativado_recompoe_o_quadro_para_o_invariante()
+    {
+        // Fecha o ciclo com a decisao do ultimo gestor: com 2 gestores, desativar um e
+        // permitido; depois disso o outro vira o ultimo e nao pode sair; reativar o primeiro
+        // devolve a folga. Prova que o invariante le o quadro VIGENTE, e nao um retrato.
+        using var ctx = CriarContexto(nameof(Reativar_gestor_desativado_recompoe_o_quadro_para_o_invariante));
+        var g1 = Semear(ctx, 1, ClinicaA, "gestor-1@kura.test");
+        var g2 = Semear(ctx, 2, ClinicaA, "gestor-2@kura.test");
+        var sut = CriarService(ctx, ClinicaA);
+
+        await sut.DesativarAsync(g1.Id);
+        var ultimo = () => sut.DesativarAsync(g2.Id);
+        await ultimo.Should().ThrowAsync<RegraDeNegocioException>();
+
+        await sut.ReativarAsync(g1.Id);
+        await sut.DesativarAsync(g2.Id);
+
+        (await ctx.UsuariosClinica.IgnoreQueryFilters().SingleAsync(u => u.Id == g2.Id))
+            .StAtiva.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Definir_senha_de_usuario_de_outra_clinica_devolve_nao_encontrado()
     {

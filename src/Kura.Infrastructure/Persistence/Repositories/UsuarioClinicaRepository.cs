@@ -82,10 +82,13 @@ public class UsuarioClinicaRepository : Repository<UsuarioClinica>, IUsuarioClin
     /// Filtrar por ativo aqui aprovaria o e-mail reutilizado e explodiria no <c>INSERT</c> —
     /// invisível para esta suíte, porque o provider InMemory não valida índice único.
     /// </remarks>
-    public async Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(long idClinica, string email) =>
+    public async Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(
+        long idClinica, string email, long? excetoId = null) =>
         await _dbSet
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.IdClinica == idClinica && u.DsEmail == email);
+            .FirstOrDefaultAsync(u => u.IdClinica == idClinica
+                                   && u.DsEmail == email
+                                   && (excetoId == null || u.Id != excetoId));
 
     /// <inheritdoc />
     public async Task<int> ContarGestoresAtivosAsync(long idClinica, long? excetoId = null) =>

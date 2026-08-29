@@ -100,6 +100,32 @@ internal static class AutenticacaoHelper
     }
 
     /// <summary>
+    /// A-5 (fix wave pos-G2 da FD-04) - token VALIDO com <c>perfil=GESTOR</c> e <b>sem</b> a
+    /// claim <c>clinicaId</c>.
+    ///
+    /// <para>A politica <c>SomenteGestor</c> exige papel e NAO exige tenant, entao ela
+    /// <b>aprova</b> este token. O que acontece depois e o que interessa: o primeiro acesso a
+    /// <c>IClinicaContext.IdClinica</c> lanca <c>UnauthorizedAccessException</c>
+    /// (<c>GetRequiredClaimValue</c>), que o <c>ExceptionHandlerMiddleware</c> mapeia para
+    /// <b>401</b>. Ou seja, a lacuna degrada FECHADO - e isso e medido, nao deduzido, em
+    /// <c>UsuariosClinicaHttpTests.Token_de_GESTOR_sem_clinicaId_degrada_fechado_em_401</c>.</para>
+    /// </summary>
+    public static string GerarTokenGestorSemClinicaId()
+    {
+        var chave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(KuraApiFactory.ChaveJwt));
+        var credenciais = new SigningCredentials(chave, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: KuraApiFactory.EmissorJwt,
+            audience: KuraApiFactory.AudienciaJwt,
+            claims: [new Claim("perfil", "GESTOR")],
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: credenciais);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
     /// Token bem formado, com os mesmos claims, mas assinado com OUTRA chave — isola
     /// "assinatura inválida" de "token sintaticamente quebrado".
     /// </summary>

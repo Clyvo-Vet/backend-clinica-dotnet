@@ -167,6 +167,7 @@ public class UsuariosClinicaHttpTests : IClassFixture<KuraApiFactory>
                 tpPerfil = PerfisUsuarioClinica.Gestor,
             }),
             await client.PutAsJsonAsync($"{Rota}/1/senha", new { dsSenha = "OutraSenha#2026" }),
+            await client.PostAsJsonAsync($"{Rota}/1/reativacao", new { }),
             await client.DeleteAsync($"{Rota}/1"),
         };
 
@@ -337,6 +338,105 @@ public class UsuariosClinicaHttpTests : IClassFixture<KuraApiFactory>
             Rota, CorpoDeCriacao(EmailUnico("perfil-ruim"), "RECEPCIONISTA"));
 
         resposta.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // -----------------------------------------------------------------------------------
+    // A-1 / A-3 / A-5 (fix wave pos-G2)
+    // -----------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Atualizar_usuario_de_outra_clinica_devolve_404()
+    {
+        // A-1: o unico verbo que nao tinha teste de escopo de tenant. O id 2 e o usuario
+        // semeado no OUTRO tenant.
+        var client = await ClienteGestorAsync();
+
+        var resposta = await client.PutAsJsonAsync($"{Rota}/2", new
+        {
+            dsEmail = "invadido@kura.test",
+            tpPerfil = PerfisUsuarioClinica.Veterinario,
+        });
+
+        resposta.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        // Controle positivo: o MESMO verbo, com id da propria clinica, nao devolve 404.
+        var proprio = await client.PutAsJsonAsync($"{Rota}/3", new
+        {
+            dsEmail = KuraApiFactory.EmailGestorPuro,
+            tpPerfil = PerfisUsuarioClinica.Gestor,
+        });
+        proprio.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Usuario_desativado_recusa_PUT_com_422_e_volta_pela_reativacao()
+    {
+        // A-3, o ciclo inteiro sobre HTTP: antes da fix wave, o PUT sobre usuario desativado
+        // respondia 200 sem reativar - sucesso silencioso, a classe de defeito da TASK-69.
+        var client = await ClienteGestorAsync();
+        var email = EmailUnico("porta-de-volta");
+
+        var criacao = await client.PostAsJsonAsync(Rota, CorpoDeCriacao(email));
+        var criado = await criacao.Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+
+        (await client.DeleteAsync($"{Rota}/{criado!.Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var putEnquantoInativo = await client.PutAsJsonAsync($"{Rota}/{criado.Id}", new
+        {
+            dsEmail = email,
+            tpPerfil = PerfisUsuarioClinica.Gestor,
+        });
+        putEnquantoInativo.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await putEnquantoInativo.Content.ReadAsStringAsync())
+            .Should().Contain("DESATIVADO");
+
+        // A gravacao nao pode ter acontecido junto com a recusa.
+        var apurado = await (await client.GetAsync($"{Rota}/{criado.Id}"))
+            .Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+        apurado!.StAtiva.Should().BeFalse();
+        apurado.TpPerfil.Should().Be(PerfisUsuarioClinica.Veterinario);
+
+        var reativacao = await client.PostAsJsonAsync($"{Rota}/{criado.Id}/reativacao", new { });
+
+        reativacao.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reativado = await reativacao.Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+        reativado!.StAtiva.Should().BeTrue();
+
+        // E o PUT volta a funcionar - a porta deixou de ser de mao unica.
+        (await client.PutAsJsonAsync($"{Rota}/{criado.Id}", new
+        {
+            dsEmail = email,
+            tpPerfil = PerfisUsuarioClinica.Gestor,
+        })).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Reativar_usuario_de_outra_clinica_devolve_404()
+    {
+        var client = await ClienteGestorAsync();
+
+        var resposta = await client.PostAsJsonAsync($"{Rota}/2/reativacao", new { });
+
+        resposta.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Token_de_GESTOR_sem_clinicaId_degrada_fechado_em_401()
+    {
+        // A-5: a politica SomenteGestor exige PAPEL e nao exige TENANT - ela APROVA este
+        // token. Quem barra e ClinicaContext.IdClinica, que lanca UnauthorizedAccessException
+        // quando a claim falta, e o ExceptionHandlerMiddleware mapeia para 401.
+        //
+        // O registro existe porque a lacuna e real: a policy sozinha nao garante tenant. O que
+        // esta medido aqui e que ela degrada FECHADO - nao que ela cubra o caso.
+        var client = _factory.CreateClient();
+        client.UsarToken(AutenticacaoHelper.GerarTokenGestorSemClinicaId());
+
+        var lista = await client.GetAsync(Rota);
+        var criacao = await client.PostAsJsonAsync(Rota, CorpoDeCriacao(EmailUnico("sem-tenant")));
+
+        lista.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        criacao.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────

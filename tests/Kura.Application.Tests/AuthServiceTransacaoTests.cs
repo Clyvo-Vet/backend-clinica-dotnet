@@ -255,9 +255,12 @@ public class AuthServiceTransacaoTests
         public Task<UsuarioClinica?> BuscarPorIdNaClinicaAsync(long id, long idClinica) =>
             Task.FromResult(_store.FirstOrDefault(u => u.Id == id && u.IdClinica == idClinica));
 
-        public Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(long idClinica, string email) =>
+        public Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(
+            long idClinica, string email, long? excetoId = null) =>
             Task.FromResult(
-                _store.FirstOrDefault(u => u.IdClinica == idClinica && u.DsEmail == email));
+                _store.FirstOrDefault(u => u.IdClinica == idClinica
+                                        && u.DsEmail == email
+                                        && (excetoId == null || u.Id != excetoId)));
 
         public Task<int> ContarGestoresAtivosAsync(long idClinica, long? excetoId = null) =>
             Task.FromResult(_store.Count(u => u.IdClinica == idClinica

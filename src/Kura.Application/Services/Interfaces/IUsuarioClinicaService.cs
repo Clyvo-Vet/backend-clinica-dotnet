@@ -20,4 +20,10 @@ public interface IUsuarioClinicaService
     Task DefinirSenhaAsync(long id, UsuarioClinicaSenhaUpdateDto dto);
 
     Task DesativarAsync(long id);
+
+    /// <summary>
+    /// A-3 (fix wave pós-G2 da FD-04) — devolve um usuário desativado ao quadro. Idempotente:
+    /// reativar quem já está ativo devolve o usuário sem erro.
+    /// </summary>
+    Task<UsuarioClinicaResponseDto> ReativarAsync(long id);
 }

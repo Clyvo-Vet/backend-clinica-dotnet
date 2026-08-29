@@ -69,6 +69,24 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         "Esta operação deixaria a clínica sem nenhum gestor ativo. "
         + "Promova outro usuário a GESTOR antes de rebaixar ou desativar este.";
 
+    /// <summary>
+    /// 🔴 <b>Fix wave pós-G2 (achado A-3).</b> Mensagem da recusa de alterar usuário
+    /// DESATIVADO. Antes desta correção, <c>AtualizarAsync</c> e <c>DefinirSenhaAsync</c>
+    /// respondiam <b><c>200</c>/<c>204</c></b> sobre um usuário desativado: a alteração era
+    /// gravada, mas o usuário continuava sem conseguir entrar (o login filtra
+    /// <c>ST_ATIVA</c>) e a resposta não dizia isso em lugar nenhum. Quem administrava via
+    /// sucesso e nada acontecia — a mesma classe de defeito da TASK-69 (tela de cadastro de
+    /// pet que fingia sucesso com <c>setTimeout</c>).
+    /// </summary>
+    public const string MensagemUsuarioDesativado =
+        "Este usuário está DESATIVADO e alterações não têm efeito enquanto ele estiver assim. "
+        + "Reative-o primeiro (operação de reativação deste mesmo recurso) e refaça a alteração.";
+
+    /// <summary>Mensagem do conflito de e-mail na reativação. Ver <c>ReativarAsync</c>.</summary>
+    public const string MensagemReativacaoComEmailOcupado =
+        "Não é possível reativar: o e-mail deste usuário já está em uso por outro usuário "
+        + "desta clínica. Troque o e-mail do outro usuário antes de reativar este.";
+
     private readonly IUsuarioClinicaRepository _repository;
     private readonly IVeterinarioRepository _veterinarioRepository;
     private readonly IUnitOfWork _uow;
@@ -131,6 +149,9 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         var idClinica = _clinicaContext.IdClinica;
         var usuario = await ObterOuFalharAsync(id);
 
+        // A-3 (fix wave pós-G2): NADA de sucesso silencioso sobre usuário desativado.
+        GarantirUsuarioAtivo(usuario);
+
         var email = NormalizarEmail(dto.DsEmail);
         var perfil = NormalizarPerfil(dto.TpPerfil);
 
@@ -140,8 +161,7 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         // Invariante do último gestor: só é consultado quando a mudança de fato REMOVE um
         // gestor ativo do quadro. Um usuário já desativado não conta como gestor ativo, então
         // rebaixá-lo não pode zerar contagem nenhuma — checar ali daria 422 sem motivo.
-        if (usuario.StAtiva
-            && usuario.TpPerfil == PerfisUsuarioClinica.Gestor
+        if (usuario.TpPerfil == PerfisUsuarioClinica.Gestor
             && perfil != PerfisUsuarioClinica.Gestor)
         {
             await GarantirQueSobraGestorAsync(idClinica, usuario.Id);
@@ -162,6 +182,10 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
     public async Task DefinirSenhaAsync(long id, UsuarioClinicaSenhaUpdateDto dto)
     {
         var usuario = await ObterOuFalharAsync(id);
+
+        // A-3: definir senha de usuário desativado é gravação sem efeito observável — o login
+        // filtra ST_ATIVA, então a senha nova nunca seria usada. 422 em vez de 204 mentiroso.
+        GarantirUsuarioAtivo(usuario);
 
         usuario.DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.DsSenha);
 
@@ -184,6 +208,67 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
 
         _repository.SoftDelete(usuario);
         await _uow.CommitAsync();
+    }
+
+    /// <summary>
+    /// 🔴 <b>A-3 (fix wave pós-G2) — a saída da porta de mão única.</b>
+    ///
+    /// <para><b>O problema, como a revisão G2 o descreveu:</b> desativar um usuário sumia com
+    /// ele da lista, <b>queimava o e-mail para sempre</b> (a checagem de UK inclui inativo, e
+    /// isso está certo — a linha continua ocupando <c>UK_USUARIO_CLINICA_EMAIL</c> no Oracle) e
+    /// <b>não havia volta</b>. Pior: o <c>PUT</c> respondia <c>200</c> sem reativar.</para>
+    ///
+    /// <para><b>DECISÃO: endpoint de reativação, e não recusa com instrução.</b> As duas
+    /// opções matavam o <c>200</c> silencioso; o que as separa é o que sobra depois. Recusar
+    /// com uma mensagem clara deixaria a clínica com um e-mail permanentemente inutilizável e
+    /// uma pessoa que só volta ao quadro por cirurgia no Oracle — cuja conta, neste ciclo,
+    /// está <c>ORA-28000</c>. Como o escopo negativo da FD-04 já retirou recuperação de senha,
+    /// convite por e-mail e super-admin, "peça ao suporte" não descreve nenhum caminho que
+    /// exista. Um <c>POST .../reativacao</c> custa um método, herda a política
+    /// <c>SomenteGestor</c> e o escopo de tenant do controller inteiro, e não abre superfície
+    /// nova: só volta um <c>ST_ATIVA</c> que um gestor da MESMA clínica já tinha desligado.</para>
+    ///
+    /// <para><b>Idempotente por decisão:</b> reativar quem já está ativo devolve o usuário sem
+    /// erro. O estado pedido é o estado vigente — e isto <b>não</b> é sucesso silencioso: o
+    /// corpo devolve <c>stAtiva: true</c>, que é exatamente o que foi pedido. É o mesmo
+    /// critério que mantém <c>DesativarAsync</c> tolerante com quem já está inativo.</para>
+    ///
+    /// <para>⚠️ <b>O que a reativação NÃO revalida, declarado:</b> o vínculo com
+    /// <c>VETERINARIO</c>. Se o veterinário vinculado tiver sido desativado nesse meio-tempo, a
+    /// reativação passa mesmo assim. Recusar ali transformaria a desativação de um veterinário
+    /// em bloqueio da volta de um usuário administrativo que não tem nada a ver com aquilo —
+    /// custo maior que o do vínculo pendurado, que qualquer <c>PUT</c> posterior corrige.</para>
+    /// </summary>
+    public async Task<UsuarioClinicaResponseDto> ReativarAsync(long id)
+    {
+        var idClinica = _clinicaContext.IdClinica;
+        var usuario = await ObterOuFalharAsync(id);
+
+        if (usuario.StAtiva)
+            return ToResponse(usuario);
+
+        // Conflito de e-mail com OUTRO usuário (por isso o excetoId): em base já existente
+        // pode haver linha ativa com o mesmo e-mail — a UK do Oracle não distingue ativo de
+        // inativo, mas dado herdado ou criado antes desta task pode. Reativar às cegas
+        // devolveria ORA-00001 (500) ou, pior, deixaria o login ambíguo dentro da clínica.
+        var outro = await _repository.BuscarPorEmailNaClinicaAsync(
+            idClinica, usuario.DsEmail, excetoId: usuario.Id);
+
+        if (outro is not null)
+            throw new RegraDeNegocioException(MensagemReativacaoComEmailOcupado);
+
+        usuario.StAtiva = true;
+        _repository.Update(usuario);
+        await _uow.CommitAsync();
+
+        return ToResponse(usuario);
+    }
+
+    /// <summary>A-3 — ver <see cref="MensagemUsuarioDesativado"/>.</summary>
+    private static void GarantirUsuarioAtivo(UsuarioClinica usuario)
+    {
+        if (!usuario.StAtiva)
+            throw new RegraDeNegocioException(MensagemUsuarioDesativado);
     }
 
     private async Task<UsuarioClinica> ObterOuFalharAsync(long id) =>

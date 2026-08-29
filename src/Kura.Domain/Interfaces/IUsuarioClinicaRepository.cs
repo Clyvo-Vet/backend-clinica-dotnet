@@ -64,7 +64,16 @@ public interface IUsuarioClinicaRepository : IRepository<UsuarioClinica>
     /// índice único</b>, então nenhum teste desta suíte pegaria o erro no INSERT: a única
     /// defesa é este predicado.</para>
     /// </summary>
-    Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(long idClinica, string email);
+    /// <param name="excetoId">
+    /// Quando informado, ignora essa linha na busca. Existe para a REATIVAÇÃO (fix wave
+    /// pós-G2 da FD-04): ao reativar, o próprio usuário desativado é o dono do e-mail, e um
+    /// <c>FirstOrDefault</c> poderia devolvê-lo — fazendo o usuário colidir CONSIGO MESMO e
+    /// tornando a reativação impossível. A pergunta que a reativação precisa fazer é "existe
+    /// OUTRO com este e-mail", e ela tem de estar escrita no predicado, não resolvida depois
+    /// por comparação de id sobre um resultado de ordem indefinida.
+    /// </param>
+    Task<UsuarioClinica?> BuscarPorEmailNaClinicaAsync(
+        long idClinica, string email, long? excetoId = null);
 
     /// <summary>
     /// FD-04 — quantos <c>GESTOR</c> ATIVOS a clínica tem, <b>excluindo</b> opcionalmente um

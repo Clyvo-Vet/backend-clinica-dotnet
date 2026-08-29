@@ -108,6 +108,26 @@ public class UsuariosClinicaController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// 🔴 <b>A-3 (fix wave pós-G2)</b> — reativa um usuário desativado desta clínica.
+    ///
+    /// <para>Existe porque, sem ele, desativar era <b>porta de mão única</b>: o usuário sumia
+    /// da lista, o e-mail ficava reservado para sempre (a linha continua ocupando
+    /// <c>UK_USUARIO_CLINICA_EMAIL</c>) e não havia caminho de volta dentro do produto — e o
+    /// escopo negativo da FD-04 já retirou recuperação de senha, convite e super-admin.</para>
+    ///
+    /// <para>Herda <c>[Authorize(Policy = SomenteGestor)]</c> do controller e o escopo de
+    /// tenant do service: id de outra clínica devolve <c>404</c>, como todos os demais verbos.</para>
+    /// </summary>
+    /// <response code="200">Usuário ativo (reativado agora, ou já ativo — a operação é idempotente).</response>
+    /// <response code="404">Não existe, ou pertence a outra clínica.</response>
+    /// <response code="422">O e-mail dele já está em uso por outro usuário desta clínica.</response>
+    [HttpPost("{id:long}/reativacao")]
+    [ProducesResponseType(typeof(UsuarioClinicaResponseDto), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 404)]
+    [ProducesResponseType(typeof(ProblemDetails), 422)]
+    public async Task<IActionResult> Reativar(long id) => Ok(await _service.ReativarAsync(id));
+
     /// <summary>Desativa um usuário (soft delete — a linha permanece no banco).</summary>
     /// <response code="204">Usuário desativado.</response>
     /// <response code="404">Não existe, ou pertence a outra clínica.</response>
