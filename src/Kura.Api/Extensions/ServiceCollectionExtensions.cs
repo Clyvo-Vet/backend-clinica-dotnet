@@ -78,6 +78,7 @@ public static class ServiceCollectionExtensions
         // Repositórios especializados
         services.AddScoped<IClinicaRepository, ClinicaRepository>();
         services.AddScoped<IVeterinarioRepository, VeterinarioRepository>();
+        services.AddScoped<IUsuarioClinicaRepository, UsuarioClinicaRepository>();
         services.AddScoped<ITutorRepository, TutorRepository>();
         services.AddScoped<IPetRepository, PetRepository>();
         services.AddScoped<ITutorPetRepository, TutorPetRepository>();
