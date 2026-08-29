@@ -19,11 +19,12 @@ internal static class AutenticacaoHelper
     /// Deliberadamente NÃO gera o token localmente: um token forjado provaria só que a
     /// validação do JWT funciona, não que o fluxo de autenticação da aplicação funciona.
     /// </summary>
-    public static async Task<string> ObterTokenAsync(HttpClient client)
+    public static async Task<string> ObterTokenAsync(
+        HttpClient client, string? email = null)
     {
         var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
-            dsEmail = KuraApiFactory.EmailClinica,
+            dsEmail = email ?? KuraApiFactory.EmailClinica,
             dsSenha = KuraApiFactory.SenhaClinica,
         });
 
@@ -57,6 +58,42 @@ internal static class AutenticacaoHelper
             ],
             notBefore: DateTime.UtcNow.AddHours(-3),
             expires: DateTime.UtcNow.AddHours(-2),
+            signingCredentials: credenciais);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    /// 🔴 FD-04 — token <b>VÁLIDO</b> no formato ANTERIOR à FD-03: assinatura correta,
+    /// emissor e audiência corretos, dentro da validade, com <c>clinicaId</c> e
+    /// <c>veterinarioId</c> — e <b>SEM a claim <c>perfil</c></b>.
+    ///
+    /// <para>Não é um token forjado para inventar um cenário: é exatamente o que
+    /// <c>AuthService.GenerateToken</c> emitia antes da FD-03, e todo token desse formato
+    /// <b>continua sendo aceito pela autenticação até expirar</b> (o
+    /// <c>Jwt:ExpiryHours</c> padrão é 8h). A pergunta que ele faz à política
+    /// <c>SomenteGestor</c> é a que decide a segurança da FD-04: ausência de papel vira
+    /// negação (403) ou vira permissão?</para>
+    ///
+    /// <para>⚠️ <b>Este é o único token desta suíte que não vem do endpoint de login</b>, e
+    /// tem de ser forjado justamente porque o login de hoje é <b>incapaz</b> de emiti-lo — a
+    /// FD-03 sempre põe a claim. Um teste que só usasse tokens do login não conseguiria
+    /// alcançar este caso.</para>
+    /// </summary>
+    public static string GerarTokenPreFd03()
+    {
+        var chave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(KuraApiFactory.ChaveJwt));
+        var credenciais = new SigningCredentials(chave, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: KuraApiFactory.EmissorJwt,
+            audience: KuraApiFactory.AudienciaJwt,
+            claims:
+            [
+                new Claim("clinicaId", KuraApiFactory.IdClinicaSemeada.ToString()),
+                new Claim("veterinarioId", KuraApiFactory.IdVeterinarioSemeado.ToString()),
+            ],
+            expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: credenciais);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
