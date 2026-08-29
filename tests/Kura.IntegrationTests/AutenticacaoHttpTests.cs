@@ -1,10 +1,12 @@
 namespace Kura.IntegrationTests;
 
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using Kura.Application.DTOs.Auth;
+using Kura.Application.Services;
 
 /// <summary>
 /// S3D-06 — item da rubrica: "fluxo completo de requisições HTTP, incluindo
@@ -46,6 +48,87 @@ public class AutenticacaoHttpTests
         corpo.Usuario.Should().NotBeNull();
         corpo.Usuario!.IdClinica.Should().Be(KuraApiFactory.IdClinicaSemeada);
         corpo.Usuario.NmVeterinario.Should().Be(KuraApiFactory.NomeVeterinarioSemeado);
+
+        // FD-03: a credencial agora vive em USUARIO_CLINICA e o papel viaja na resposta.
+        corpo.TpPerfil.Should().Be("VETERINARIO");
+    }
+
+    /// <summary>
+    /// 🔴 <b>FD-03 — prova de mordida sobre HTTP real: GESTOR PURO.</b> Um usuário sem
+    /// <c>ID_VETERINARIO</c> autentica, o token sai <b>sem</b> a claim <c>veterinarioId</c> e
+    /// a chave <c>usuario</c> vem <c>null</c> no corpo — atravessando roteamento,
+    /// <c>AuthService</c> real, EF e a serialização de produção.
+    ///
+    /// <para><b>Controle positivo:</b> contra o código antigo este login sequer chegava ao
+    /// token — <c>LoginAsync</c> validava contra <c>CLINICA</c> e este e-mail não existe lá,
+    /// então a resposta seria 422. E a asserção sobre o JSON CRU é o que separa "campo nulo"
+    /// de "campo sumiu": se a serialização passar a omitir nulos, o app da clínica
+    /// (<c>types/api.ts</c>) recebe outro shape e este teste pega.</para>
+    /// </summary>
+    [Fact]
+    public async Task Login_de_gestor_sem_veterinario_devolve_200_com_usuario_nulo_e_sem_claim_de_veterinario()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            dsEmail = KuraApiFactory.EmailGestorPuro,
+            dsSenha = KuraApiFactory.SenhaClinica,
+        });
+
+        // Assert
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var json = JsonDocument.Parse(await resposta.Content.ReadAsStringAsync());
+        json.RootElement.TryGetProperty("usuario", out var usuario).Should().BeTrue(
+            "a chave tem que continuar presente — o contrato do app da clínica depende do shape");
+        usuario.ValueKind.Should().Be(JsonValueKind.Null);
+
+        var corpo = await resposta.Content.ReadFromJsonAsync<TokenResponseDto>();
+        corpo!.Usuario.Should().BeNull();
+        corpo.TpPerfil.Should().Be("GESTOR");
+
+        var claims = new JwtSecurityTokenHandler().ReadJwtToken(corpo.AccessToken).Claims.ToList();
+        claims.Should().Contain(c => c.Type == "perfil" && c.Value == "GESTOR");
+        claims.Should().Contain(c => c.Type == "clinicaId");
+        claims.Should().NotContain(c => c.Type == "veterinarioId",
+            "claim ausente é a única codificação honesta de \"este usuário não é veterinário\"");
+    }
+
+    /// <summary>
+    /// 🔴 <b>FD-03 — prova de mordida sobre HTTP real: E-MAIL EM 2 CLÍNICAS.</b> A UK da V17 é
+    /// <c>(ID_CLINICA, DS_EMAIL)</c>, então duas linhas com o mesmo e-mail são estado legal do
+    /// banco. O login falha com mensagem PRÓPRIA em vez de escolher um tenant.
+    ///
+    /// <para><b>Controle positivo:</b> a senha enviada é válida para AS DUAS linhas semeadas —
+    /// é a situação exata em que um <c>FirstOrDefault()</c> devolveria 200 com o tenant certo
+    /// em metade das vezes. O teste asserta que o <c>title</c> NÃO é "Email ou senha
+    /// inválidos.": disfarçar isso de senha errada passaria num teste que só checasse o
+    /// status.</para>
+    /// </summary>
+    [Fact]
+    public async Task Login_com_email_em_duas_clinicas_devolve_422_com_mensagem_propria()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            dsEmail = KuraApiFactory.EmailAmbiguo,
+            dsSenha = KuraApiFactory.SenhaClinica,
+        });
+
+        // Assert
+        resposta.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+
+        using var corpo = JsonDocument.Parse(await resposta.Content.ReadAsStringAsync());
+        var titulo = corpo.RootElement.GetProperty("title").GetString();
+        titulo.Should().Be(AuthService.MensagemEmailAmbiguo);
+        titulo.Should().NotBe("Email ou senha inválidos.",
+            "ambiguidade de cadastro não pode se disfarçar de credencial errada");
     }
 
     [Fact]

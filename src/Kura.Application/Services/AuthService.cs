@@ -67,7 +67,7 @@ public sealed class AuthService : IAuthService
     /// <summary>
     /// Mensagem do caso ambíguo. Ver <c>ResolverUsuarioAsync</c> para o argumento.
     /// </summary>
-    internal const string MensagemEmailAmbiguo =
+    public const string MensagemEmailAmbiguo =
         "Este e-mail está cadastrado em mais de uma clínica. " +
         "Não é possível identificar o usuário só pelo e-mail — " +
         "peça ao gestor da sua clínica um e-mail de acesso exclusivo.";

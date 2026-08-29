@@ -84,6 +84,22 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     public const long IdVeterinarioOutroTenant = 2;
     public const string NomeVeterinarioOutroTenant = "Dr. Outro Tenant";
 
+    // ── FD-03: usuários que só existem para provar comportamento novo ────────────────
+    /// <summary>
+    /// GESTOR sem <c>ID_VETERINARIO</c>, na clínica semeada. Existe para exercitar, sobre
+    /// HTTP real, o caso que a heurística de fallback tornava impossível: login de quem não
+    /// é veterinário. Nenhum outro teste usa este usuário.
+    /// </summary>
+    public const string EmailGestorPuro = "gestor-puro@kura.test";
+
+    /// <summary>
+    /// MESMO e-mail em duas clínicas — estado LEGAL do banco, porque a UK da V17 é
+    /// <c>(ID_CLINICA, DS_EMAIL)</c>. Existe para provar que o login falha explicitamente em
+    /// vez de escolher um tenant. Sem as DUAS linhas o cenário é logicamente incapaz de
+    /// falhar.
+    /// </summary>
+    public const string EmailAmbiguo = "atende-nas-duas@kura.test";
+
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
     public const string EmissorJwt = "kura-api";
@@ -201,8 +217,12 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             IdClinica = IdClinicaSemeada,
             NmVeterinario = NomeVeterinarioSemeado,
             NrCrmv = "SP-99999",
-            // Igual ao e-mail de acesso da clínica: é assim que AuthService.LoginAsync
-            // escolhe o veterinário responsável pelo token.
+            // ⚠️ FD-03: até esta task, este e-mail ser igual ao da clínica NÃO era detalhe —
+            // era o primeiro ramo da heurística de fallback de LoginAsync, que escolhia "o
+            // veterinário logado" batendo VETERINARIO.DS_EMAIL com CLINICA.DS_EMAIL_ACESSO.
+            // A heurística morreu; hoje o vínculo é explícito em
+            // USUARIO_CLINICA.ID_VETERINARIO (semeado mais abaixo). O e-mail continua igual
+            // só por fidelidade ao que o registro em runtime grava.
             DsEmail = EmailClinica,
             NrTelefone = "11999990000",
             StAtiva = true,
@@ -236,6 +256,74 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             NrCrmv = "SP-88888",
             DsEmail = "outro-tenant@kura.test",
             NrTelefone = "11988880000",
+            StAtiva = true,
+        });
+
+        // 🔴 FD-03: a partir daqui quem autentica é USUARIO_CLINICA, não CLINICA. Sem estas
+        // duas linhas o login HTTP de toda a suíte de integração devolve 422 — e é
+        // exatamente esse o ponto do escopo de runtime da task: a credencial existir em
+        // CLINICA deixou de bastar. Elas são, para a suíte, o equivalente do que
+        // AuthService.RegisterClinicaAsync faz em produção e do que a conversão da V17 faz
+        // para base já existente.
+        //
+        // ID_VETERINARIO preenchido de propósito: espelha o vínculo que o registro em runtime
+        // cria (veterinário e usuário nascem juntos) e é o que mantém `usuario` não nulo na
+        // resposta de login — o cenário que os testes HTTP asserem.
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 1,
+            IdClinica = IdClinicaSemeada,
+            IdVeterinario = IdVeterinarioSemeado,
+            DsEmail = EmailClinica,
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Veterinario,
+            StAtiva = true,
+        });
+
+        // O segundo tenant também ganha usuário — pelo mesmo motivo que ganhou clínica e
+        // veterinário: sem linha do outro tenant, nenhuma asserção de escopo tem como falhar.
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 2,
+            IdClinica = IdClinicaOutroTenant,
+            IdVeterinario = IdVeterinarioOutroTenant,
+            DsEmail = "outro-tenant@kura.test",
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Veterinario,
+            StAtiva = true,
+        });
+
+        // GESTOR PURO — sem ID_VETERINARIO. Ver a constante EmailGestorPuro.
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 3,
+            IdClinica = IdClinicaSemeada,
+            IdVeterinario = null,
+            DsEmail = EmailGestorPuro,
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+            StAtiva = true,
+        });
+
+        // MESMO e-mail nas duas clínicas. Ver a constante EmailAmbiguo.
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 4,
+            IdClinica = IdClinicaSemeada,
+            IdVeterinario = null,
+            DsEmail = EmailAmbiguo,
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+            StAtiva = true,
+        });
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 5,
+            IdClinica = IdClinicaOutroTenant,
+            IdVeterinario = null,
+            DsEmail = EmailAmbiguo,
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Gestor,
             StAtiva = true,
         });
 

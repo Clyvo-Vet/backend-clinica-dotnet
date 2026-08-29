@@ -65,11 +65,13 @@ public class AuthServiceTransacaoTests
     {
         var clinicaStore = new List<Clinica>();
         var veterinarioStore = new List<Veterinario>();
+        var usuarioStore = new List<UsuarioClinica>();
 
         var clinicaRepo = new FakeClinicaRepository(clinicaStore);
         var veterinarioRepo = new FakeVeterinarioRepository(veterinarioStore) { DeveLancarNoProximoAdd = true };
-        var uow = new FakeUnitOfWork(clinicaStore, veterinarioStore);
-        var sut = new AuthService(clinicaRepo, veterinarioRepo, uow, BuildConfig());
+        var usuarioRepo = new FakeUsuarioClinicaRepository(usuarioStore);
+        var uow = new FakeUnitOfWork(clinicaStore, veterinarioStore, usuarioStore);
+        var sut = new AuthService(clinicaRepo, veterinarioRepo, usuarioRepo, uow, BuildConfig());
 
         var dto = BuildDto();
 
@@ -82,6 +84,7 @@ public class AuthServiceTransacaoTests
             "o rollback da transação deve desfazer o INSERT da Clinica quando o Veterinario falha — " +
             "sem isso, a clínica fica órfã e o e-mail fica permanentemente 'tomado'");
         veterinarioStore.Should().BeEmpty();
+        usuarioStore.Should().BeEmpty();
 
         // 2) Retry com o mesmo e-mail deve funcionar após o rollback.
         var resultado = await sut.RegisterClinicaAsync(dto);
@@ -90,6 +93,48 @@ public class AuthServiceTransacaoTests
         resultado.DsEmailAcesso.Should().Be("admin@teste.com");
         clinicaStore.Should().HaveCount(1);
         veterinarioStore.Should().HaveCount(1);
+        usuarioStore.Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// 🔴 <b>FD-03 — prova de mordida da TERCEIRA escrita.</b> O <c>USUARIO_CLINICA</c> gestor
+    /// entra na MESMA transação que a clínica e o veterinário. Se ele falhar, o rollback tem
+    /// que desfazer os dois anteriores: a partir da FD-03 uma clínica sem usuário é tão
+    /// inutilizável quanto a clínica órfã que a TASK-30 evitou — o login não tem mais como
+    /// autenticar contra <c>CLINICA</c> —, e com o e-mail e o CNPJ igualmente "tomados".
+    ///
+    /// <para><b>Controle positivo:</b> este teste é impossível de escrever contra o código
+    /// antigo (não havia terceira escrita), e falha se alguém mover a criação do usuário para
+    /// DEPOIS de <c>CommitTransactionAsync</c> — nesse arranjo a clínica sobreviveria à
+    /// falha.</para>
+    /// </summary>
+    [Fact]
+    public async Task RegisterClinicaAsync_FalhaAoGravarUsuarioClinica_DesfazClinicaEVeterinario()
+    {
+        var clinicaStore = new List<Clinica>();
+        var veterinarioStore = new List<Veterinario>();
+        var usuarioStore = new List<UsuarioClinica>();
+
+        var clinicaRepo = new FakeClinicaRepository(clinicaStore);
+        var veterinarioRepo = new FakeVeterinarioRepository(veterinarioStore);
+        var usuarioRepo = new FakeUsuarioClinicaRepository(usuarioStore) { DeveLancarNoProximoAdd = true };
+        var uow = new FakeUnitOfWork(clinicaStore, veterinarioStore, usuarioStore);
+        var sut = new AuthService(clinicaRepo, veterinarioRepo, usuarioRepo, uow, BuildConfig());
+
+        var act = () => sut.RegisterClinicaAsync(BuildDto());
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        clinicaStore.Should().BeEmpty(
+            "clínica sem USUARIO_CLINICA não consegue mais logar — deixá-la gravada é o mesmo " +
+            "defeito da clínica órfã da TASK-30, por outro caminho");
+        veterinarioStore.Should().BeEmpty();
+        usuarioStore.Should().BeEmpty();
+
+        // Retry limpo depois do rollback.
+        var resultado = await sut.RegisterClinicaAsync(BuildDto());
+        resultado.DsEmailAcesso.Should().Be("admin@teste.com");
+        usuarioStore.Should().ContainSingle()
+            .Which.TpPerfil.Should().Be(PerfisUsuarioClinica.Gestor);
     }
 
     // ── Fakes ────────────────────────────────────────────────────────────────
@@ -173,6 +218,50 @@ public class AuthServiceTransacaoTests
     }
 
     /// <summary>
+    /// FD-03: terceiro store da transação de registro. Mesmo desenho dos outros dois.
+    /// </summary>
+    private sealed class FakeUsuarioClinicaRepository : IUsuarioClinicaRepository
+    {
+        private readonly List<UsuarioClinica> _store;
+
+        public FakeUsuarioClinicaRepository(List<UsuarioClinica> store) => _store = store;
+
+        /// <summary>Quando true, a próxima chamada a AddAsync lança e se auto-reseta.</summary>
+        public bool DeveLancarNoProximoAdd { get; set; }
+
+        public Task<IReadOnlyList<UsuarioClinica>> BuscarAtivosPorEmailAsync(string email) =>
+            Task.FromResult<IReadOnlyList<UsuarioClinica>>(
+                _store.Where(u => u.DsEmail == email && u.StAtiva).OrderBy(u => u.IdClinica).ToList());
+
+        public Task<UsuarioClinica?> GetByIdAsync(long id) =>
+            Task.FromResult(_store.FirstOrDefault(u => u.Id == id));
+
+        public Task<IEnumerable<UsuarioClinica>> GetAllAsync() =>
+            Task.FromResult<IEnumerable<UsuarioClinica>>(_store.ToList());
+
+        public Task<IEnumerable<UsuarioClinica>> FindAsync(Expression<Func<UsuarioClinica, bool>> predicate) =>
+            Task.FromResult(_store.AsQueryable().Where(predicate).AsEnumerable());
+
+        public Task AddAsync(UsuarioClinica entity)
+        {
+            if (DeveLancarNoProximoAdd)
+            {
+                DeveLancarNoProximoAdd = false;
+                throw new InvalidOperationException(
+                    "Falha simulada ao gravar o usuário da clínica (ex.: violação de UK, timeout).");
+            }
+
+            entity.Id = _store.Count + 1;
+            _store.Add(entity);
+            return Task.CompletedTask;
+        }
+
+        public void Update(UsuarioClinica entity) { }
+
+        public void SoftDelete(UsuarioClinica entity) => entity.StAtiva = false;
+    }
+
+    /// <summary>
     /// Imita begin/commit/rollback de transação sobre listas em memória
     /// compartilhadas com os fakes de repositório: guarda o tamanho das
     /// listas no início da transação e, em caso de rollback, trunca de volta
@@ -184,13 +273,19 @@ public class AuthServiceTransacaoTests
     {
         private readonly List<Clinica> _clinicaStore;
         private readonly List<Veterinario> _veterinarioStore;
+        private readonly List<UsuarioClinica> _usuarioStore;
         private int _clinicaSnapshot;
         private int _veterinarioSnapshot;
+        private int _usuarioSnapshot;
 
-        public FakeUnitOfWork(List<Clinica> clinicaStore, List<Veterinario> veterinarioStore)
+        public FakeUnitOfWork(
+            List<Clinica> clinicaStore,
+            List<Veterinario> veterinarioStore,
+            List<UsuarioClinica> usuarioStore)
         {
             _clinicaStore = clinicaStore;
             _veterinarioStore = veterinarioStore;
+            _usuarioStore = usuarioStore;
         }
 
         public Task<int> CommitAsync() => Task.FromResult(1);
@@ -199,6 +294,7 @@ public class AuthServiceTransacaoTests
         {
             _clinicaSnapshot = _clinicaStore.Count;
             _veterinarioSnapshot = _veterinarioStore.Count;
+            _usuarioSnapshot = _usuarioStore.Count;
             return Task.CompletedTask;
         }
 
@@ -211,6 +307,9 @@ public class AuthServiceTransacaoTests
 
             if (_veterinarioStore.Count > _veterinarioSnapshot)
                 _veterinarioStore.RemoveRange(_veterinarioSnapshot, _veterinarioStore.Count - _veterinarioSnapshot);
+
+            if (_usuarioStore.Count > _usuarioSnapshot)
+                _usuarioStore.RemoveRange(_usuarioSnapshot, _usuarioStore.Count - _usuarioSnapshot);
 
             return Task.CompletedTask;
         }
