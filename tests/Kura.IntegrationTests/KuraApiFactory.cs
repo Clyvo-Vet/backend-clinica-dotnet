@@ -100,6 +100,17 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public const string EmailAmbiguo = "atende-nas-duas@kura.test";
 
+    /// <summary>
+    /// F1 da fix wave pós-G2. Usuário da clínica SEMEADA cujo <c>ID_VETERINARIO</c> aponta o
+    /// veterinário do OUTRO tenant.
+    ///
+    /// <para>⚠️ Este não é um estado impossível que o teste inventou: a
+    /// <c>FK_USUARIO_CLINICA_VET</c> da V17 referencia só <c>VETERINARIO(ID_VETERINARIO)</c>,
+    /// <b>sem compor com <c>ID_CLINICA</c></b> — o Oracle aceita a linha. A única defesa é a
+    /// guarda em <c>AuthService.ObterVeterinarioVinculadoAsync</c>.</para>
+    /// </summary>
+    public const string EmailVinculoCruzado = "vinculo-cruzado@kura.test";
+
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
     public const string EmissorJwt = "kura-api";
@@ -302,6 +313,19 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             DsEmail = EmailGestorPuro,
             DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
             TpPerfil = PerfisUsuarioClinica.Gestor,
+            StAtiva = true,
+        });
+
+        // VÍNCULO CRUZADO: usuário da clínica 1 apontando o veterinário da clínica 2.
+        // Ver a constante EmailVinculoCruzado.
+        db.UsuariosClinica.Add(new UsuarioClinica
+        {
+            Id = 6,
+            IdClinica = IdClinicaSemeada,
+            IdVeterinario = IdVeterinarioOutroTenant,
+            DsEmail = EmailVinculoCruzado,
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
+            TpPerfil = PerfisUsuarioClinica.Veterinario,
             StAtiva = true,
         });
 

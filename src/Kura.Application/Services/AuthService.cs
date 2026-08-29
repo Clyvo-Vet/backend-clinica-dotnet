@@ -79,6 +79,24 @@ public sealed class AuthService : IAuthService
         if (usuario is null || !BCrypt.Net.BCrypt.Verify(dto.DsSenha, usuario.DsSenhaHash))
             throw new RegraDeNegocioException(MensagemCredencialInvalida);
 
+        // 🔴 FIX WAVE PÓS-G2 (F2) — clínica desativada volta a barrar o login.
+        // REGRESSÃO que a primeira versão desta task introduziu sem perceber: o login ANTIGO
+        // consultava CLINICA, e ClinicaConfiguration.cs:41 declara HasQueryFilter(e =>
+        // e.StAtiva) — então uma clínica soft-deletada simplesmente não era encontrada e o
+        // login morria com a mensagem genérica. Trocada a fonte para USUARIO_CLINICA, só o
+        // ST_ATIVA do USUÁRIO passou a ser checado, e a clínica inteira poderia estar
+        // desativada com seus usuários logando normalmente.
+        //
+        // Hoje isso é LATENTE — a revisão G2 não achou caminho de código que desative uma
+        // Clinica. Mas "latente" não é "seguro": este projeto carrega há meses um vazamento
+        // cross-tenant de IoT exatamente com esse rótulo (CLAUDE.md, achado de 2026-08-13),
+        // e a diferença entre latente e explorável é alguém acrescentar um endpoint de
+        // desativação — que é justamente o tipo de coisa que a FD-04 (CRUD) traz.
+        //
+        // Predicado EXPLÍCITO, não confiança no query filter: mesmo raciocínio do
+        // UsuarioClinicaRepository. `c.StAtiva` está escrito aqui de propósito.
+        await GarantirClinicaAtivaAsync(usuario.IdClinica);
+
         // O veterinário só existe se o usuário TIVER vínculo. Nada de fallback: um gestor
         // não-veterinário loga normalmente e a ficha vem nula (ver TokenResponseDto.Usuario).
         var veterinario = await ObterVeterinarioVinculadoAsync(usuario);
@@ -144,6 +162,27 @@ public sealed class AuthService : IAuthService
     }
 
     /// <summary>
+    /// Barra o login quando a clínica do usuário está soft-deletada (F2 da fix wave pós-G2).
+    ///
+    /// <para><b>Mensagem genérica de propósito, e ela restaura o comportamento EXATO de antes
+    /// da FD-03:</b> no código antigo a clínica inativa era invisível ao
+    /// <c>FirstOrDefault()</c> por causa do query filter, e o resultado era
+    /// <c>"Email ou senha inválidos."</c>. Usar a mesma mensagem também não revela ao chamador
+    /// que a conta existe mas foi desativada.</para>
+    ///
+    /// <para><b>Por que DEPOIS da verificação de senha:</b> a resposta observável é idêntica
+    /// nos dois lugares (mesma mensagem, mesmo status), então checar depois só evita uma ida
+    /// ao banco para cada tentativa de senha errada.</para>
+    /// </summary>
+    private async Task GarantirClinicaAtivaAsync(long idClinica)
+    {
+        var ativas = await _clinicaRepository.FindAsync(c => c.Id == idClinica && c.StAtiva);
+
+        if (!ativas.Any())
+            throw new RegraDeNegocioException(MensagemCredencialInvalida);
+    }
+
+    /// <summary>
     /// Ficha do veterinário vinculado, ou <c>null</c> quando o usuário não tem vínculo.
     ///
     /// <para>⚠️ O predicado escopa por <c>IdClinica</c> <b>explicitamente</b>, e isso não é
@@ -151,8 +190,18 @@ public sealed class AuthService : IAuthService
     /// <b>DESLIGA INTEIRO</b> (não nega) quando <c>IdClinicaFiltro</c> é nulo — travado em
     /// <c>UsuarioClinicaTenantIsolationTests.SemContextoDeClinica_FiltroDesligaInteiro_RetornaAsDuasClinicas</c>.
     /// Sem o <c>IdClinica</c> escrito aqui, um <c>ID_VETERINARIO</c> apontando para outra
-    /// clínica (dado corrompido, ou uma FK futura mal escrita) devolveria a ficha do tenant
-    /// errado sem nenhum aviso.</para>
+    /// clínica devolveria a ficha do tenant errado sem nenhum aviso.</para>
+    ///
+    /// <para>🔴 <b>Isto NÃO é hipotético — a FK da V17 permite o estado (F1 da fix wave
+    /// pós-G2).</b> <c>FK_USUARIO_CLINICA_VET</c> é
+    /// <c>FOREIGN KEY (ID_VETERINARIO) REFERENCES VETERINARIO(ID_VETERINARIO)</c>: ela
+    /// <b>não é composta com <c>ID_CLINICA</c></b>, então o Oracle ACEITA um
+    /// <c>USUARIO_CLINICA</c> da clínica A apontando um <c>VETERINARIO</c> da clínica B.
+    /// <b>Esta linha de código é hoje a única defesa contra isso.</b> A revisão G2 mediu o
+    /// que acontece sem ela: a ficha COMPLETA do veterinário do outro tenant sai no corpo do
+    /// <c>200</c>, junto de um token com <c>clinicaId</c> da clínica A. Travado por
+    /// <c>AuthServiceTests.LoginAsync_UsuarioApontandoVeterinarioDeOutraClinica_NaoVazaAFicha</c>
+    /// e pelo cenário HTTP equivalente em <c>AutenticacaoHttpTests</c>.</para>
     /// </summary>
     private async Task<Veterinario?> ObterVeterinarioVinculadoAsync(UsuarioClinica usuario)
     {

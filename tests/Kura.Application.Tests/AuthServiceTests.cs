@@ -56,9 +56,40 @@ public class AuthServiceTests
     private static bool TemClaim(string jwt, string claimType) =>
         new JwtSecurityTokenHandler().ReadJwtToken(jwt).Claims.Any(c => c.Type == claimType);
 
-    private void PlantarUsuarios(string email, params UsuarioClinica[] usuarios) =>
+    /// <summary>
+    /// Clínicas "existentes" para o mock de <see cref="IClinicaRepository"/>. Toda clínica de
+    /// um usuário plantado entra aqui ATIVA por padrão — é o estado normal. O teste de F2
+    /// desativa explicitamente com <see cref="DesativarClinica"/>.
+    /// </summary>
+    private readonly List<Clinica> _clinicas = [];
+
+    private void RefazerMockDeClinicas() =>
+        _repoMock.Setup(r => r.FindAsync(
+                It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()))
+            .ReturnsAsync((System.Linq.Expressions.Expression<Func<Clinica, bool>> p) =>
+                _clinicas.Where(p.Compile()).ToList());
+
+    private void PlantarUsuarios(string email, params UsuarioClinica[] usuarios)
+    {
         _usuarioRepoMock.Setup(r => r.BuscarAtivosPorEmailAsync(email))
             .ReturnsAsync(usuarios);
+
+        // A clínica de cada usuário passa a existir e ATIVA. Sem isto, a guarda de F2
+        // (GarantirClinicaAtivaAsync) barraria todo login destes testes — o que faria a
+        // suíte "passar" pelos motivos errados nos cenários negativos.
+        foreach (var u in usuarios.Where(u => _clinicas.All(c => c.Id != u.IdClinica)))
+            _clinicas.Add(new Clinica { Id = u.IdClinica, StAtiva = true });
+
+        RefazerMockDeClinicas();
+    }
+
+    private void DesativarClinica(long idClinica)
+    {
+        foreach (var c in _clinicas.Where(c => c.Id == idClinica))
+            c.StAtiva = false;
+
+        RefazerMockDeClinicas();
+    }
 
     private void PlantarVeterinario(Veterinario veterinario) =>
         _vetRepoMock.Setup(r => r.FindAsync(
@@ -323,10 +354,111 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<RegraDeNegocioException>()
             .WithMessage("Email ou senha inválidos.");
 
+        // ⚠️ Precisão pós-fix-wave: LoginAsync VOLTOU a ler CLINICA — mas só para checar
+        // ST_ATIVA (F2), e só DEPOIS de a credencial já ter sido validada contra
+        // USUARIO_CLINICA. Neste cenário não há usuário nenhum, então o fluxo morre antes: um
+        // FindAsync aqui só poderia significar que a clínica voltou a ser FONTE de credencial.
         _repoMock.Verify(
             r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Clinica, bool>>>()),
             Times.Never,
-            "LoginAsync não pode mais tocar em CLINICA para autenticar");
+            "CLINICA não pode voltar a ser fonte de credencial");
+    }
+
+    /// <summary>
+    /// 🔴 <b>F1 da fix wave pós-G2 — a guarda de tenant de <c>ObterVeterinarioVinculadoAsync</c>
+    /// agora está TRAVADA.</b> A revisão G2 removeu <c>&amp;&amp; v.IdClinica ==
+    /// usuario.IdClinica</c> e a suíte de 330 ficou <b>inteiramente verde</b>: a guarda estava
+    /// certa e desprotegida.
+    ///
+    /// <para><b>Por que o estado é alcançável no banco, e não só no mock:</b>
+    /// <c>FK_USUARIO_CLINICA_VET</c> (V17) referencia <c>VETERINARIO(ID_VETERINARIO)</c> e
+    /// <b>não é composta com <c>ID_CLINICA</c></b> — o Oracle aceita, sem reclamar, um
+    /// <c>USUARIO_CLINICA</c> da clínica 1 apontando um <c>VETERINARIO</c> da clínica 2.</para>
+    ///
+    /// <para><b>Controle positivo:</b> o veterinário plantado EXISTE e o <c>ID_VETERINARIO</c>
+    /// do usuário aponta exatamente para ele — a única coisa que o esconde é a comparação de
+    /// clínica. Sem a guarda, <c>Usuario</c> vem preenchido com a ficha do outro tenant (nome,
+    /// CRMV, e-mail, telefone) e o teste falha nas duas asserções.</para>
+    /// </summary>
+    [Fact]
+    public async Task LoginAsync_UsuarioApontandoVeterinarioDeOutraClinica_NaoVazaAFicha()
+    {
+        // Arrange — usuário da clínica 1, vínculo apontando o veterinário 99 da CLÍNICA 2.
+        PlantarUsuarios("infiltrado@clinica.test", new UsuarioClinica
+        {
+            Id = 500,
+            IdClinica = 1,
+            IdVeterinario = 99,
+            DsEmail = "infiltrado@clinica.test",
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword("secret"),
+            TpPerfil = PerfisUsuarioClinica.Veterinario,
+            StAtiva = true
+        });
+        PlantarVeterinario(new Veterinario
+        {
+            Id = 99,
+            IdClinica = 2,
+            NmVeterinario = "Dr. Do Outro Tenant",
+            NrCrmv = "SP-VAZAMENTO",
+            DsEmail = "vitima@outra-clinica.test",
+            NrTelefone = "11900000000",
+            StAtiva = true
+        });
+
+        // Act
+        var result = await _sut.LoginAsync(
+            new LoginDto { DsEmail = "infiltrado@clinica.test", DsSenha = "secret" });
+
+        // Assert — o login FUNCIONA (o usuário é legítimo na clínica dele), mas a ficha do
+        // outro tenant não sai.
+        result.Usuario.Should().BeNull(
+            "a ficha do veterinário da clínica 2 não pode sair num 200 emitido para a clínica 1");
+        GetClaim(result.AccessToken, "clinicaId").Should().Be("1",
+            "o token continua escopado na clínica do usuário — o vazamento seria no CORPO");
+    }
+
+    /// <summary>
+    /// 🔴 <b>F2 da fix wave pós-G2 — clínica soft-deletada volta a barrar o login.</b>
+    ///
+    /// <para>REGRESSÃO que a primeira versão desta task introduziu: o login antigo consultava
+    /// <c>Clinica</c>, cujo <c>HasQueryFilter(e =&gt; e.StAtiva)</c>
+    /// (<c>ClinicaConfiguration.cs:41</c>) escondia a clínica desativada e produzia
+    /// "Email ou senha inválidos.". Trocada a fonte para <c>USUARIO_CLINICA</c>, passou a
+    /// bastar o <c>ST_ATIVA</c> do USUÁRIO.</para>
+    ///
+    /// <para><b>Controle positivo:</b> o MESMO usuário, com a MESMA senha, loga normalmente
+    /// enquanto a clínica está ativa — asserido na primeira metade do teste. Sem essa metade,
+    /// o 422 da segunda não distinguiria "a clínica inativa barrou" de "o arranjo estava
+    /// quebrado".</para>
+    /// </summary>
+    [Fact]
+    public async Task LoginAsync_ClinicaSoftDeletada_NaoAutentica()
+    {
+        // Arrange
+        PlantarUsuarios("gestor@desativada.test", new UsuarioClinica
+        {
+            Id = 600,
+            IdClinica = 77,
+            IdVeterinario = null,
+            DsEmail = "gestor@desativada.test",
+            DsSenhaHash = BCrypt.Net.BCrypt.HashPassword("secret"),
+            TpPerfil = PerfisUsuarioClinica.Gestor,
+            StAtiva = true
+        });
+
+        // Controle positivo: com a clínica ATIVA, esta credencial autentica.
+        var comClinicaAtiva = await _sut.LoginAsync(
+            new LoginDto { DsEmail = "gestor@desativada.test", DsSenha = "secret" });
+        comClinicaAtiva.AccessToken.Should().NotBeNullOrWhiteSpace();
+
+        // Act — só a clínica muda de estado. O usuário continua ST_ATIVA = 'S'.
+        DesativarClinica(77);
+        var act = () => _sut.LoginAsync(
+            new LoginDto { DsEmail = "gestor@desativada.test", DsSenha = "secret" });
+
+        // Assert
+        await act.Should().ThrowAsync<RegraDeNegocioException>()
+            .WithMessage("Email ou senha inválidos.");
     }
 
     // ── RegisterClinica ──────────────────────────────────────────────────────

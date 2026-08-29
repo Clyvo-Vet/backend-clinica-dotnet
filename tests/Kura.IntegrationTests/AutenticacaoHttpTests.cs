@@ -178,6 +178,47 @@ public class AutenticacaoHttpTests
         corpo.RootElement.GetProperty("traceId").GetString().Should().NotBeNullOrWhiteSpace();
     }
 
+    /// <summary>
+    /// 🔴 <b>F1 da fix wave pós-G2, sobre HTTP real — o vazamento cross-tenant que a revisão
+    /// G2 mediu.</b> Um <c>USUARIO_CLINICA</c> da clínica 1 cujo <c>ID_VETERINARIO</c> aponta o
+    /// veterinário da clínica 2 loga normalmente, e a ficha do OUTRO tenant <b>não</b> sai no
+    /// corpo do <c>200</c>.
+    ///
+    /// <para><b>Controle positivo, e ele é o ponto do teste:</b> o veterinário do outro tenant
+    /// EXISTE no banco desta fábrica e tem nome distinto
+    /// (<c>NomeVeterinarioOutroTenant</c>) — o teste asserta que esse nome NÃO aparece em
+    /// lugar nenhum do JSON cru. Sem a guarda em <c>ObterVeterinarioVinculadoAsync</c> ele
+    /// aparece, junto de CRMV, e-mail e telefone.</para>
+    /// </summary>
+    [Fact]
+    public async Task Login_de_usuario_com_vinculo_em_outra_clinica_nao_vaza_a_ficha_do_outro_tenant()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        // Act
+        var resposta = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            dsEmail = KuraApiFactory.EmailVinculoCruzado,
+            dsSenha = KuraApiFactory.SenhaClinica,
+        });
+
+        // Assert
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var bruto = await resposta.Content.ReadAsStringAsync();
+        bruto.Should().NotContain(KuraApiFactory.NomeVeterinarioOutroTenant,
+            "a ficha do veterinário da outra clínica não pode sair num 200 emitido para esta");
+
+        var corpo = await resposta.Content.ReadFromJsonAsync<TokenResponseDto>();
+        corpo!.Usuario.Should().BeNull();
+
+        var claims = new JwtSecurityTokenHandler().ReadJwtToken(corpo.AccessToken).Claims.ToList();
+        claims.Should().Contain(
+            c => c.Type == "clinicaId" && c.Value == KuraApiFactory.IdClinicaSemeada.ToString(),
+            "o token segue escopado na clínica do usuário — o vazamento seria no CORPO");
+    }
+
     [Fact]
     public async Task Endpoint_protegido_sem_token_devolve_401()
     {
