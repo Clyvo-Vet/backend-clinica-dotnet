@@ -512,11 +512,33 @@ circular de disponibilidade** — a Luna nunca subiria porque a Luna está fora 
 Medido na mesma requisição do corpo acima: `oracle` **2034,98 ms** + `luna` **2037,06 ms**,
 com **2042,99 ms** de wall total da requisição. Se fossem sequenciais o total seria ~4072 ms.
 
-Isso importa por causa de uma margem estreita: o healthcheck do container em
-`DevOps-Cloud/docker-compose.yml` é `interval: 30s`, **`timeout: 5s`**, `retries: 5`,
-`start_period: 60s`, e o pior caso já medido do `/health` é **~4,1s** — sobra **~0,9s**.
-**Qualquer mudança que acrescente latência por requisição precisa ser medida antes e depois:**
-comida a margem, o `kura-api` fica `unhealthy` e a Luna não sobe.
+Isso importa por causa da margem contra o healthcheck do container, definido em
+`DevOps-Cloud/docker-compose.yml` como `interval: 30s`, **`timeout: 5s`**, `retries: 5`,
+`start_period: 60s`. **A margem depende inteiramente de qual caminho o check toma**, e os três
+números abaixo vêm de medições distintas — cada um com a origem colada nele, de propósito:
+
+| Caminho | Duração do `/health` | Margem contra `timeout: 5s` | Origem da medição |
+|---|---|---|---|
+| **Feliz** (Oracle e Luna vivos) | **0,93–88 ms** | ≈ **+4,9 s** | revisão independente do G4 |
+| **Falha** (Oracle fora) | **8.027 ms** | **−3,03 s** — estoura | `A1` do G4, provado por `docker inspect .State.Health.Log`: `Health check exceeded timeout (5s)` |
+| **Falha** (Oracle congelado, `docker pause`) | **~15,0 s** | estoura | revisão da `S3D-10` |
+
+🔴 **Leia as três linhas juntas ou você tira a conclusão errada.** O check **não** estoura o
+`timeout` no uso normal — sobra quase toda a janela. Ele estoura **quando o Oracle já está fora ou
+travado**, ou seja, **quando `unhealthy` já é o veredito correto**. O efeito colateral é que o
+`kura-api` fica `unhealthy` e **a Luna não sobe** (`depends_on: service_healthy`), o que transforma
+um banco indisponível em duas indisponibilidades.
+
+⚠️ **Correção de um número que este README afirmou por 4 sessões.** Até o G4, este parágrafo dizia
+que *"o pior caso já **medido** do `/health` é ~4,1s — sobra ~0,9s"*. **Nunca foi medido.** O
+`~4,1s` é o `~4072 ms` do parágrafo logo acima — o valor **contrafactual** de *"se fossem
+sequenciais"*, que aquele mesmo parágrafo diz que **não acontece**, porque os checks rodam em
+paralelo. Uma hipótese virou medição três linhas adiante e depois virou margem de segurança.
+**É por isso que a tabela acima carrega a coluna "origem": sem proveniência colada no número,
+hipótese e medição ficam tipograficamente idênticas.**
+
+**Qualquer mudança que acrescente latência por requisição precisa ser medida antes e depois** —
+e no **caminho feliz**, que é onde a margem de fato existe.
 
 ### Cold start no compose — o que é esperado e o que NÃO é verdade
 
