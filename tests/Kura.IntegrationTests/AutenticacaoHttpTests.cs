@@ -219,6 +219,81 @@ public class AutenticacaoHttpTests
             "o token segue escopado na clínica do usuário — o vazamento seria no CORPO");
     }
 
+    /// <summary>
+    /// 🔴 <b>F3 da fix wave pós-G2 — o round-trip registro → login, sobre HTTP real.</b> É o
+    /// análogo, dentro deste repo, do que <c>seed-demo.sh</c> faz em outro:
+    /// <c>POST /auth/register-clinica</c> (<c>:160</c>) e, depois,
+    /// <c>POST /auth/login</c> com a MESMA credencial (<c>:321</c>).
+    ///
+    /// <para><b>Por que ele foi acrescentado mesmo com a mutação de F3 já mordendo:</b> a
+    /// mutação (<c>ID_VETERINARIO = null</c> no registro) é pega por 2 testes UNITÁRIOS, e
+    /// nenhum deles atravessa HTTP — a suíte de integração ficou <b>23/23 verde</b> sob ela,
+    /// porque <c>KuraApiFactory</c> semeia o <c>USUARIO_CLINICA</c> à mão em vez de passar
+    /// pelo registro. Ou seja: o caminho que o gate da FD-12 vai exercitar de verdade não
+    /// tinha cobertura nenhuma aqui. Agora tem.</para>
+    ///
+    /// <para><b>Controle positivo:</b> o teste não se contenta com o <c>200</c> — ele casa o
+    /// <c>usuario.id</c> da resposta de LOGIN com o <c>idVeterinarioAdmin</c> devolvido pelo
+    /// REGISTRO. Um login que autenticasse "alguém" da clínica passaria num teste que só
+    /// olhasse o status.</para>
+    /// </summary>
+    [Fact]
+    public async Task Registro_de_clinica_seguido_de_login_funciona_como_no_seed_demo()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        const string email = "clinica-recem-registrada@kura.test";
+        const string senha = "SenhaDeRegistro#2026";
+
+        // Act 1 — registro (equivalente a seed-demo.sh:160).
+        var registro = await client.PostAsJsonAsync("/api/v1/auth/register-clinica", new
+        {
+            nmClinica = "Clinica Recem Registrada",
+            nrCnpj = "11.222.333/0001-81",
+            dsEndereco = "Rua do Registro, 1",
+            nmCidade = "Sao Paulo",
+            sgUf = "SP",
+            nrCep = "01000-000",
+            nrTelefone = "11999990002",
+            dsEmail = "contato-recem@kura.test",
+            dsEmailAcesso = email,
+            dsSenha = senha,
+            nmVeterinarioAdmin = "Dr. Recem Registrado",
+            nrCRMV = "CRMV-REG-0001",
+        });
+
+        registro.StatusCode.Should().Be(HttpStatusCode.Created);
+        var corpoRegistro = await registro.Content.ReadFromJsonAsync<RegisterClinicaResponseDto>();
+        corpoRegistro!.Usuario.Should().NotBeNull(
+            "seed-demo.sh:162 e smoke-contratos.sh:251 leem `usuario.id` DESTA resposta");
+        corpoRegistro.IdVeterinarioAdmin.Should().Be(corpoRegistro.Usuario.Id);
+
+        // Act 2 — login com a mesma credencial (equivalente a seed-demo.sh:321).
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            dsEmail = email,
+            dsSenha = senha,
+        });
+
+        // Assert — sem o USUARIO_CLINICA criado pelo registro, isto seria 422: a conversão da
+        // V17 converte ZERO linhas num ambiente do zero.
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var corpoLogin = await login.Content.ReadFromJsonAsync<TokenResponseDto>();
+        corpoLogin!.TpPerfil.Should().Be("GESTOR");
+        corpoLogin.Usuario.Should().NotBeNull(
+            "o gestor criado no registro TEM vínculo com o veterinário administrador — " +
+            "é isso que mantém o app da clínica funcionando sem alteração");
+        corpoLogin.Usuario!.Id.Should().Be(corpoRegistro.IdVeterinarioAdmin);
+
+        var claims = new JwtSecurityTokenHandler().ReadJwtToken(corpoLogin.AccessToken).Claims.ToList();
+        claims.Should().Contain(
+            c => c.Type == "veterinarioId"
+                 && c.Value == corpoRegistro.IdVeterinarioAdmin.ToString());
+        claims.Should().Contain(
+            c => c.Type == "clinicaId" && c.Value == corpoRegistro.IdClinica.ToString());
+    }
+
     [Fact]
     public async Task Endpoint_protegido_sem_token_devolve_401()
     {

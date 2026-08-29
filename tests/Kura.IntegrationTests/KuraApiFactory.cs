@@ -176,6 +176,27 @@ public class KuraApiFactory : WebApplicationFactory<Program>
                 // Mantido para ficar fiel à produção: o interceptor é quem barra escrita
                 // nas tabelas cuja autoridade é o backend Java (CONTA_TUTOR, CONSENTIMENTO).
                 options.AddInterceptors(new ReadOnlyTablesInterceptor());
+
+                // 🔴 FIX WAVE PÓS-G2 (F3). Sem esta linha, TODO endpoint que abra transação
+                // explícita é INALCANÇÁVEL nesta suíte — e isso não é teoria, é medido:
+                // POST /api/v1/auth/register-clinica devolvia 500 com
+                //   "An error was generated for warning
+                //    'Microsoft.EntityFrameworkCore.Database.Transaction.TransactionIgnoredWarning':
+                //    Transactions are not supported by the in-memory store."
+                // O provider InMemory promove esse aviso a EXCEÇÃO por padrão, então
+                // AuthService.RegisterClinicaAsync morria em BeginTransactionAsync antes de
+                // gravar qualquer coisa. Consequência prática: o fluxo que seed-demo.sh
+                // exercita de verdade (registro -> login) nunca tinha sido coberto por HTTP
+                // neste repo — a lacuna é anterior à FD-03.
+                //
+                // ⚠️ O QUE ISTO CUSTA, declarado: com o aviso rebaixado, begin/commit/rollback
+                // viram NO-OP. Esta suíte passa a provar a ORQUESTRAÇÃO e o resultado HTTP,
+                // NUNCA a atomicidade — um rollback que devesse desfazer escritas não desfaz
+                // nada aqui. A prova de atomicidade continua onde sempre esteve:
+                // AuthServiceTransacaoTests, com fakes que implementam o snapshot à mão (ver a
+                // docstring daquela classe), e, no fim, contra Oracle real no gate do ciclo.
+                options.ConfigureWarnings(w =>
+                    w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
             });
         });
     }
