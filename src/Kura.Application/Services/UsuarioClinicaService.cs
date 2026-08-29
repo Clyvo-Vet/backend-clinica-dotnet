@@ -311,10 +311,35 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
     /// deixou o cenário semeado em <c>KuraApiFactory.EmailVinculoCruzado</c>). A única defesa
     /// é esta comparação.</para>
     ///
-    /// <para>A busca é <c>BuscarPorIdIgnorandoFiltrosAsync</c>, e não <c>GetByIdAsync</c>, de
-    /// propósito: com o query filter ligado o veterinário alheio já viria <c>null</c> e a
-    /// comparação abaixo seria inalcançável — ou seja, apagá-la não quebraria teste nenhum, e
-    /// a garantia deixaria de ser verificável por mutação.</para>
+    /// <para>🔴 <b>A busca é <c>BuscarPorIdIgnorandoFiltrosAsync</c>, e não
+    /// <c>GetByIdAsync</c>, de propósito — e a justificativa abaixo foi REESCRITA na fix wave
+    /// pós-G2 porque a anterior estava FACTUALMENTE ERRADA.</b> Ela dizia que, com o query
+    /// filter ligado, apagar a comparação <b>"não quebraria teste nenhum"</b>. Isso é falso, e
+    /// era uma alegação nunca medida — exatamente o vício que este projeto persegue. O que as
+    /// duas medições desta fix wave mostram:</para>
+    ///
+    /// <list type="bullet">
+    ///   <item><description><b>MED-1</b> — apagar só a comparação, mantendo
+    ///   <c>IgnoreQueryFilters()</c>: <b>3 testes mordem</b> (2 em
+    ///   <c>UsuarioClinicaServiceTests</c> + 1 em <c>UsuariosClinicaHttpTests</c>).</description></item>
+    ///   <item><description><b>MED-2</b> — trocar para <c>GetByIdAsync</c> (filtros ligados)
+    ///   <b>e</b> apagar a comparação: sobram <b>2 mordidas, as duas de service</b>; o
+    ///   <b>assembly HTTP fica 45/45 VERDE</b>.</description></item>
+    /// </list>
+    ///
+    /// <para><b>O argumento correto, e ele é mais forte que o errado:</b> os testes de service
+    /// rodam com <c>IdClinicaFiltro = null</c>, isto é, com os filtros DESLIGADOS — então eles
+    /// morderiam de qualquer jeito. Quem some com <c>GetByIdAsync</c> é a prova <b>sobre o
+    /// caminho de produção</b>: com o filtro ligado, o veterinário alheio vira <c>null</c>, o
+    /// vazamento deixa de ser observável por HTTP e o isolamento passa a depender de estado
+    /// AMBIENTE. Sobraria uma garantia comprovada apenas por um arranjo de teste que a
+    /// produção nunca usa — e o filtro <b>desliga inteiro</b> (não nega) sempre que não há
+    /// clínica no contexto.</para>
+    ///
+    /// <para>⚠️ MED-2 mediu de passagem algo que este repositório tratava como incerto:
+    /// <c>GetByIdAsync</c> (que é <c>DbSet.FindAsync</c>) <b>aplica</b> os query filters neste
+    /// projeto — foi por isso que o teste HTTP ficou verde. Não é dedução da documentação do
+    /// EF: é o resultado da execução.</para>
     ///
     /// <para>Veterinário inativo também é recusado: vincular a um registro soft-deletado
     /// criaria autoria apontando para alguém que a clínica considera fora do quadro.</para>
