@@ -276,7 +276,25 @@ public class ServicoPrecoTenantIsolationTests
         // lança InvalidCastException (InMemoryTypeMapping não é RelationalTypeMapping) —
         // medido nesta task, na primeira execução. A anotação crua guarda exatamente o
         // que HasColumnType declarou, e é legível em qualquer provider.
-        vlPreco.FindAnnotation("Relational:ColumnType")?.Value.Should().Be("NUMBER(10,2)",
+        // F1 (fix wave pós-G2) — ACHADO DA REVISÃO, e ele é do tipo que este projeto
+        // mais repete: a versão anterior desta asserção era
+        //     vlPreco.FindAnnotation("Relational:ColumnType")?.Value.Should().Be(...)
+        // e o `?.` CURTO-CIRCUITA A CADEIA INTEIRA: com a anotação ausente, `.Should()`
+        // nunca executa e o teste passa VERDE. Medido pela G2 removendo o HasColumnType
+        // de vlPreco: a suíte ficou 10/10 verde. A mutação original desta task cobria
+        // "valor errado", nunca "declaração ausente" — que é o caso realista.
+        //
+        // ⚠️ Regra geral que sai daqui: `?.` antes de `.Should()` DESARMA o
+        // FluentAssertions em silêncio. Separar a busca da asserção é o que garante que
+        // as DUAS falhas (ausente e divergente) mordam, cada uma com mensagem própria.
+        var anotacaoTipoColuna = vlPreco.FindAnnotation("Relational:ColumnType");
+
+        anotacaoTipoColuna.Should().NotBeNull(
+            "VL_PRECO tem que declarar HasColumnType explicitamente: sem ele o provider " +
+            "Oracle escolhe o tipo por default do mapeamento e o modelo passa a não afirmar " +
+            "NADA sobre a coluna de dinheiro");
+
+        anotacaoTipoColuna!.Value.Should().Be("NUMBER(10,2)",
             "o tipo de coluna declarado tem que ser literalmente o da V18 (VL_PRECO " +
             "NUMBER(10,2)); divergência EF↔Flyway numa tabela nova é dívida criada de graça");
     }

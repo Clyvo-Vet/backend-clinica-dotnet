@@ -345,7 +345,25 @@ public class CobrancaTenantIsolationTests
         // lança InvalidCastException (InMemoryTypeMapping não é RelationalTypeMapping) —
         // medido nesta task, na primeira execução. A anotação crua guarda exatamente o
         // que HasColumnType declarou, e é legível em qualquer provider.
-        vlCobrado.FindAnnotation("Relational:ColumnType")?.Value.Should().Be("NUMBER(10,2)",
+        // F1 (fix wave pós-G2) — ACHADO DA REVISÃO, e ele é do tipo que este projeto
+        // mais repete: a versão anterior desta asserção era
+        //     vlCobrado.FindAnnotation("Relational:ColumnType")?.Value.Should().Be(...)
+        // e o `?.` CURTO-CIRCUITA A CADEIA INTEIRA: com a anotação ausente, `.Should()`
+        // nunca executa e o teste passa VERDE. Medido pela G2 removendo o HasColumnType
+        // de vlCobrado: a suíte ficou 10/10 verde. A mutação original desta task cobria
+        // "valor errado", nunca "declaração ausente" — que é o caso realista.
+        //
+        // ⚠️ Regra geral que sai daqui: `?.` antes de `.Should()` DESARMA o
+        // FluentAssertions em silêncio. Separar a busca da asserção é o que garante que
+        // as DUAS falhas (ausente e divergente) mordam, cada uma com mensagem própria.
+        var anotacaoTipoColuna = vlCobrado.FindAnnotation("Relational:ColumnType");
+
+        anotacaoTipoColuna.Should().NotBeNull(
+            "VL_COBRADO tem que declarar HasColumnType explicitamente: sem ele o provider " +
+            "Oracle escolhe o tipo por default do mapeamento e o modelo passa a não afirmar " +
+            "NADA sobre a coluna de dinheiro");
+
+        anotacaoTipoColuna!.Value.Should().Be("NUMBER(10,2)",
             "o tipo de coluna declarado tem que ser literalmente o da V18 (VL_COBRADO " +
             "NUMBER(10,2)); divergência EF↔Flyway numa tabela nova é dívida criada de graça");
     }
@@ -386,6 +404,42 @@ public class CobrancaTenantIsolationTests
         cobrancas.Sum(c => c.VlCobrado).Should().Be(0.70m,
             "dez parcelas de sete centavos são exatamente setenta centavos em decimal; " +
             "em double a mesma soma dá 0.7000000000000001");
+    }
+
+    [Fact]
+    public void DtCobranca_NasceComDataUtil_NuncaComAnoUm()
+    {
+        // Arrange
+        // F2 (fix wave pós-G2). O modo de falha que este teste tranca: DateTime é
+        // struct, então uma FD-10 que esqueça de setar DT_COBRANCA não grava NULO —
+        // grava 0001-01-01. Esse valor passa pelo NOT NULL do Oracle, não é pego por
+        // nenhuma guarda de null, e desaparece de todo KPI por período da FD-11.
+        // Receita lançada, gravada e invisível — a pior das três combinações.
+        var antes = DateTime.UtcNow.AddSeconds(-5);
+
+        // Act — o objeto é construído SEM ninguém tocar em DtCobranca, de propósito.
+        var cobranca = new Cobranca
+        {
+            IdEventoClinico = 1,
+            IdClinica = 1,
+            VlCobrado = 100.00m
+        };
+
+        // Assert
+        cobranca.DtCobranca.Should().NotBe(default,
+            "sem inicializador, DT_COBRANCA nasceria 0001-01-01 e a cobrança ficaria " +
+            "invisível a todo relatório por período (FD-11)");
+
+        cobranca.DtCobranca.Should().BeOnOrAfter(antes)
+            .And.BeOnOrBefore(DateTime.UtcNow.AddSeconds(5),
+                "a contrapartida do DEFAULT CURRENT_TIMESTAMP da V18 é a data de agora, " +
+                "não uma data arbitrária");
+
+        // Controle positivo do próprio teste: o mesmo campo em uma struct DateTime SEM
+        // inicializador é exatamente `default` — ou seja, a asserção acima mede algo que
+        // teria valor diferente se o inicializador sumisse.
+        default(DateTime).Should().Be(new DateTime(1, 1, 1),
+            "este é o valor que a entidade teria sem o inicializador");
     }
 
     [Fact]

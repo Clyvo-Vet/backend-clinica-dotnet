@@ -68,9 +68,31 @@ public class Cobranca : EntidadeBase
     public string? DsFormaPagamento { get; set; }
 
     /// <summary>
-    /// <c>DT_COBRANCA TIMESTAMP NOT NULL</c> — data do lançamento. Linha com data nula
-    /// seria invisível a todo KPI por período (FD-11): receita lançada que nenhum
-    /// relatório enxerga.
+    /// <c>DT_COBRANCA TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL</c> — data do
+    /// lançamento. Linha com data nula seria invisível a todo KPI por período (FD-11):
+    /// receita lançada que nenhum relatório enxerga.
+    ///
+    /// <para><b>O inicializador é a contrapartida do <c>DEFAULT CURRENT_TIMESTAMP</c> da
+    /// V18, e existe por um modo de falha específico</b> (achado F2 da revisão G2):
+    /// <c>DateTime</c> é struct, então "esquecer de setar" não produz nulo — produz
+    /// <c>0001-01-01</c>. Esse valor <b>não é nulo</b>, então nenhuma guarda de null o
+    /// pega; ele passa pelo <c>NOT NULL</c> do Oracle sem reclamar e some de todo KPI
+    /// por período da FD-11, que filtra por intervalo de datas. Receita lançada,
+    /// gravada, e invisível.</para>
+    ///
+    /// <para><b>Por que inicializador CLR e não <c>HasDefaultValueSql</c>:</b> é o padrão
+    /// já estabelecido neste repo para exatamente esta forma — <c>DT_CRIACAO</c> também
+    /// tem <c>DEFAULT CURRENT_TIMESTAMP</c> na V18 e <c>EntidadeBase.DtCriacao</c> a
+    /// resolve com <c>= DateTime.UtcNow</c>. E o <c>HasDefaultValueSql</c> seria
+    /// <b>inerte</b> aqui: o EF só delega ao default do banco quando a propriedade está
+    /// no valor CLR default — ou seja, ele só salvaria o caso que este inicializador
+    /// já impede de existir, e <b>só contra Oracle</b> (o InMemory da suíte não aplica
+    /// default nenhum, então o <c>0001-01-01</c> continuaria vivo em teste).</para>
+    ///
+    /// <para>⚠️ <b>Isto reduz o dano, não dispensa a FD-10:</b> o inicializador dá a
+    /// data em que o objeto foi <i>construído</i>. Quem lança uma cobrança com data
+    /// retroativa (fechamento do dia anterior) tem que setá-la explicitamente — o
+    /// default é uma rede, não a regra.</para>
     /// </summary>
-    public DateTime DtCobranca { get; set; }
+    public DateTime DtCobranca { get; set; } = DateTime.UtcNow;
 }
