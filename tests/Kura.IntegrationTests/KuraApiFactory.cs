@@ -1,4 +1,4 @@
-namespace Kura.IntegrationTests;
+﻿namespace Kura.IntegrationTests;
 
 using Kura.Domain.Entities;
 using Kura.Infrastructure.Persistence;
@@ -110,6 +110,17 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     /// guarda em <c>AuthService.ObterVeterinarioVinculadoAsync</c>.</para>
     /// </summary>
     public const string EmailVinculoCruzado = "vinculo-cruzado@kura.test";
+
+    // -- FD-09: tabela de precos semeada nos DOIS tenants -----------------------------
+    // A isca cross-tenant e OBRIGATORIA aqui: os DTOs desta task nao tem IdClinica, entao
+    // nao existe caminho HTTP que crie um SERVICO_PRECO na clinica alheia. Sem esta linha
+    // semeada, a asserta de IDOR ("id de outra clinica devolve 404") seria logicamente
+    // incapaz de falhar - o 404 viria de a linha nao existir para ninguem, nao do escopo
+    // de tenant. Com ela, remover o predicado de clinica do repositorio devolve 200.
+    public const long IdServicoPrecoOutroTenant = 1;
+    public const long IdServicoPrecoSemeado = 2;
+    public const string NomeServicoPrecoSemeado = "Consulta de rotina (semeada)";
+    public const decimal PrecoServicoPrecoSemeado = 180.50m;
 
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
@@ -369,6 +380,26 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             DsEmail = EmailAmbiguo,
             DsSenhaHash = BCrypt.Net.BCrypt.HashPassword(SenhaClinica),
             TpPerfil = PerfisUsuarioClinica.Gestor,
+            StAtiva = true,
+        });
+
+        // FD-09 - ver as constantes IdServicoPreco*. A linha do OUTRO tenant existe
+        // exclusivamente como isca de IDOR; nenhum teste faz login naquela clinica.
+        db.ServicosPreco.Add(new ServicoPreco
+        {
+            Id = IdServicoPrecoOutroTenant,
+            IdClinica = IdClinicaOutroTenant,
+            NmServico = "Consulta do Outro Tenant",
+            VlPreco = 999.99m,
+            StAtiva = true,
+        });
+
+        db.ServicosPreco.Add(new ServicoPreco
+        {
+            Id = IdServicoPrecoSemeado,
+            IdClinica = IdClinicaSemeada,
+            NmServico = NomeServicoPrecoSemeado,
+            VlPreco = PrecoServicoPrecoSemeado,
             StAtiva = true,
         });
 
