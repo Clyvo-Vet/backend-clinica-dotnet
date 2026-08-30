@@ -1,4 +1,4 @@
-namespace Kura.Api.Extensions;
+﻿namespace Kura.Api.Extensions;
 
 using FluentValidation;
 using Kura.Api.Services;
@@ -45,6 +45,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         // FD-04: CRUD de USUARIO_CLINICA, protegido pela politica SomenteGestor.
         services.AddScoped<IUsuarioClinicaService, UsuarioClinicaService>();
+        // FD-09: CRUD de SERVICO_PRECO, protegido pela mesma politica SomenteGestor.
+        services.AddScoped<IServicoPrecoService, ServicoPrecoService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAgendaService, AgendaService>();
         services.AddScoped<ILunaService, LunaService>();
@@ -81,6 +83,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IClinicaRepository, ClinicaRepository>();
         services.AddScoped<IVeterinarioRepository, VeterinarioRepository>();
         services.AddScoped<IUsuarioClinicaRepository, UsuarioClinicaRepository>();
+        services.AddScoped<IServicoPrecoRepository, ServicoPrecoRepository>();
         services.AddScoped<ITutorRepository, TutorRepository>();
         services.AddScoped<IPetRepository, PetRepository>();
         services.AddScoped<ITutorPetRepository, TutorPetRepository>();
