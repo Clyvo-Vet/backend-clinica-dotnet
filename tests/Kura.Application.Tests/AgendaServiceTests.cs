@@ -1,4 +1,4 @@
-﻿namespace Kura.Application.Tests;
+namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Moq;

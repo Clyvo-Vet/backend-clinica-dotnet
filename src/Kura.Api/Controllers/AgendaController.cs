@@ -1,4 +1,4 @@
-﻿namespace Kura.Api.Controllers;
+namespace Kura.Api.Controllers;
 
 using Kura.Application.DTOs.Agenda;
 using Kura.Application.Services.Interfaces;

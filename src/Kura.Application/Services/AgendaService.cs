@@ -51,6 +51,36 @@ public sealed class AgendaService : IAgendaService
     /// </list>
     ///
     /// <para>
+    /// 🔴 <b>ARMADILHA ARMADA PARA QUEM CRIAR O FLUXO DE LEAD — leia antes de usar
+    /// <c>INTENCAO</c>.</b> Hoje <b>nenhuma linha pode estar em <c>INTENCAO</c></b>, e isso foi
+    /// medido, não presumido: o backend Java grava apenas <c>AGENDADO</c> (em <c>criar()</c>),
+    /// <c>CANCELADO</c> e <c>CONFIRMADO</c>; o <c>.NET</c> tem um único caminho de escrita (este),
+    /// e o validator recusa <c>INTENCAO</c> com <b>400</b>; e o DDL nasce
+    /// <c>DEFAULT 'AGENDADO'</c>. A linha <c>INTENCAO → CANCELADO</c> acima é, portanto, defesa em
+    /// profundidade — não caminho vivo.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>O que morde:</b> não existe aresta <c>INTENCAO → AGENDADO</c> em <b>nenhum</b> dos dois
+    /// backends. Quem criar o fluxo de lead (Luna gerando intenção de agendamento, por exemplo)
+    /// vai conseguir <b>gravar</b> <c>INTENCAO</c> pelo Java e depois descobrir que o lead só sabe
+    /// morrer: daqui ele vai para <c>CANCELADO</c> e nada mais. <b>Promover lead a agendamento é
+    /// uma decisão de produto que ninguém tomou ainda</b> — ela precisa de dono (qual backend
+    /// escreve?) antes de virar aresta. Não acrescente <c>AGENDADO</c> aos destinos do validator
+    /// só para destravar: o validator recusar estados de partida é deliberado (ver
+    /// <c>AtualizarStatusAgendamentoValidator</c>).
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>Segunda lacuna conhecida e NÃO fechada aqui: não há guarda de data ao marcar falta.</b>
+    /// Um agendamento marcado como <c>NAO_COMPARECEU</c> antes da hora marcada é aceito por esta
+    /// máquina — «faltou» é sobre um compromisso que já passou, mas nada compara
+    /// <c>DtAgendamento</c> com o relógio. Fechar isso exige uma ruling (tolerância? o horário do
+    /// servidor ou o da clínica?) e mexe em fuso, que já mordeu este projeto; ficou fora do escopo
+    /// da FD-06 de propósito, e está registrado no relatório da task.
+    /// </para>
+    ///
+    /// <para>
     /// ⚠️ <b>Estado de origem desconhecido (ou nulo) é recusado, não ignorado.</b> A coluna é
     /// <c>NOT NULL DEFAULT 'AGENDADO'</c> com <c>CHECK</c> nos seis valores, então uma origem
     /// fora deste mapa é sinal de que o mapa envelheceu — e nesse caso a resposta certa é parar,
