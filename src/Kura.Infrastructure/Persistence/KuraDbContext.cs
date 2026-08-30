@@ -37,6 +37,8 @@ public class KuraDbContext : DbContext
     public DbSet<TriagemLuna> TriagensLuna => Set<TriagemLuna>();
     public DbSet<InteracaoCanal> InteracoesCanal => Set<InteracaoCanal>();
     public DbSet<UsuarioClinica> UsuariosClinica => Set<UsuarioClinica>();
+    public DbSet<ServicoPreco> ServicosPreco => Set<ServicoPreco>();
+    public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
     public DbSet<Agendamento> Agendamentos => Set<Agendamento>();
     public DbSet<ContaTutor> ContasTutor => Set<ContaTutor>();
     public DbSet<Consentimento> Consentimentos => Set<Consentimento>();
@@ -194,6 +196,33 @@ public class KuraDbContext : DbContext
         // explicitamente no LINQ; este filtro não vai fazer isso por ela.
         // Comportamento provado em UsuarioClinicaTenantIsolationTests.
         modelBuilder.Entity<UsuarioClinica>()
+            .HasQueryFilter(e => e.StAtiva &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        // FD-08 (ciclo FIN): as 2 entidades financeiras da V18__financeiro.sql (repo
+        // Java). Ambas declaram ID_CLINICA NOT NULL, então o predicado é a forma
+        // simples das anteriores, sem a guarda de null que InteracaoCanal precisa.
+        // TenantFilterCoverageTests quebra se uma delas ficar de fora, e a allowlist
+        // de compensação manual continua fechada em {"Agendamento"} — nada foi
+        // acrescentado a ela.
+        //
+        // Para COBRANCA o filtro não é defesa em profundidade, é a defesa principal:
+        // ID_CLINICA é denormalizado do evento de propósito (comentário da coluna na
+        // V18) justamente para que este predicado exista e para que os KPI da FD-11
+        // agrupem sem join. Uma consulta de receita que escapasse daqui somaria
+        // dinheiro de outra clínica.
+        //
+        // Como nas demais: estes são os ÚNICOS lugares onde o filtro destas entidades
+        // vive — ServicoPrecoConfiguration e CobrancaConfiguration deliberadamente NÃO
+        // declaram HasQueryFilter (dois filtros anônimos se substituem em silêncio;
+        // guardas em *TenantIsolationTests.Configuracao_NaoDeclaraQueryFilterProprio).
+        modelBuilder.Entity<ServicoPreco>()
+            .HasQueryFilter(e => e.StAtiva &&
+                (_clinicaContext.IdClinicaFiltro == null ||
+                 e.IdClinica == _clinicaContext.IdClinicaFiltro));
+
+        modelBuilder.Entity<Cobranca>()
             .HasQueryFilter(e => e.StAtiva &&
                 (_clinicaContext.IdClinicaFiltro == null ||
                  e.IdClinica == _clinicaContext.IdClinicaFiltro));
