@@ -1,4 +1,4 @@
-namespace Kura.Api.Controllers;
+﻿namespace Kura.Api.Controllers;
 
 using Kura.Application.DTOs.Agenda;
 using Kura.Application.Services.Interfaces;
@@ -40,13 +40,13 @@ public class AgendaController(IAgendaService agendaService) : ControllerBase
     /// O cliente deve enviar o NrVersion obtido na última leitura para evitar sobrescrita silenciosa.
     /// </summary>
     /// <param name="id">Identificador do agendamento.</param>
-    /// <param name="dto">Novo status (REALIZADO | CANCELADO), NrVersion atual e observação opcional.</param>
+    /// <param name="dto">Novo status (REALIZADO | CANCELADO | NAO_COMPARECEU | CONFIRMADO), NrVersion atual e observação opcional.</param>
     /// <returns>Agendamento com status e NrVersion atualizados.</returns>
     /// <response code="200">Status atualizado com sucesso.</response>
     /// <response code="400">Dados inválidos (status ou versão).</response>
     /// <response code="404">Agendamento não encontrado.</response>
     /// <response code="409">Conflito de concorrência — outro processo atualizou o agendamento. Atualize e tente novamente.</response>
-    /// <response code="422">Agendamento já está em estado final (REALIZADO ou CANCELADO).</response>
+    /// <response code="422">Agendamento já está em estado final (REALIZADO, CANCELADO ou NAO_COMPARECEU) ou a transição de status pedida não é permitida a partir do status atual — ver a máquina de estados em <c>AgendaService.TransicoesPermitidas</c>.</response>
     [HttpPatch("~/api/v1/agendamentos/{id:long}/status")]
     [ProducesResponseType(typeof(AgendamentoItemDto), 200)]
     [ProducesResponseType(typeof(ProblemDetails), 400)]

@@ -13,7 +13,80 @@ public sealed class AgendaService : IAgendaService
     private readonly IClinicaContext _clinicaContext;
     private readonly IUnitOfWork _uow;
 
-    private static readonly HashSet<string> StatusFinais = ["REALIZADO", "CANCELADO"];
+    /// <summary>
+    /// FD-06 — <b>máquina de estados de <c>AGENDAMENTO.ST_STATUS</c> do lado <c>.NET</c>.</b>
+    /// Chave = status atual da linha; valor = destinos alcançáveis a partir dele.
+    ///
+    /// <para>
+    /// 🔴 <b>Por que a lista de destinos do validator NÃO basta.</b> O validator só enxerga o
+    /// corpo da requisição; ele não sabe de onde o agendamento está saindo. Sem esta tabela,
+    /// <c>StatusFinais</c> seria a única regra e <c>INTENCAO → REALIZADO</c> passaria com 200 —
+    /// um atendimento faturável nascido de um lead que nunca virou agendamento. A trilha
+    /// financeira deste mesmo ciclo (FD-10/FD-11) fatura exatamente sobre esse dado.
+    /// </para>
+    ///
+    /// <para><b>As decisões, uma a uma:</b></para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     <c>CONFIRMADO</c> só a partir de <c>AGENDADO</c> — cópia literal da guarda do outro
+    ///     dono da tabela compartilhada (<c>Agendamento.java</c>, <c>confirmar()</c> exige
+    ///     status <b>exatamente</b> <c>AGENDADO</c>). Divergir aqui faria o mesmo gesto ser
+    ///     aceito por um backend e recusado pelo outro.
+    ///   </description></item>
+    ///   <item><description>
+    ///     <c>NAO_COMPARECEU</c> a partir de <c>AGENDADO</c> ou <c>CONFIRMADO</c> — «faltou» só
+    ///     tem sentido para quem tinha hora marcada. A partir de <c>INTENCAO</c> não: um lead
+    ///     que nunca virou compromisso não pode faltar a ele, e aceitar isso encheria de faltas
+    ///     falsas a base sobre a qual uma política de no-show seria construída.
+    ///   </description></item>
+    ///   <item><description>
+    ///     <c>REALIZADO</c> a partir de <c>AGENDADO</c> ou <c>CONFIRMADO</c> — mesmo argumento,
+    ///     e é o par que fecha <c>INTENCAO → REALIZADO</c>.
+    ///   </description></item>
+    ///   <item><description>
+    ///     <c>CANCELADO</c> a partir de <c>INTENCAO</c>, <c>AGENDADO</c> ou <c>CONFIRMADO</c> —
+    ///     exatamente as três origens que o <c>cancelar()</c> do Java aceita depois da FD-06.
+    ///     Cancelar um lead é legítimo: é como ele morre.
+    ///   </description></item>
+    /// </list>
+    ///
+    /// <para>
+    /// ⚠️ <b>Estado de origem desconhecido (ou nulo) é recusado, não ignorado.</b> A coluna é
+    /// <c>NOT NULL DEFAULT 'AGENDADO'</c> com <c>CHECK</c> nos seis valores, então uma origem
+    /// fora deste mapa é sinal de que o mapa envelheceu — e nesse caso a resposta certa é parar,
+    /// não escolher um caminho.
+    /// </para>
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string[]> TransicoesPermitidas =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["INTENCAO"] = ["CANCELADO"],
+            ["AGENDADO"] = ["CONFIRMADO", "REALIZADO", "CANCELADO", "NAO_COMPARECEU"],
+            ["CONFIRMADO"] = ["REALIZADO", "CANCELADO", "NAO_COMPARECEU"],
+            ["REALIZADO"] = [],
+            ["CANCELADO"] = [],
+            ["NAO_COMPARECEU"] = [],
+        };
+
+    /// <summary>
+    /// Estados terminais — <b>derivados</b> do mapa acima (origem sem nenhum destino), nunca
+    /// mantidos à mão.
+    ///
+    /// <para>
+    /// 🔴 <b>É a regra de ouro v7 do projeto aplicada ao caso que a FD-06 criou.</b> Até esta
+    /// task esta lista era <c>["REALIZADO", "CANCELADO"]</c> escrita literalmente, e estava
+    /// certa por acidente: o validator tornava <c>NAO_COMPARECEU</c> <b>inalcançável</b>, então
+    /// ninguém precisou lembrar dele aqui. Afrouxar o validator sem tocar nesta linha deixaria
+    /// um agendamento marcado como falta virar <c>REALIZADO</c> depois — dado falso com cara de
+    /// dado certo. Derivando, acrescentar um estado terminal ao mapa é suficiente: não há
+    /// segunda lista para esquecer.
+    /// </para>
+    /// </summary>
+    private static readonly IReadOnlySet<string> StatusFinais =
+        TransicoesPermitidas
+            .Where(par => par.Value.Length == 0)
+            .Select(par => par.Key)
+            .ToHashSet(StringComparer.Ordinal);
 
     public AgendaService(
         IAgendamentoReadRepository readRepository,
@@ -64,6 +137,19 @@ public sealed class AgendaService : IAgendaService
         if (agendamento.StStatus is not null && StatusFinais.Contains(agendamento.StStatus))
             throw new RegraDeNegocioException(
                 $"Agendamento {id} já está em estado final ({agendamento.StStatus}) e não pode ser alterado.");
+
+        // FD-06 — a origem manda tanto quanto o destino. Ver TransicoesPermitidas.
+        if (agendamento.StStatus is null
+            || !TransicoesPermitidas.TryGetValue(agendamento.StStatus, out var destinosPermitidos))
+            throw new RegraDeNegocioException(
+                $"Agendamento {id} está com status atual não reconhecido "
+                + $"('{agendamento.StStatus ?? "null"}') e não pode ter o status alterado.");
+
+        if (!destinosPermitidos.Contains(dto.DsStatus, StringComparer.Ordinal))
+            throw new RegraDeNegocioException(
+                $"Transição de status inválida para o agendamento {id}: "
+                + $"{agendamento.StStatus} -> {dto.DsStatus}. A partir de {agendamento.StStatus} "
+                + $"só é possível ir para: {string.Join(", ", destinosPermitidos)}.");
 
         if (dto.NrVersion != agendamento.NrVersion)
             throw new ConflitoConcorrenciaException("Agendamento", id);

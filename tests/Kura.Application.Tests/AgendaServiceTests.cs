@@ -1,4 +1,4 @@
-namespace Kura.Application.Tests;
+﻿namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Moq;
@@ -207,5 +207,140 @@ public class AgendaServiceTests
 
         // Assert
         await act.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+    }
+
+    // ---------- FD-06: máquina de estados ----------
+
+    /// <summary>
+    /// Toda transição que a FD-06 declara legítima. O par <c>AGENDADO → CONFIRMADO</c> é o que
+    /// copia a guarda do Java (<c>confirmar()</c> exige status exatamente <c>AGENDADO</c>).
+    /// </summary>
+    [Theory]
+    [InlineData("INTENCAO", "CANCELADO")]
+    [InlineData("AGENDADO", "CONFIRMADO")]
+    [InlineData("AGENDADO", "REALIZADO")]
+    [InlineData("AGENDADO", "CANCELADO")]
+    [InlineData("AGENDADO", "NAO_COMPARECEU")]
+    [InlineData("CONFIRMADO", "REALIZADO")]
+    [InlineData("CONFIRMADO", "CANCELADO")]
+    [InlineData("CONFIRMADO", "NAO_COMPARECEU")]
+    public async Task AtualizarStatusAsync_TransicaoPermitida_Persiste(string origem, string destino)
+    {
+        // Arrange
+        var agendamento = AgendamentoAtivo(stStatus: origem, version: 2);
+        _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
+
+        var dto = new AtualizarStatusAgendamentoDto { DsStatus = destino, NrVersion = 2 };
+
+        // Act
+        var result = await _sut.AtualizarStatusAsync(10L, dto);
+
+        // Assert
+        result.DsStatus.Should().Be(destino);
+        agendamento.StStatus.Should().Be(destino);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    /// <summary>
+    /// 🔴 As recusas que só existem por causa desta task. <c>INTENCAO → REALIZADO</c> e
+    /// <c>INTENCAO → NAO_COMPARECEU</c> passariam se <c>StatusFinais</c> fosse a única regra;
+    /// <c>CONFIRMADO → CONFIRMADO</c> e <c>REALIZADO → ...</c> mostram os dois motivos
+    /// diferentes de recusa (origem errada e origem terminal).
+    /// </summary>
+    [Theory]
+    [InlineData("INTENCAO", "REALIZADO")]
+    [InlineData("INTENCAO", "NAO_COMPARECEU")]
+    [InlineData("INTENCAO", "CONFIRMADO")]
+    [InlineData("CONFIRMADO", "CONFIRMADO")]
+    [InlineData("REALIZADO", "CANCELADO")]
+    [InlineData("CANCELADO", "REALIZADO")]
+    [InlineData("NAO_COMPARECEU", "REALIZADO")]
+    [InlineData("NAO_COMPARECEU", "CANCELADO")]
+    public async Task AtualizarStatusAsync_TransicaoRecusada_NaoCommitaENaoMutaAEntidade(
+        string origem, string destino)
+    {
+        // Arrange
+        var agendamento = AgendamentoAtivo(stStatus: origem, version: 2);
+        _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
+
+        var dto = new AtualizarStatusAgendamentoDto { DsStatus = destino, NrVersion = 2 };
+
+        // Act
+        var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
+
+        // Assert
+        await act.Should().ThrowAsync<RegraDeNegocioException>();
+        agendamento.StStatus.Should().Be(origem, "uma transição recusada não pode deixar rastro");
+        agendamento.NrVersion.Should().Be(2);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
+    }
+
+    /// <summary>
+    /// 🔴 <b>O risco central da FD-06.</b> Marcar falta e depois «corrigir» para realizado
+    /// apagaria o registro da ausência — e é sobre esse dado que a trilha financeira do ciclo
+    /// FIN fatura. Este caso é o que obriga <c>NAO_COMPARECEU</c> a ser terminal.
+    /// </summary>
+    [Fact]
+    public async Task AtualizarStatusAsync_NaoCompareceuEhTerminal_MensagemDizEstadoFinal()
+    {
+        // Arrange
+        var agendamento = AgendamentoAtivo(stStatus: "NAO_COMPARECEU", version: 1);
+        _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
+
+        var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 1 };
+
+        // Act
+        var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
+
+        // Assert
+        var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
+        ex.Which.Message.Should().Contain("estado final")
+          .And.Contain("NAO_COMPARECEU");
+    }
+
+    /// <summary>
+    /// A transição é conferida ANTES do <c>NrVersion</c>: um pedido impossível é impossível
+    /// independentemente de o cliente estar com a versão em dia. Documenta a ordem das guardas
+    /// para que trocá-la quebre um teste em vez de mudar silenciosamente qual erro o app recebe.
+    /// </summary>
+    [Fact]
+    public async Task AtualizarStatusAsync_TransicaoInvalidaEVersaoStale_PrecedeOConflito()
+    {
+        // Arrange
+        var agendamento = AgendamentoAtivo(stStatus: "INTENCAO", version: 9);
+        _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
+
+        var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 1 };
+
+        // Act
+        var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
+
+        // Assert
+        await act.Should().ThrowAsync<RegraDeNegocioException>();
+    }
+
+    /// <summary>
+    /// Status de origem fora do <c>CHECK</c> do Oracle (linha corrompida ou mapa envelhecido):
+    /// falha fechado. Antes da FD-06 esse caso caía direto na escrita.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("FATURADO")]
+    public async Task AtualizarStatusAsync_OrigemDesconhecida_FalhaFechado(string? origem)
+    {
+        // Arrange
+        var agendamento = AgendamentoAtivo(stStatus: origem!, version: 2);
+        _agendamentoRepoMock.Setup(r => r.GetByIdAsync(10L, 1L)).ReturnsAsync(agendamento);
+
+        var dto = new AtualizarStatusAgendamentoDto { DsStatus = "REALIZADO", NrVersion = 2 };
+
+        // Act
+        var act = async () => await _sut.AtualizarStatusAsync(10L, dto);
+
+        // Assert
+        var ex = await act.Should().ThrowAsync<RegraDeNegocioException>();
+        ex.Which.Message.Should().Contain("não reconhecido");
+        _uowMock.Verify(u => u.CommitAsync(), Times.Never);
     }
 }
