@@ -272,9 +272,13 @@ public class ServicoPrecoTenantIsolationTests
             "escala 2 é o que guarda os CENTAVOS. Com escala 0 o banco arredonda em " +
             "silêncio (999.99 → 1000, medido na FD-07) — nenhuma exceção, nenhum log");
 
-        vlPreco.GetColumnType().Should().Be("NUMBER(10,2)",
-            "o tipo de coluna declarado tem que ser literalmente o da V18; divergência " +
-            "EF↔Flyway numa tabela nova é dívida criada de graça");
+        // GetColumnType() NÃO pode ser usado aqui: sob o provider InMemory ele
+        // lança InvalidCastException (InMemoryTypeMapping não é RelationalTypeMapping) —
+        // medido nesta task, na primeira execução. A anotação crua guarda exatamente o
+        // que HasColumnType declarou, e é legível em qualquer provider.
+        vlPreco.FindAnnotation("Relational:ColumnType")?.Value.Should().Be("NUMBER(10,2)",
+            "o tipo de coluna declarado tem que ser literalmente o da V18 (VL_PRECO " +
+            "NUMBER(10,2)); divergência EF↔Flyway numa tabela nova é dívida criada de graça");
     }
 
     [Fact]
