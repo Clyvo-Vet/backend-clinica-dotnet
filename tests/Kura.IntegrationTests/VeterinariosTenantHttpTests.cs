@@ -143,6 +143,42 @@ public class VeterinariosTenantHttpTests : IClassFixture<KuraApiFactory>
     }
 
     /// <summary>
+    /// <b>Assimetria que a FD-05 deixa registrada, e ela é de LEITURA.</b> A escrita não aceita
+    /// mais clínica vinda do cliente; <c>GET /api/v1/veterinarios?clinicaId=…</c> ainda aceita —
+    /// <c>VeterinarioService.GetByClinicaAsync</c> repassa o valor da query string ao
+    /// repositório. O que impede o vazamento é o query filter de tenant, que compõe com o
+    /// <c>Where</c> do repositório e esvazia o resultado. <b>Medido aqui, não deduzido</b>,
+    /// justamente porque a proteção é ambiente: se alguém remover o filtro, este teste vira
+    /// vermelho em vez de o vazamento voltar em silêncio.
+    /// </summary>
+    [Fact]
+    public async Task Listar_veterinarios_filtrando_por_outra_clinica_devolve_lista_vazia()
+    {
+        // Arrange
+        var client = await ClienteDaClinicaSemeadaAsync();
+
+        // Act
+        var alheia = await client.GetAsync(
+            $"/api/v1/veterinarios?clinicaId={KuraApiFactory.IdClinicaOutroTenant}");
+
+        // Controle positivo: MESMA rota, MESMO parâmetro, clínica PRÓPRIA. Sem ele, uma lista
+        // vazia por rota errada ou parâmetro ignorado passaria por "isolamento funcionando".
+        var propria = await client.GetAsync(
+            $"/api/v1/veterinarios?clinicaId={KuraApiFactory.IdClinicaSemeada}");
+
+        // Assert
+        alheia.StatusCode.Should().Be(HttpStatusCode.OK);
+        var listaAlheia = await alheia.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
+        listaAlheia.Should().BeEmpty(
+            "o filtro de tenant esvazia a consulta por clínica alheia");
+
+        propria.StatusCode.Should().Be(HttpStatusCode.OK);
+        var listaPropria = await propria.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
+        listaPropria.Should().NotBeEmpty(
+            "controle positivo: o mesmo filtro na própria clínica precisa devolver linhas");
+    }
+
+    /// <summary>
     /// <b>SoftDeleteAsync — mesma medição do <c>UpdateAsync</c>.</b> O controle positivo
     /// apaga um veterinário <b>criado por este próprio teste</b>, e não o semeado: desativar o
     /// semeado deixaria o host desta classe num estado que nenhum outro teste dela espera.

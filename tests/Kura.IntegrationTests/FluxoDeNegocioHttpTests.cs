@@ -101,7 +101,8 @@ public class FluxoDeNegocioHttpTests
         // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/veterinarios", new
         {
-            idClinica = KuraApiFactory.IdClinicaSemeada,
+            // FD-05: o corpo NAO carrega mais idClinica - a clinica sai do JWT. Ver
+            // VeterinarioCreateDto e VeterinariosTenantHttpTests.
             nmVeterinario = "Dr. Criado por Integração",
             nrCrmv = "SP-12345",
             dsEmail = "criado@kura.test",
@@ -133,7 +134,6 @@ public class FluxoDeNegocioHttpTests
         // Act
         var resposta = await client.PostAsJsonAsync("/api/v1/veterinarios", new
         {
-            idClinica = KuraApiFactory.IdClinicaSemeada,
             nmVeterinario = "",   // NotEmpty no VeterinarioCreateValidator
             nrCrmv = "",          // NotEmpty
             dsEmail = "",         // NotEmpty
