@@ -39,11 +39,22 @@ using Kura.Domain.Interfaces;
 /// </para>
 ///
 /// <para>
-/// ⚠️ <c>GetByClinicaAsync</c> ainda recebe a clínica por <b>query string</b>
-/// (<c>GET /api/v1/veterinarios?clinicaId=…</c>). É leitura, e o query filter a esvazia para
-/// clínica alheia — medido, não deduzido, em
-/// <c>Listar_veterinarios_filtrando_por_outra_clinica_devolve_lista_vazia</c>. Fica registrado
-/// como assimetria: a escrita não aceita mais clínica do cliente, a leitura ainda aceita.
+/// ⚠️ <b>Correção do relatório original desta task (fix wave pós-G2):</b> o "falha ABERTO"
+/// acima vale para <c>Update</c>/<c>SoftDelete</c>/<c>GetById</c>/<c>GetAll</c>, e <b>NÃO</b>
+/// para <c>CreateAsync</c>. São duas propriedades diferentes do mesmo contexto: sem a claim,
+/// <c>IdClinicaFiltro</c> (<c>TryGetClaimValue</c>) devolve <c>null</c> e o filtro <b>desliga</b>,
+/// mas <c>IdClinica</c> (<c>GetRequiredClaimValue</c>) <b>LANÇA</b> — então criar veterinário sem
+/// tenant é <c>401</c> e não grava nada, ou seja, <b>falha FECHADO</b>. As duas metades estão
+/// travadas em <c>VeterinariosSemClinicaNoTokenHttpTests</c>.
+/// </para>
+///
+/// <para>
+/// 🟢 <b>R-2 (fix wave pós-G2): a assimetria de leitura ACABOU.</b> <c>GetByClinicaAsync</c> —
+/// que recebia a clínica por query string em <c>GET /api/v1/veterinarios?clinicaId=…</c> — foi
+/// <b>removido</b> deste service e da interface, junto do parâmetro no controller. O argumento
+/// está em <c>VeterinariosController.GetAll</c>. A leitura por clínica que sobrou no
+/// repositório (<c>GetAllByClinicaIdAsync</c>) continua existindo porque <c>ClinicaService</c> a
+/// usa em 3 pontos com id derivado do próprio agregado, não de entrada do cliente.
 /// </para>
 /// </summary>
 public sealed class VeterinarioService : IVeterinarioService
@@ -73,12 +84,6 @@ public sealed class VeterinarioService : IVeterinarioService
         var veterinario = await _repository.GetByIdAsync(id)
             ?? throw new EntidadeNaoEncontradaException("Veterinario", id);
         return ToResponse(veterinario);
-    }
-
-    public async Task<IEnumerable<VeterinarioResponseDto>> GetByClinicaAsync(long idClinica)
-    {
-        var veterinarios = await _repository.GetAllByClinicaIdAsync(idClinica);
-        return veterinarios.Select(ToResponse);
     }
 
     public async Task<VeterinarioResponseDto> CreateAsync(VeterinarioCreateDto dto)

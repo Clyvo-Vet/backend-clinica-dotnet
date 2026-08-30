@@ -18,18 +18,32 @@ public class VeterinariosController : ControllerBase
     public VeterinariosController(IVeterinarioService service) => _service = service;
 
     /// <summary>
-    /// Lista todos os veterinários, com filtro opcional por clínica.
+    /// Lista os veterinários da clínica autenticada.
     /// </summary>
-    /// <param name="clinicaId">Filtro por ID da clínica (opcional).</param>
-    /// <returns>Lista de veterinários.</returns>
+    ///
+    /// <remarks>
+    /// 🔴 <b>FD-05 (fix wave pós-G2, R-2): o parâmetro de query <c>clinicaId</c> foi
+    /// REMOVIDO.</b> Ele <b>parecia</b> escopar por clínica e não escopava nada: o query filter
+    /// de tenant já restringe a consulta ao <c>clinicaId</c> do JWT, então o parâmetro só
+    /// conseguia produzir dois resultados — a <b>própria</b> lista (quando o valor coincidia com
+    /// o token) ou uma lista <b>vazia</b> (qualquer outro valor). Superfície que anuncia um poder
+    /// que não tem é a mesma família de "UI para dado sem produtor" — e, num endpoint
+    /// multi-tenant, ela convida exatamente a tentativa que a FD-05 fechou na escrita.
+    ///
+    /// <para>⚠️ <b>Compatível para trás:</b> cliente que ainda mande <c>?clinicaId=</c> não
+    /// recebe erro — o ASP.NET ignora parâmetro de query não vinculado, do mesmo jeito que o
+    /// <c>System.Text.Json</c> ignora o <c>idClinica</c> que sumiu do corpo do <c>POST</c>. Para
+    /// quem mandava a própria clínica o efeito é idêntico; para quem mandava outra, a resposta
+    /// deixa de ser uma lista vazia enganosa e passa a ser a lista correta do próprio tenant.</para>
+    /// </remarks>
+    ///
+    /// <returns>Lista de veterinários da clínica do token.</returns>
     /// <response code="200">Lista retornada com sucesso.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<VeterinarioResponseDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] long? clinicaId)
+    public async Task<IActionResult> GetAll()
     {
-        var result = clinicaId.HasValue
-            ? await _service.GetByClinicaAsync(clinicaId.Value)
-            : await _service.GetAllAsync();
+        var result = await _service.GetAllAsync();
         return Ok(result);
     }
 

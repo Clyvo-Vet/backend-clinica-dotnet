@@ -143,39 +143,52 @@ public class VeterinariosTenantHttpTests : IClassFixture<KuraApiFactory>
     }
 
     /// <summary>
-    /// <b>Assimetria que a FD-05 deixa registrada, e ela é de LEITURA.</b> A escrita não aceita
-    /// mais clínica vinda do cliente; <c>GET /api/v1/veterinarios?clinicaId=…</c> ainda aceita —
-    /// <c>VeterinarioService.GetByClinicaAsync</c> repassa o valor da query string ao
-    /// repositório. O que impede o vazamento é o query filter de tenant, que compõe com o
-    /// <c>Where</c> do repositório e esvazia o resultado. <b>Medido aqui, não deduzido</b>,
-    /// justamente porque a proteção é ambiente: se alguém remover o filtro, este teste vira
-    /// vermelho em vez de o vazamento voltar em silêncio.
+    /// 🟢 <b>R-2 da fix wave pós-G2: o parâmetro <c>?clinicaId=</c> foi REMOVIDO da listagem</b>
+    /// — o argumento está em <c>VeterinariosController.GetAll</c>. Este teste era, antes,
+    /// <c>Listar_veterinarios_filtrando_por_outra_clinica_devolve_lista_vazia</c>, e provava a
+    /// assimetria que a remoção acabou de eliminar: a escrita não aceitava mais clínica do
+    /// cliente, a leitura ainda aceitava.
+    ///
+    /// <para>Na forma nova ele prova <b>duas</b> coisas de uma vez: que mandar o parâmetro não
+    /// causa erro (compatibilidade para trás — o ASP.NET ignora query não vinculada) e que ele
+    /// não tem <b>efeito</b>, porque a resposta continua sendo a lista do tenant do token, sem o
+    /// veterinário da outra clínica. A asserção de <c>NotContain</c> é a que morde: ela quebra
+    /// se o query filter de tenant for removido.</para>
     /// </summary>
     [Fact]
-    public async Task Listar_veterinarios_filtrando_por_outra_clinica_devolve_lista_vazia()
+    public async Task Listar_com_clinicaId_de_outro_tenant_na_query_ignora_o_parametro()
     {
         // Arrange
         var client = await ClienteDaClinicaSemeadaAsync();
 
-        // Act
-        var alheia = await client.GetAsync(
+        // Act — o parâmetro que deixou de existir, mandado assim mesmo.
+        var comParametro = await client.GetAsync(
             $"/api/v1/veterinarios?clinicaId={KuraApiFactory.IdClinicaOutroTenant}");
 
-        // Controle positivo: MESMA rota, MESMO parâmetro, clínica PRÓPRIA. Sem ele, uma lista
-        // vazia por rota errada ou parâmetro ignorado passaria por "isolamento funcionando".
-        var propria = await client.GetAsync(
-            $"/api/v1/veterinarios?clinicaId={KuraApiFactory.IdClinicaSemeada}");
+        // Controle: a MESMA rota sem parâmetro nenhum. As duas respostas têm de descrever o
+        // mesmo conjunto — é isso que "o parâmetro não tem efeito" significa.
+        var semParametro = await client.GetAsync("/api/v1/veterinarios");
 
         // Assert
-        alheia.StatusCode.Should().Be(HttpStatusCode.OK);
-        var listaAlheia = await alheia.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
-        listaAlheia.Should().BeEmpty(
-            "o filtro de tenant esvazia a consulta por clínica alheia");
+        comParametro.StatusCode.Should().Be(
+            HttpStatusCode.OK,
+            "query string não vinculada é ignorada pelo ASP.NET, não recusada");
+        semParametro.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        propria.StatusCode.Should().Be(HttpStatusCode.OK);
-        var listaPropria = await propria.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
-        listaPropria.Should().NotBeEmpty(
-            "controle positivo: o mesmo filtro na própria clínica precisa devolver linhas");
+        var comLista = await comParametro.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
+        var semLista = await semParametro.Content.ReadFromJsonAsync<List<VeterinarioResponseDto>>();
+
+        comLista.Should().NotBeNull();
+        comLista!.Should().NotBeEmpty(
+            "antes do R-2 este mesmo pedido devolvia lista VAZIA — o parâmetro parecia escopar");
+        comLista.Should().OnlyContain(v => v.IdClinica == KuraApiFactory.IdClinicaSemeada);
+        comLista.Should().NotContain(
+            v => v.Id == KuraApiFactory.IdVeterinarioOutroTenant,
+            "pedir a outra clínica na query não pode trazer o veterinário dela");
+
+        comLista.Select(v => v.Id).Should().BeEquivalentTo(
+            semLista!.Select(v => v.Id),
+            "o parâmetro removido não pode ter efeito nenhum sobre o resultado");
     }
 
     /// <summary>
