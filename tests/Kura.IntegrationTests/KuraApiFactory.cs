@@ -122,6 +122,16 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     public const string NomeServicoPrecoSemeado = "Consulta de rotina (semeada)";
     public const decimal PrecoServicoPrecoSemeado = 180.50m;
 
+    // -- FD-10: evento clinico semeado nos DOIS tenants ------------------------------
+    // O evento e o recurso da ROTA do lancamento de cobranca
+    // (POST /api/v1/eventos-clinicos/{id}/cobrancas), entao a isca cross-tenant e
+    // OBRIGATORIA aqui pelo mesmo motivo da FD-09: sem um evento REAL na clinica alheia,
+    // a asserta "evento de outra clinica devolve 404" seria logicamente incapaz de falhar
+    // -- o 404 viria de a linha nao existir para ninguem, nao do escopo de tenant. Com
+    // ela, remover a comparacao de clinica de EventoClinicoRepository devolve 201.
+    public const long IdEventoClinicoSemeado = 1;
+    public const long IdEventoClinicoOutroTenant = 2;
+
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
     public const string EmissorJwt = "kura-api";
@@ -400,6 +410,32 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             IdClinica = IdClinicaSemeada,
             NmServico = NomeServicoPrecoSemeado,
             VlPreco = PrecoServicoPrecoSemeado,
+            StAtiva = true,
+        });
+
+        // FD-10 - ver as constantes IdEventoClinico*. O evento do OUTRO tenant existe
+        // exclusivamente como isca de IDOR; nenhum teste faz login naquela clinica.
+        db.EventosClinicos.Add(new EventoClinico
+        {
+            Id = IdEventoClinicoSemeado,
+            IdClinica = IdClinicaSemeada,
+            IdPet = 1,
+            IdVeterinario = IdVeterinarioSemeado,
+            IdTipoEvento = 1,
+            DtEvento = DateTime.UtcNow.AddDays(-1),
+            DsObservacao = "Atendimento semeado para o lancamento de cobranca",
+            StAtiva = true,
+        });
+
+        db.EventosClinicos.Add(new EventoClinico
+        {
+            Id = IdEventoClinicoOutroTenant,
+            IdClinica = IdClinicaOutroTenant,
+            IdPet = 2,
+            IdVeterinario = IdVeterinarioOutroTenant,
+            IdTipoEvento = 1,
+            DtEvento = DateTime.UtcNow.AddDays(-1),
+            DsObservacao = "Atendimento do outro tenant (isca)",
             StAtiva = true,
         });
 
