@@ -132,6 +132,15 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     public const long IdEventoClinicoSemeado = 1;
     public const long IdEventoClinicoOutroTenant = 2;
 
+    // -- F3 da revisao G2 da FD-10: COBRANCA semeada no OUTRO tenant ------------------
+    // 🔴 Faltava, e a lacuna era mensuravel: a mutacao do predicado de tenant em
+    // CobrancaRepository mordia so nas suites unitarias e a suite HTTP ficava VERDE,
+    // porque nao existia nenhuma cobranca alheia para vazar. E a mesma licao da FD-09 --
+    // *a isca do outro tenant precisa EXISTIR, senao o teste e vacuo*. Nenhum teste faz
+    // login na clinica 2; esta linha existe exclusivamente como isca de IDOR.
+    public const long IdCobrancaOutroTenant = 1;
+    public const decimal ValorCobrancaOutroTenant = 777.77m;
+
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
     public const string EmissorJwt = "kura-api";
@@ -436,6 +445,19 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             IdTipoEvento = 1,
             DtEvento = DateTime.UtcNow.AddDays(-1),
             DsObservacao = "Atendimento do outro tenant (isca)",
+            StAtiva = true,
+        });
+
+        // F3 - ver a constante IdCobrancaOutroTenant. Isca de IDOR do lado financeiro.
+        db.Cobrancas.Add(new Cobranca
+        {
+            Id = IdCobrancaOutroTenant,
+            IdEventoClinico = IdEventoClinicoOutroTenant,
+            IdClinica = IdClinicaOutroTenant,
+            IdServicoPreco = IdServicoPrecoOutroTenant,
+            VlCobrado = ValorCobrancaOutroTenant,
+            DsFormaPagamento = "DINHEIRO",
+            DtCobranca = DateTime.UtcNow.AddDays(-1),
             StAtiva = true,
         });
 

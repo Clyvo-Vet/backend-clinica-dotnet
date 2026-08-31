@@ -1,4 +1,4 @@
-namespace Kura.Application.Services;
+﻿namespace Kura.Application.Services;
 
 using Kura.Application.DTOs.Cobranca;
 using Kura.Application.Services.Interfaces;
@@ -140,8 +140,24 @@ public sealed class CobrancaService : ICobrancaService
         return itens.Select(ToResponse);
     }
 
-    public async Task<CobrancaResponseDto> ObterPorIdAsync(long id) =>
-        ToResponse(await _cobrancaRepository.BuscarPorIdNaClinicaAsync(id, _clinicaContext.IdClinica)
+    /// <summary>
+    /// 🔴 <b>F1 da revisão G2: o <c>idEventoClinico</c> da ROTA participa da busca.</b> Antes
+    /// esta leitura filtrava só por id + clínica, e o segmento do meio da rota era aceito com
+    /// qualquer valor — evento de outro tenant e evento inexistente devolviam <c>200</c>.
+    ///
+    /// <para><b>Por que a checagem mora no predicado do repositório, e não numa segunda
+    /// consulta ao evento como faz <see cref="ListarDoEventoAsync"/>.</b> São perguntas
+    /// diferentes: o <c>Listar</c> precisa saber se o EVENTO é seu, porque a resposta natural
+    /// de um evento alheio seria uma lista vazia — indistinguível de "este atendimento não
+    /// teve cobrança", uma afirmação sobre um atendimento que não é seu. Aqui a resposta
+    /// natural já é a linha, e exigir que ela esteja pendurada NAQUELE evento é estritamente
+    /// mais forte do que confirmar que o evento existe: cobre de uma vez o evento alheio, o
+    /// evento inexistente e o par (evento, cobrança) que simplesmente não casa. Uma consulta,
+    /// não duas.</para>
+    /// </summary>
+    public async Task<CobrancaResponseDto> ObterPorIdAsync(long idEventoClinico, long id) =>
+        ToResponse(await _cobrancaRepository.BuscarNoEventoDaClinicaAsync(
+            id, idEventoClinico, _clinicaContext.IdClinica)
             ?? throw new EntidadeNaoEncontradaException("Cobranca", id));
 
     /// <summary>

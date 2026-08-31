@@ -1,4 +1,4 @@
-namespace Kura.Infrastructure.Persistence.Repositories;
+﻿namespace Kura.Infrastructure.Persistence.Repositories;
 
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
@@ -25,8 +25,12 @@ public class CobrancaRepository : Repository<Cobranca>, ICobrancaRepository
             .ThenByDescending(c => c.Id)
             .ToListAsync();
 
-    public async Task<Cobranca?> BuscarPorIdNaClinicaAsync(long id, long idClinica) =>
+    public async Task<Cobranca?> BuscarNoEventoDaClinicaAsync(
+        long id, long idEventoClinico, long idClinica) =>
         await _dbSet
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == id && c.IdClinica == idClinica && c.StAtiva);
+            .FirstOrDefaultAsync(c => c.Id == id
+                                   && c.IdEventoClinico == idEventoClinico
+                                   && c.IdClinica == idClinica
+                                   && c.StAtiva);
 }

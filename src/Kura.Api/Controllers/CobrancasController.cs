@@ -1,4 +1,4 @@
-namespace Kura.Api.Controllers;
+﻿namespace Kura.Api.Controllers;
 
 using Kura.Api.Extensions;
 using Kura.Application.DTOs.Cobranca;
@@ -123,12 +123,12 @@ public class CobrancasController : ControllerBase
     /// </summary>
     /// <response code="200">Cobrança encontrada.</response>
     /// <response code="403">Token válido cujo perfil não é GESTOR.</response>
-    /// <response code="404">Não existe, ou pertence a outra clínica.</response>
+    /// <response code="404">Não existe, pertence a outra clínica, ou não está pendurada NESTE evento clínico (F1 da revisão G2 — o segmento <c>idEventoClinico</c> da rota é parte da busca, não decoração).</response>
     [HttpGet("{id:long}")]
     [Authorize(Policy = PoliticasAutorizacao.SomenteGestor)]
     [ProducesResponseType(typeof(CobrancaResponseDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(typeof(ProblemDetails), 404)]
     public async Task<IActionResult> ObterPorId(long idEventoClinico, long id) =>
-        Ok(await _service.ObterPorIdAsync(id));
+        Ok(await _service.ObterPorIdAsync(idEventoClinico, id));
 }

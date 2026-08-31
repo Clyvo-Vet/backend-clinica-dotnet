@@ -1,4 +1,4 @@
-namespace Kura.Application.Services.Interfaces;
+﻿namespace Kura.Application.Services.Interfaces;
 
 using Kura.Application.DTOs.Cobranca;
 
@@ -15,6 +15,9 @@ public interface ICobrancaService
     /// <summary>Cobranças ativas lançadas num evento clínico da clínica do JWT.</summary>
     Task<IEnumerable<CobrancaResponseDto>> ListarDoEventoAsync(long idEventoClinico);
 
-    /// <summary>Uma cobrança da clínica do JWT, pelo id.</summary>
-    Task<CobrancaResponseDto> ObterPorIdAsync(long id);
+    /// <summary>
+    /// Uma cobrança da clínica do JWT, pelo id, <b>desde que pendurada no evento clínico
+    /// informado</b> (F1 da revisão G2 — ver <c>ICobrancaRepository</c>).
+    /// </summary>
+    Task<CobrancaResponseDto> ObterPorIdAsync(long idEventoClinico, long id);
 }

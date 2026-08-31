@@ -1,4 +1,4 @@
-namespace Kura.IntegrationTests;
+﻿namespace Kura.IntegrationTests;
 
 using System.Net;
 using System.Net.Http.Json;
@@ -364,6 +364,103 @@ public class CobrancasHttpTests : IClassFixture<KuraApiFactory>
         var criada = await resposta.Content.ReadFromJsonAsync<CobrancaResponseDto>();
         criada!.IdClinica.Should().Be(KuraApiFactory.IdClinicaSemeada);
         criada.IdEventoClinico.Should().Be(KuraApiFactory.IdEventoClinicoSemeado);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // 🔴 F1 da revisão G2 — o segmento idEventoClinico da rota não é decoração
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Obter_cobranca_por_um_evento_que_NAO_e_o_dela_devolve_404()
+    {
+        // 🔴 F1, medido na revisão: antes do fix esta requisição devolvia 200. A cobrança é
+        // da clínica do token e a leitura é feita pelo gestor dela — o único erro é o
+        // segmento do meio da rota. O XML doc do método prometia um 404 que nunca acontecia.
+        var veterinario = await ClienteVeterinarioAsync();
+        var gestor = await ClienteGestorAsync();
+
+        var lancamento = await veterinario.PostAsJsonAsync(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado), new { vlCobrado = 44.00m });
+        var criada = await lancamento.Content.ReadFromJsonAsync<CobrancaResponseDto>();
+
+        // Evento de OUTRO tenant no segmento do meio.
+        var porEventoAlheio = await gestor.GetAsync(
+            $"{Rota(KuraApiFactory.IdEventoClinicoOutroTenant)}/{criada!.Id}");
+        porEventoAlheio.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // Evento INEXISTENTE no segmento do meio.
+        var porEventoInexistente = await gestor.GetAsync($"{Rota(999999)}/{criada.Id}");
+        porEventoInexistente.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // 🔴 CONTROLE POSITIVO: a MESMA cobrança, pelo evento certo, devolve 200. Sem ele,
+        // um endpoint quebrado que devolvesse 404 sempre passaria nos dois acima.
+        var pelaRotaCerta = await gestor.GetAsync(
+            $"{Rota(KuraApiFactory.IdEventoClinicoSemeado)}/{criada.Id}");
+        pelaRotaCerta.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Obter_cobranca_do_OUTRO_tenant_por_id_devolve_404()
+    {
+        // 🔴 F3 da revisão G2: esta é a asserção que ficava VÁCUA antes de KuraApiFactory
+        // semear uma COBRANCA na clínica 2 — sem linha alheia no banco, o 404 viria de "não
+        // existe para ninguém" e a mutação do predicado de tenant do CobrancaRepository não
+        // mordia no HTTP (mordia só nas unitárias).
+        //
+        // A rota usa o evento DONO da cobrança alheia de propósito: assim o predicado de
+        // evento (F1) casa, e a ÚNICA coisa entre a resposta e o vazamento é a comparação
+        // de clínica.
+        var gestor = await ClienteGestorAsync();
+
+        var resposta = await gestor.GetAsync(
+            $"{Rota(KuraApiFactory.IdEventoClinicoOutroTenant)}"
+            + $"/{KuraApiFactory.IdCobrancaOutroTenant}");
+
+        resposta.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // O valor da isca é 777,77 — se ele aparecer no corpo, vazou.
+        (await resposta.Content.ReadAsStringAsync()).Should().NotContain("777");
+    }
+
+    [Fact]
+    public async Task Obter_cobranca_da_PROPRIA_clinica_por_id_devolve_200()
+    {
+        // 🔴 CONTROLE POSITIVO do teste acima: a mesma forma de leitura, na clínica do
+        // token, devolve a linha. Sem ele, um repositório que não achasse nada nunca
+        // passaria naquele 404 por mérito.
+        var veterinario = await ClienteVeterinarioAsync();
+        var gestor = await ClienteGestorAsync();
+
+        var lancamento = await veterinario.PostAsJsonAsync(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado), new { vlCobrado = 55.00m });
+        var criada = await lancamento.Content.ReadFromJsonAsync<CobrancaResponseDto>();
+
+        var resposta = await gestor.GetAsync(
+            $"{Rota(KuraApiFactory.IdEventoClinicoSemeado)}/{criada!.Id}");
+
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
+        var lida = await resposta.Content.ReadFromJsonAsync<CobrancaResponseDto>();
+        lida!.IdClinica.Should().Be(KuraApiFactory.IdClinicaSemeada);
+        lida.VlCobrado.Should().Be(55.00m);
+    }
+
+    [Fact]
+    public async Task Listagem_do_proprio_evento_NUNCA_traz_a_cobranca_do_outro_tenant()
+    {
+        // Segundo consumidor da mesma isca (F3): a listagem. A asserção só é capaz de falhar
+        // porque a cobrança da clínica 2 EXISTE no banco.
+        var veterinario = await ClienteVeterinarioAsync();
+        var gestor = await ClienteGestorAsync();
+
+        await veterinario.PostAsJsonAsync(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado), new { vlCobrado = 66.00m });
+
+        var lista = await gestor.GetFromJsonAsync<List<CobrancaResponseDto>>(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado));
+
+        lista.Should().NotBeNullOrEmpty();
+        lista!.Should().OnlyContain(c => c.IdClinica == KuraApiFactory.IdClinicaSemeada);
+        lista.Should().NotContain(c => c.VlCobrado == KuraApiFactory.ValorCobrancaOutroTenant);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────

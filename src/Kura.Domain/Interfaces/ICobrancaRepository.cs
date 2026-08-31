@@ -1,4 +1,4 @@
-namespace Kura.Domain.Interfaces;
+﻿namespace Kura.Domain.Interfaces;
 
 using Kura.Domain.Entities;
 
@@ -29,6 +29,22 @@ public interface ICobrancaRepository : IRepository<Cobranca>
     /// </summary>
     Task<IReadOnlyList<Cobranca>> ListarDoEventoNaClinicaAsync(long idEventoClinico, long idClinica);
 
-    /// <summary>Busca uma cobrança por id <b>dentro da clínica informada</b>.</summary>
-    Task<Cobranca?> BuscarPorIdNaClinicaAsync(long id, long idClinica);
+    /// <summary>
+    /// Busca uma cobrança por id <b>dentro da clínica informada E pendurada no evento
+    /// informado</b>.
+    ///
+    /// <para>
+    /// 🔴 <b>O <c>idEventoClinico</c> entra no predicado por causa do achado F1 da revisão
+    /// G2 da FD-10.</b> A versão anterior filtrava só por id + clínica, e a rota é
+    /// <c>/eventos-clinicos/{idEventoClinico}/cobrancas/{id}</c>: o segmento do meio era
+    /// aceito com <b>qualquer</b> valor — evento de outro tenant e evento inexistente
+    /// (<c>999999</c>) devolviam <c>200</c>, medido. Não era vazamento cross-tenant (a
+    /// cobrança em si já era filtrada por clínica), mas o XML doc do método <b>prometia um
+    /// <c>404</c> que nunca acontecia</b> — "documentação que garante o que o código não
+    /// faz", a classe de defeito mais repetida deste projeto — e divergia do <c>Listar</c>
+    /// irmão, que valida. Duas regras diferentes para a mesma rota-pai, no mesmo controller,
+    /// é armadilha para quem vier depois.
+    /// </para>
+    /// </summary>
+    Task<Cobranca?> BuscarNoEventoDaClinicaAsync(long id, long idEventoClinico, long idClinica);
 }

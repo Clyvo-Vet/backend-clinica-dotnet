@@ -1,4 +1,4 @@
-namespace Kura.Application.Tests;
+﻿namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Kura.Application.DTOs.Cobranca;
@@ -155,7 +155,7 @@ public class CobrancaServiceTests
         ctx.ChangeTracker.Clear();
 
         // 3. Relê a cobrança pelo caminho de produto.
-        var relida = await service.ObterPorIdAsync(lancada.Id);
+        var relida = await service.ObterPorIdAsync(EventoDaClinicaA, lancada.Id);
 
         relida.VlCobrado.Should().Be(150.00m, "VL_COBRADO é uma CÓPIA do preço do instante do "
             + "lançamento; remarcar a tabela não reescreve histórico financeiro");
@@ -416,14 +416,62 @@ public class CobrancaServiceTests
             EventoDaClinicaB, new CobrancaCreateDto { VlCobrado = 22m });
 
         // IDOR direto: a clínica A pede o id da cobrança da B.
-        var recusa = () => comoClinicaA.ObterPorIdAsync(daClinicaB.Id);
+        var recusa = () => comoClinicaA.ObterPorIdAsync(EventoDaClinicaB, daClinicaB.Id);
         await recusa.Should().ThrowAsync<EntidadeNaoEncontradaException>();
 
         // 🔴 Controle positivo: a MESMA leitura, pelo dono, devolve a linha. Sem ele, um
         // ObterPorIdAsync que lançasse sempre passaria na recusa acima.
-        var dona = await comoClinicaB.ObterPorIdAsync(daClinicaB.Id);
+        var dona = await comoClinicaB.ObterPorIdAsync(EventoDaClinicaB, daClinicaB.Id);
         dona.Id.Should().Be(daClinicaB.Id);
         dona.IdClinica.Should().Be(ClinicaB);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // 🔴 F1 da revisão G2 — o idEventoClinico da ROTA participa da busca
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Obter_cobranca_por_um_evento_que_NAO_e_o_dela_e_recusado()
+    {
+        // 🔴 F1: antes do fix o predicado era só (id + clínica) e o segmento do meio da rota
+        // era aceito com QUALQUER valor. Aqui a cobrança é legitimamente da clínica A e a
+        // leitura é feita pela clínica A — o único erro é o evento. Se este teste passar a
+        // devolver a linha, o `idEventoClinico` voltou a ser decoração.
+        using var ctx = CenarioComOsDoisTenants(
+            nameof(Obter_cobranca_por_um_evento_que_NAO_e_o_dela_e_recusado));
+        var service = CriarService(ctx, ClinicaA);
+
+        // Um SEGUNDO evento da MESMA clínica: assim o que separa o 404 do 200 é
+        // exclusivamente o evento, sem nenhuma trava de tenant ajudando.
+        const long OutroEventoDaClinicaA = 11L;
+        SemearEvento(ctx, OutroEventoDaClinicaA, ClinicaA);
+
+        var lancada = await service.LancarAsync(
+            EventoDaClinicaA, new CobrancaCreateDto { VlCobrado = 50m });
+
+        var recusa = () => service.ObterPorIdAsync(OutroEventoDaClinicaA, lancada.Id);
+        await recusa.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+
+        // 🔴 CONTROLE POSITIVO: a MESMA cobrança, pelo evento certo, volta.
+        var certa = await service.ObterPorIdAsync(EventoDaClinicaA, lancada.Id);
+        certa.Id.Should().Be(lancada.Id);
+    }
+
+    [Fact]
+    public async Task Obter_cobranca_por_um_evento_INEXISTENTE_e_recusado()
+    {
+        using var ctx = CenarioComOsDoisTenants(
+            nameof(Obter_cobranca_por_um_evento_INEXISTENTE_e_recusado));
+        var service = CriarService(ctx, ClinicaA);
+
+        var lancada = await service.LancarAsync(
+            EventoDaClinicaA, new CobrancaCreateDto { VlCobrado = 50m });
+
+        // 999999 não existe para ninguém — medido como 200 antes do fix.
+        var recusa = () => service.ObterPorIdAsync(999999L, lancada.Id);
+        await recusa.Should().ThrowAsync<EntidadeNaoEncontradaException>();
+
+        (await service.ObterPorIdAsync(EventoDaClinicaA, lancada.Id)).Id.Should().Be(lancada.Id);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
