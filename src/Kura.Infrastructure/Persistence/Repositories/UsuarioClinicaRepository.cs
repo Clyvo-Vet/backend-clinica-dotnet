@@ -98,4 +98,51 @@ public class UsuarioClinicaRepository : Repository<UsuarioClinica>, IUsuarioClin
                           && u.StAtiva
                           && u.TpPerfil == PerfisUsuarioClinica.Gestor
                           && (excetoId == null || u.Id != excetoId));
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para><b>SQL cru, e não LINQ, porque o EF Core não sabe emitir <c>FOR UPDATE</c>.</b>
+    /// Não há tradução de lock pessimista no provider Oracle — nem
+    /// <c>IsolationLevel.Serializable</c> resolveria, porque Oracle implementa
+    /// <c>SERIALIZABLE</c> com snapshot: a segunda transação não bloquearia, ela morreria com
+    /// <c>ORA-08177</c> depois, virando <c>500</c> em vez do <c>422</c> correto.</para>
+    ///
+    /// <para><b><c>ExecuteSqlRawAsync</c>, e não <c>SqlQueryRaw</c>/<c>FromSqlRaw</c>:</b> as
+    /// duas últimas podem envolver o SQL num <c>SELECT ... FROM (&lt;sql&gt;)</c>, e Oracle
+    /// não aceita <c>FOR UPDATE</c> dentro de inline view. <c>ExecuteSqlRawAsync</c> manda o
+    /// texto literal. O <c>SELECT ... FOR UPDATE</c> trava TODAS as linhas do resultado no
+    /// momento da EXECUÇÃO do statement (antes de qualquer fetch) — por isso executar já
+    /// basta, e o retorno <c>-1</c> de <c>ExecuteNonQuery</c> não significa "nada aconteceu".
+    /// Isto foi <b>medido</b>, não deduzido: ver a seção de prova do relatório da FD-13.</para>
+    ///
+    /// <para><c>'S'</c> aparece literal porque é o que a coluna guarda
+    /// (<c>BoolToSimNaoConverter</c>) e o conversor do EF não participa de SQL cru; o perfil
+    /// vai por parâmetro, ancorado em <see cref="PerfisUsuarioClinica.Gestor"/>, para não
+    /// duplicar a constante como string solta.</para>
+    ///
+    /// <para>⚠️ <b>Se a clínica já não tem NENHUM gestor ativo, isto trava zero linha</b> e não
+    /// serializa nada — o que é inofensivo, porque nesse caso a contagem seguinte devolve 0 e
+    /// o invariante recusa de qualquer jeito.</para>
+    /// </remarks>
+    public async Task BloquearGestoresAtivosAsync(long idClinica)
+    {
+        // Ver o <remarks> da interface: sem provider relacional não há SQL cru nem transação,
+        // então aqui não há lock — e o service continua com a checagem não serializada, que é
+        // exatamente o comportamento pré-FD-13. Silencioso de propósito: a alternativa
+        // (lançar) quebraria as 650 suítes InMemory sem tornar nenhuma delas mais verdadeira.
+        if (!_context.Database.IsRelational())
+            return;
+
+        await _context.Database.ExecuteSqlRawAsync(
+            """
+            SELECT ID_USUARIO_CLINICA
+              FROM USUARIO_CLINICA
+             WHERE ID_CLINICA = {0}
+               AND TP_PERFIL = {1}
+               AND ST_ATIVA = 'S'
+               FOR UPDATE
+            """,
+            idClinica,
+            PerfisUsuarioClinica.Gestor);
+    }
 }

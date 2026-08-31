@@ -268,6 +268,13 @@ public class AuthServiceTransacaoTests
                                            && u.TpPerfil == PerfisUsuarioClinica.Gestor
                                            && (excetoId == null || u.Id != excetoId)));
 
+        /// <summary>
+        /// FD-13 — no-op: uma lista em memória não tem lock de linha para adquirir. Esta
+        /// classe fake existe para os testes de TRANSAÇÃO do <c>AuthService</c>, que nem
+        /// chegam ao invariante do último gestor.
+        /// </summary>
+        public Task BloquearGestoresAtivosAsync(long idClinica) => Task.CompletedTask;
+
         public Task<IEnumerable<UsuarioClinica>> GetAllAsync() =>
             Task.FromResult<IEnumerable<UsuarioClinica>>(_store.ToList());
 
@@ -328,6 +335,17 @@ public class AuthServiceTransacaoTests
             _veterinarioSnapshot = _veterinarioStore.Count;
             _usuarioSnapshot = _usuarioStore.Count;
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// FD-13 — devolve <c>true</c> porque este fake IMITA transação de verdade (snapshot +
+        /// truncate no rollback). Devolver <c>false</c> aqui faria os chamadores pularem o
+        /// commit/rollback e o fake deixaria de exercitar o que ele existe para exercitar.
+        /// </summary>
+        public async Task<bool> TryBeginTransactionAsync()
+        {
+            await BeginTransactionAsync();
+            return true;
         }
 
         public Task CommitTransactionAsync() => Task.CompletedTask;

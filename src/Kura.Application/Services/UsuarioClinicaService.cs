@@ -164,22 +164,27 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         // gestor ativo do quadro. Um usuário já desativado não conta como gestor ativo — e
         // desde a fix wave pós-G2 ele nem chega aqui (GarantirUsuarioAtivo, acima).
         //
-        // ⚠️ A-4 (fix wave pós-G2): esta checagem é, DE PROPÓSITO, a ÚLTIMA leitura antes da
-        // escrita — antes ela vinha ANTES da validação do vínculo com veterinário, o que
-        // deixava um round trip de banco inteiro dentro da janela entre CONTAR e GRAVAR.
-        // Isso ENCURTA a janela; NÃO fecha a corrida. Ver GarantirQueSobraGestorAsync.
-        if (usuario.TpPerfil == PerfisUsuarioClinica.Gestor
-            && perfil != PerfisUsuarioClinica.Gestor)
+        // ⚠️ A-4 (fix wave pós-G2) deixou esta checagem como a ÚLTIMA leitura antes da escrita,
+        // o que ENCURTAVA a janela sem fechá-la. A FD-13 fecha: quando a mudança rebaixa um
+        // gestor, contagem e escrita passam a acontecer sob lock, dentro da MESMA transação —
+        // ver ExecutarSobInvarianteDeGestorAsync.
+        var rebaixandoGestor = usuario.TpPerfil == PerfisUsuarioClinica.Gestor
+                            && perfil != PerfisUsuarioClinica.Gestor;
+
+        async Task GravarAsync()
         {
-            await GarantirQueSobraGestorAsync(idClinica, usuario.Id);
+            usuario.DsEmail = email;
+            usuario.TpPerfil = perfil;
+            usuario.IdVeterinario = dto.IdVeterinario;
+
+            _repository.Update(usuario);
+            await _uow.CommitAsync();
         }
 
-        usuario.DsEmail = email;
-        usuario.TpPerfil = perfil;
-        usuario.IdVeterinario = dto.IdVeterinario;
-
-        _repository.Update(usuario);
-        await _uow.CommitAsync();
+        if (rebaixandoGestor)
+            await ExecutarSobInvarianteDeGestorAsync(idClinica, usuario.Id, GravarAsync);
+        else
+            await GravarAsync();
 
         return ToResponse(usuario);
     }
@@ -208,11 +213,21 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         if (!usuario.StAtiva)
             return;
 
-        if (usuario.TpPerfil == PerfisUsuarioClinica.Gestor)
-            await GarantirQueSobraGestorAsync(_clinicaContext.IdClinica, usuario.Id);
+        async Task GravarAsync()
+        {
+            _repository.SoftDelete(usuario);
+            await _uow.CommitAsync();
+        }
 
-        _repository.SoftDelete(usuario);
-        await _uow.CommitAsync();
+        // FD-13: desativar um GESTOR passa por lock + contagem + escrita na MESMA transação.
+        // Desativar um VETERINARIO não pode zerar o quadro de gestores, então não paga o
+        // custo do lock — e, mais importante, não fica travando linhas de gente que a
+        // operação não toca.
+        if (usuario.TpPerfil == PerfisUsuarioClinica.Gestor)
+            await ExecutarSobInvarianteDeGestorAsync(
+                _clinicaContext.IdClinica, usuario.Id, GravarAsync);
+        else
+            await GravarAsync();
     }
 
     /// <summary>
@@ -362,77 +377,102 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
     }
 
     /// <summary>
+    /// 🔴 <b>FD-13 — a serialização do invariante do último gestor.</b> Roda <i>travar</i> →
+    /// <i>contar</i> → <i>gravar</i> dentro de <b>uma única transação</b>, que é o que
+    /// transforma a checagem de um palpite sobre o passado numa decisão sobre o presente.
+    ///
+    /// <para><b>O defeito que isto fecha, medido contra Oracle real (3/3 antes, 5/5 depois —
+    /// relatório da FD-13):</b> duas desativações CONCORRENTES de gestores DIFERENTES da
+    /// mesma clínica devolviam <c>204</c> + <c>204</c> e deixavam a clínica com <b>ZERO
+    /// gestor ativo</b>. Serialmente a segunda sempre deu <c>422</c> — logo a regra existia; o
+    /// buraco era a janela entre CONTAR e GRAVAR. O estado resultante é irrecuperável dentro
+    /// do produto: sem gestor não há login administrativo, e a reativação exige
+    /// <c>SomenteGestor</c>. A clínica se tranca sozinha.</para>
+    ///
+    /// <para><b>A ordem das três operações é a correção inteira</b>, e trocá-la desfaz o fix
+    /// em silêncio: o <c>FOR UPDATE</c> de <see cref="IUsuarioClinicaRepository
+    /// .BloquearGestoresAtivosAsync"/> vem <b>antes</b> da contagem, porque contar primeiro
+    /// só produziria um número já velho quando o lock chegasse. E o lock cobre o conjunto
+    /// INTEIRO de gestores ativos, não "os outros": é a interseção entre os dois conjuntos que
+    /// faz uma transação bloquear a outra.</para>
+    ///
+    /// <para><b>Por que a transação é obrigatória e não decorativa</b> (ao contrário do que a
+    /// FD-04 concluiu, e ela estava certa sobre transação <i>sozinha</i>): lock de linha no
+    /// Oracle dura até o <c>COMMIT</c>/<c>ROLLBACK</c>. Sem transação explícita, cada statement
+    /// auto-commita e o lock morre no fim do próprio <c>SELECT</c> — a segunda transação
+    /// entraria imediatamente e a corrida voltaria idêntica. Transação sem lock não fecha nada
+    /// sob READ COMMITTED; lock sem transação não dura. As duas juntas fecham.</para>
+    ///
+    /// <para>⚠️ <b>Quando o provider NÃO é relacional (o InMemory das 650 suítes), isto degrada
+    /// para o comportamento pré-FD-13</b>: <see cref="IUnitOfWork.TryBeginTransactionAsync"/>
+    /// devolve <c>false</c> e o lock é no-op. <b>Nenhum teste desta suíte prova a
+    /// serialização</b> — e um teste de <c>Task.WhenAll</c> sobre InMemory mediria o
+    /// escalonador do runtime, não o Oracle: um verde que não significaria nada. A prova é
+    /// medição contra Oracle real, registrada no relatório da FD-13. O que a suíte continua
+    /// provando é que o invariante recusa, que ele não trava demais, e que o caminho feliz
+    /// grava.</para>
+    ///
+    /// <para><b>Não há rede no banco para este invariante</b> — nenhum <c>CHECK</c> exprime "a
+    /// clínica tem ≥ 1 gestor ativo". Isso não mudou; o que mudou é que a corrida deixou de
+    /// depender de a janela ser curta.</para>
+    ///
+    /// <para><b>Custo aceito:</b> desativar/rebaixar um GESTOR passa a serializar por clínica.
+    /// É operação administrativa e rara, o bloqueio dura um round trip, e o raio é de UMA
+    /// clínica — nenhum outro caminho de escrita toca essas linhas com <c>FOR UPDATE</c>.
+    /// Desativar VETERINARIO não paga esse custo (ver <c>DesativarAsync</c>).</para>
+    /// </summary>
+    /// <param name="gravar">
+    /// A mutação + <c>CommitAsync</c>. Recebida como delegate, e não escrita aqui, porque os
+    /// dois chamadores gravam coisas diferentes (soft delete × update de perfil/e-mail/vínculo)
+    /// e precisam gravar <b>dentro</b> da transação — devolver o controle antes do
+    /// <c>CommitAsync</c> deixaria a escrita fora do lock, que é exatamente o bug original.
+    /// </param>
+    private async Task ExecutarSobInvarianteDeGestorAsync(
+        long idClinica, long idAlvo, Func<Task> gravar)
+    {
+        var transacaoReal = await _uow.TryBeginTransactionAsync();
+
+        try
+        {
+            await _repository.BloquearGestoresAtivosAsync(idClinica);
+            await GarantirQueSobraGestorAsync(idClinica, idAlvo);
+            await gravar();
+
+            if (transacaoReal)
+                await _uow.CommitTransactionAsync();
+        }
+        catch
+        {
+            // Inclui o 422 do invariante: a transação existe só para segurar o lock, então
+            // desfazê-la no caminho de recusa é o correto — nada foi gravado, e segurar as
+            // linhas travadas até o fim do request bloquearia gestores legítimos.
+            if (transacaoReal)
+                await _uow.RollbackTransactionAsync();
+
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Invariante do último gestor — ver o argumento completo na documentação da classe.
     /// A contagem exclui o próprio alvo porque ele é quem está prestes a sair do quadro de
     /// gestores ativos (por rebaixamento ou por desativação).
     ///
-    /// <para>🔴 <b>A-4 (revisão G2) — ISTO É UM TOCTOU, E ELE CONTINUA ABERTO.</b> Não há
-    /// transação, lock nem versão em volta do par <i>contar gestores</i> → <i>gravar</i>. A
-    /// interleaving concreta que quebra o invariante, com a clínica tendo exatamente 2
-    /// gestores ativos G1 e G2:</para>
+    /// <para>🔴 <b>Este método, SOZINHO, é um TOCTOU — e continua sendo.</b> Ele só é seguro
+    /// porque <see cref="ExecutarSobInvarianteDeGestorAsync"/> o chama depois do
+    /// <c>SELECT … FOR UPDATE</c> e dentro da mesma transação da escrita. <b>Chamá-lo direto
+    /// de um caminho novo reabre o bug</b> — os dois chamadores atuais
+    /// (<c>AtualizarAsync</c>, <c>DesativarAsync</c>) passam pelo helper.</para>
     ///
-    /// <list type="number">
-    ///   <item><description>Requisição <b>A</b> desativa G1: conta gestores ativos excluindo
-    ///   G1 → enxerga G2 → <b>1</b> → passa.</description></item>
-    ///   <item><description>Requisição <b>B</b> desativa G2: conta gestores ativos excluindo
-    ///   G2 → enxerga G1 (A ainda não gravou, ou gravou e não commitou) → <b>1</b> →
-    ///   passa.</description></item>
-    ///   <item><description>As duas gravam. A clínica fica com <b>ZERO</b> gestor
-    ///   ativo — o estado que este método existe para impedir.</description></item>
-    /// </list>
-    ///
-    /// <para><b>O que foi avaliado como mitigação, e por que NADA disso foi implementado:</b></para>
-    ///
-    /// <list type="bullet">
-    ///   <item><description><b>Transação explícita</b> (<c>IUnitOfWork.BeginTransactionAsync</c>,
-    ///   que já existe e é usada por <c>AuthService.RegisterClinicaAsync</c>): <b>não fecha</b>.
-    ///   Sob READ COMMITTED — o padrão do Oracle — a transação de B não enxerga a escrita não
-    ///   commitada de A, então B continua contando 1. Além disso a escrita já é de uma linha
-    ///   só, logo a transação não acrescentaria nem atomicidade. Implementá-la seria
-    ///   <b>teatro</b>: código que parece proteção e não protege.</description></item>
-    ///   <item><description><b><c>NR_VERSION</c> / optimistic locking no padrão de
-    ///   <c>AGENDAMENTO</c></b>: <b>não se aplica</b>, e por um motivo estrutural, não por
-    ///   custo. Optimistic locking protege <b>uma linha</b> de escritas concorrentes; esta
-    ///   corrida acontece entre <b>linhas DIFERENTES</b> (G1 e G2). Com <c>NR_VERSION</c> em
-    ///   <c>USUARIO_CLINICA</c>, A e B continuariam gravando linhas distintas e as duas
-    ///   passariam. Versionar a linha de <c>CLINICA</c> serializaria de fato — ao custo de
-    ///   transformar toda escrita de usuário num ponto de contenção do tenant inteiro — e
-    ///   exigiria coluna nova, ou seja, <b>migration Flyway no repo Java</b>, que está fora do
-    ///   escopo desta task por ruling.</description></item>
-    ///   <item><description><b>Revalidar dentro do <c>SaveChanges</c></b> (interceptor ou
-    ///   override): <b>não fecha</b> pelo mesmo motivo do primeiro item — a releitura acontece
-    ///   na mesma transação e continua cega para a escrita não commitada da outra.</description></item>
-    ///   <item><description><b><c>SELECT … FOR UPDATE</c></b> sobre as linhas de gestor ativo
-    ///   da clínica: é a correção <b>de verdade</b>, e a única avaliada que fecha a corrida.
-    ///   Exige SQL cru, que o provider <b>InMemory não executa</b> — adotá-la agora quebraria
-    ///   toda a suíte deste caminho e deixaria a própria guarda <b>sem nenhuma verificação em
-    ///   CI</b>. Fica como o caminho recomendado para quem tiver Oracle.</description></item>
-    /// </list>
-    ///
-    /// <para><b>O que MUDOU na fix wave, e é só isto:</b> a chamada foi movida para ser a
-    /// última leitura antes de <c>CommitAsync</c> em <c>AtualizarAsync</c> (antes havia um
-    /// round trip de banco — a validação do vínculo com veterinário — entre contar e gravar).
-    /// Isso <b>encurta</b> a janela. <b>Não a fecha.</b> Não confunda uma coisa com a outra.</para>
-    ///
-    /// <para>⚠️ <b>NÃO EXISTE REDE NO BANCO PARA ESTE INVARIANTE</b>, e é o que o separa da
-    /// unicidade de e-mail: lá, se a checagem do service perder a corrida, o
-    /// <c>UK_USUARIO_CLINICA_EMAIL</c> ainda barra a linha (feio — <c>ORA-00001</c>/500 — mas
-    /// o dado não corrompe). Aqui não há <c>CHECK</c> capaz de expressar "a clínica tem ≥ 1
-    /// gestor ativo": se a corrida acontecer, a clínica <b>fica sem administrador</b> e o
-    /// banco não reclama.</para>
-    ///
-    /// <para><b>Risco residual, dimensionado com honestidade:</b> a janela é de milissegundos,
-    /// a operação é administrativa (rara, e feita por um humano), e o raio é de <b>uma</b>
-    /// clínica. Mas é real, e o estado resultante é <b>irrecuperável dentro do produto</b> —
-    /// pelo mesmo motivo que motivou o invariante (sem recuperação de senha, sem convite, sem
-    /// super-admin).</para>
-    ///
-    /// <para>🔴 <b>ISTO NÃO ESTÁ RESOLVIDO.</b> E não é possível provar NEM refutar aqui: o
-    /// provider InMemory não modela isolamento transacional nem concorrência de banco, então
-    /// qualquer teste "de concorrência" escrito contra ele mediria o <c>Task.WhenAll</c> do
-    /// runtime, não o comportamento do Oracle — um verde que não significaria nada. A
-    /// verificação real só existe contra Oracle de verdade, e está registrada como dívida da
-    /// <b><c>FD-12</c></b>.</para>
+    /// <para><b>As mitigações que NÃO funcionam</b>, avaliadas na FD-04 e mantidas aqui para
+    /// que ninguém as reproponha: <b>transação sozinha</b> não fecha (READ COMMITTED dá
+    /// snapshot por statement — as duas contagens veem 2 gestores e as duas passam);
+    /// <b><c>NR_VERSION</c>/optimistic locking</b> não se aplica, porque a corrida é entre
+    /// <b>linhas diferentes</b> e não há versão em disputa; <b>revalidar no
+    /// <c>SaveChanges</c></b> repete a mesma leitura na mesma janela cega;
+    /// <b><c>IsolationLevel.Serializable</c></b> no Oracle é snapshot, então a segunda
+    /// transação não bloqueia — ela morre depois com <c>ORA-08177</c>, virando <c>500</c> em
+    /// vez do <c>422</c> correto.</para>
     /// </summary>
     private async Task GarantirQueSobraGestorAsync(long idClinica, long idAlvo)
     {
