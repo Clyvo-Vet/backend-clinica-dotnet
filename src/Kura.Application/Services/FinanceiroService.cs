@@ -267,6 +267,22 @@ public sealed class FinanceiroService : IFinanceiroService
     private readonly record struct PeriodoResumo(
         DateOnly De, DateOnly Ate, DateTime InicioUtc, DateTime FimExclusivoUtc)
     {
+        /// <summary>
+        /// 🔴 <b>PRECONDIÇÃO, e ela é do <c>ResumoFinanceiroQueryValidator</c>:</b> o par
+        /// <c>(de, ate)</c> tem de ser <b>computável</b> — <c>ate</c> precisa ter dia
+        /// seguinte no calendário e <c>de</c> precisa ter <c>duração</c> dias de folga antes
+        /// dele. <c>DateOnly.AddDays</c> <b>lança</b> fora de
+        /// <c>[0001-01-01, 9999-12-31]</c> em vez de saturar, então violar a precondição aqui
+        /// é <c>500</c>, não número errado.
+        ///
+        /// <para>⚠️ A guarda mora no validator DE PROPÓSITO, e não aqui: neste ponto o erro
+        /// só teria como virar exceção, e o que o gestor precisa é de um <c>400</c> com
+        /// mensagem acionável. Saturar em vez de recusar seria pior que as duas coisas —
+        /// devolveria um período <b>diferente do pedido</b>, com números plausíveis. Provado
+        /// por rota HTTP em <c>FinanceiroResumoHttpTests</c>
+        /// (<c>Periodo_NAO_COMPUTAVEL_devolve_400_e_nunca_5xx</c>, com controle positivo),
+        /// não por leitura.</para>
+        /// </summary>
         public static PeriodoResumo Criar(DateOnly de, DateOnly ate) => new(
             de,
             ate,

@@ -188,6 +188,89 @@ public class FinanceiroResumoHttpTests : IClassFixture<KuraApiFactory>
         resposta.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // 🔴 F1 da fix wave pós-G2 — NENHUM valor do domínio de `DateOnly` produz 5xx
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("9999-12-01", "9999-12-31")]
+    [InlineData("9999-12-31", "9999-12-31")]
+    [InlineData("0001-01-01", "0001-01-31")]
+    [InlineData("0001-01-01", "0001-01-01")]
+    [InlineData("0001-01-01", "9999-12-31")]
+    [InlineData("2010-01-01", "2020-01-01")]
+    public async Task Periodo_NAO_COMPUTAVEL_devolve_400_e_nunca_5xx(string de, string ate)
+    {
+        // 🔴 A MORDIDA DO F1. Antes desta fix wave os três primeiros casos devolviam **500**
+        // (`ArgumentOutOfRangeException`): `DateOnly.AddDays` LANÇA fora de
+        // [0001-01-01, 9999-12-31] em vez de saturar, e o service chamava
+        // `ate.AddDays(1)` (borda superior) e `De.AddDays(-duracao)` (período anterior, um
+        // cálculo derivado que o gestor nem pediu). `?ate=9999-12-31` não é hipótese de
+        // laboratório: é o que um seletor de data com campo vazio ou `max` produz sozinho.
+        //
+        // O último caso é a guarda de VOLUME (teto de duração), não de calendário — 2010→2020
+        // é perfeitamente computável e mesmo assim é recusado, porque a agregação é feita em
+        // MEMÓRIA. Os dois motivos são diferentes de propósito e NÃO podem ser colapsados num
+        // só: 9999-12-01→9999-12-31 são 31 dias e passam por qualquer teto de duração.
+        var client = await ClienteGestorAsync();
+
+        var resposta = await client.GetAsync(Rota(de, ate));
+
+        ((int)resposta.StatusCode).Should().BeLessThan(500,
+            "nenhum valor dentro do domínio aceito de DateOnly pode produzir 5xx neste endpoint");
+        resposta.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CONTROLE_POSITIVO_ano_alto_porem_computavel_devolve_200()
+    {
+        // 🔴 Sem este caso, um validator que recusasse TUDO passaria nos 6 casos acima. Ele é
+        // o que separa "a borda foi fechada" de "o endpoint inteiro foi fechado". 9998-12-01..12-31 é
+        // vizinho imediato da borda que estoura e é perfeitamente computável: o +1 dia cai em
+        // 9999-01-01 e o período anterior em 9998-10-31..11-30.
+        var client = await ClienteGestorAsync();
+
+        var resumo = await LerResumoAsync(
+            await client.GetAsync(Rota("9998-12-01", "9998-12-31")));
+
+        resumo.Periodo.De.Should().Be(new DateOnly(9998, 12, 1));
+        resumo.Periodo.FimExclusivoUtc.Should().Be(
+            new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        resumo.PeriodoAnterior.De.Should().Be(new DateOnly(9998, 10, 31));
+        resumo.PeriodoAnterior.Ate.Should().Be(new DateOnly(9998, 11, 30));
+        resumo.ReceitaBruta.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task CONTROLE_POSITIVO_borda_maxima_COMPUTAVEL_devolve_200()
+    {
+        // O último `ate` que ainda tem "dia seguinte" no calendário. Escrito em LITERAL
+        // (9999-12-30), não derivado de `DateOnly.MaxValue.AddDays(-1)` — repetir no teste a
+        // aritmética do produto faria a asserção concordar com ele mesmo quando ele errasse.
+        var client = await ClienteGestorAsync();
+
+        var resumo = await LerResumoAsync(
+            await client.GetAsync(Rota("9999-12-30", "9999-12-30")));
+
+        resumo.Periodo.FimExclusivoUtc.Should().Be(
+            new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc));
+        resumo.PeriodoAnterior.De.Should().Be(new DateOnly(9999, 12, 29));
+    }
+
+    [Fact]
+    public async Task CONTROLE_POSITIVO_duracao_EXATAMENTE_no_teto_devolve_200()
+    {
+        // O outro lado do teto de volume: 1830 dias contados INCLUSIVE nos dois extremos
+        // ainda passam. Sem este caso, o teto poderia estar implementado com `<` no lugar de
+        // `<=` (ou um dia fora) e nenhuma asserção perceberia. 2010-01-01 + 1829 dias =
+        // 2015-01-04 — literal, conferido no calendário, não derivado da constante.
+        var client = await ClienteGestorAsync();
+
+        var resposta = await client.GetAsync(Rota("2010-01-01", "2015-01-04"));
+
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task Intervalo_invertido_devolve_400()
     {
