@@ -33,4 +33,20 @@ public class CobrancaRepository : Repository<Cobranca>, ICobrancaRepository
                                    && c.IdEventoClinico == idEventoClinico
                                    && c.IdClinica == idClinica
                                    && c.StAtiva);
+
+    /// <summary>
+    /// FD-11 — faixa semiaberta <c>[inicioInclusivo, fimExclusivo)</c>. Ver a interface para o
+    /// porquê de o fim ser EXCLUSIVO e de esta consulta devolver linhas em vez de agregado.
+    /// </summary>
+    public async Task<IReadOnlyList<Cobranca>> ListarDaClinicaNoPeriodoAsync(
+        long idClinica, DateTime inicioInclusivo, DateTime fimExclusivo) =>
+        await _dbSet
+            .IgnoreQueryFilters()
+            .Where(c => c.IdClinica == idClinica
+                     && c.StAtiva
+                     && c.DtCobranca >= inicioInclusivo
+                     && c.DtCobranca < fimExclusivo)
+            .OrderBy(c => c.DtCobranca)
+            .ThenBy(c => c.Id)
+            .ToListAsync();
 }

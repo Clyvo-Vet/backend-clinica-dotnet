@@ -1,4 +1,4 @@
-namespace Kura.Api.Extensions;
+﻿namespace Kura.Api.Extensions;
 
 using FluentValidation;
 using Kura.Api.Services;
@@ -50,6 +50,9 @@ public static class ServiceCollectionExtensions
         // FD-10: lancamento de COBRANCA no evento clinico. ESCRITA e [Authorize]
         // (o veterinario lanca no fechamento do atendimento); LEITURA e SomenteGestor (D-7).
         services.AddScoped<ICobrancaService, CobrancaService>();
+
+        // FD-11 - KPI financeiros agregados (leitura so, sem UnitOfWork).
+        services.AddScoped<IFinanceiroService, FinanceiroService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAgendaService, AgendaService>();
         services.AddScoped<ILunaService, LunaService>();

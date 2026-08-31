@@ -1,4 +1,4 @@
-namespace Kura.Infrastructure.Persistence.Repositories;
+﻿namespace Kura.Infrastructure.Persistence.Repositories;
 
 using Kura.Domain.Entities;
 using Kura.Domain.Interfaces;
@@ -41,5 +41,29 @@ public class ServicoPrecoRepository : Repository<ServicoPreco>, IServicoPrecoRep
                                    && s.StAtiva
                                    && s.NmServico.ToUpper() == alvo
                                    && (excetoId == null || s.Id != excetoId));
+    }
+
+    /// <summary>
+    /// FD-11 — rótulos do mix. 🔴 <b>Sem <c>StAtiva</c> no predicado, de propósito</b> — ver a
+    /// interface. Acrescentar <c>&amp;&amp; s.StAtiva</c> aqui apaga do relatório a receita de
+    /// um serviço desativado depois de faturar.
+    /// </summary>
+    public async Task<IReadOnlyList<ServicoPreco>> ListarPorIdsNaClinicaAsync(
+        IReadOnlyCollection<long> ids, long idClinica)
+    {
+        if (ids.Count == 0)
+            return [];
+
+        // Array, e nao o IReadOnlyCollection recebido: a traducao de Contains para IN (...)
+        // e garantida para array/List no provider relacional; um tipo de colecao que o
+        // provider nao reconheca degrada para avaliacao client-side, que traria a tabela de
+        // precos inteira da clinica para a memoria -- e o InMemory da suite nao mostraria
+        // diferenca nenhuma.
+        var alvos = ids.ToArray();
+
+        return await _dbSet
+            .IgnoreQueryFilters()
+            .Where(s => s.IdClinica == idClinica && alvos.Contains(s.Id))
+            .ToListAsync();
     }
 }

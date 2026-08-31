@@ -1,4 +1,4 @@
-namespace Kura.Domain.Interfaces;
+﻿namespace Kura.Domain.Interfaces;
 
 using Kura.Domain.Entities;
 
@@ -47,4 +47,27 @@ public interface IServicoPrecoRepository : IRepository<ServicoPreco>
     /// </summary>
     Task<ServicoPreco?> BuscarAtivoPorNomeNaClinicaAsync(
         long idClinica, string nmServico, long? excetoId = null);
+
+    /// <summary>
+    /// FD-11 — RÓTULOS dos serviços cujos ids aparecem no mix, <b>ativos ou não</b>.
+    ///
+    /// <para>
+    /// 🔴 <b>Este método existe para NÃO filtrar por <c>StAtiva</c>, e essa é a regra inteira
+    /// dele.</b> O mix por serviço agrupa cobranças já lançadas; o nome do serviço entra como
+    /// <b>rótulo</b>, nunca como valor (o valor é a cópia em <c>VL_COBRADO</c>). Um serviço
+    /// desativado <b>depois</b> de faturar continua tendo faturado: filtrar os inativos aqui
+    /// apagaria a receita dele do relatório <b>em silêncio</b> — sem erro, sem log, só um mix
+    /// que deixa de somar o total. É o mesmo raciocínio de
+    /// <see cref="BuscarPorIdNaClinicaAsync"/>, que também devolve o desativado de propósito,
+    /// e o oposto deliberado de <see cref="ListarDaClinicaAsync"/>, que é o catálogo
+    /// oferecível hoje.
+    /// </para>
+    ///
+    /// <para>
+    /// O predicado de clínica continua escrito à mão: um rótulo trazido da clínica errada
+    /// seria vazamento de nome de serviço do concorrente dentro de um relatório.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<ServicoPreco>> ListarPorIdsNaClinicaAsync(
+        IReadOnlyCollection<long> ids, long idClinica);
 }
