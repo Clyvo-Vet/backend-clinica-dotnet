@@ -32,4 +32,18 @@ public class EventoClinicoRepository : Repository<EventoClinico>, IEventoClinico
 
         return await query.OrderByDescending(e => e.DtEvento).ToListAsync();
     }
+
+    /// <summary>
+    /// FD-10 — ver <see cref="IEventoClinicoRepository.BuscarPorIdNaClinicaAsync"/>.
+    ///
+    /// <para><c>IgnoreQueryFilters()</c> + predicado de tenant escrito à mão, de propósito:
+    /// o filtro de <c>EventoClinico</c> desliga inteiro quando não há clínica no contexto,
+    /// então uma consulta que dependesse dele responderia diferente conforme o chamador
+    /// tivesse ou não JWT. Escrito assim, trocar <c>e.IdClinica == idClinica</c> por
+    /// <c>true</c> quebra <c>CobrancaServiceTests</c>.</para>
+    /// </summary>
+    public async Task<EventoClinico?> BuscarPorIdNaClinicaAsync(long id, long idClinica) =>
+        await _dbSet
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(e => e.Id == id && e.IdClinica == idClinica);
 }
