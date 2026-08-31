@@ -498,7 +498,13 @@ public class FinanceiroServiceTests
 
         // 🔴 O avulso tem balde PRÓPRIO e declarado — nem descartado, nem somado a outro.
         var avulso = resumo.MixPorServico.Single(m => m.IdServicoPreco is null);
-        avulso.NmServico.Should().Be(FinanceiroService.RotuloAvulso);
+
+        // 🔴 F2 da fix wave pós-G2: LITERAL, não `FinanceiroService.RotuloAvulso`. A
+        // asserção anterior era derivada da constante que ela deveria estar provando — trocar
+        // "(avulso)" por "" deixava a suíte inteira verde e o app renderizava um balde EM
+        // BRANCO no mix, sem nenhum gate perceber. É a mesma armadilha documentada no
+        // cabeçalho desta classe para as DATAS; o rótulo tinha ficado de fora.
+        avulso.NmServico.Should().Be("(avulso)");
         avulso.Receita.Should().Be(33.33m);
     }
 
@@ -538,7 +544,10 @@ public class FinanceiroServiceTests
         balde.Receita.Should().Be(60.00m);
         balde.NmServico.Should().Be("Banho e tosa (saiu do catálogo)",
             "o RÓTULO vem por FK e não herda o filtro StAtiva do catálogo");
-        balde.NmServico.Should().NotBe(FinanceiroService.RotuloServicoNaoEncontrado);
+
+        // F2: literal também aqui. Um `NotBe` contra a própria constante concordaria com ela
+        // qualquer que fosse o valor dela.
+        balde.NmServico.Should().NotBe("(serviço não encontrado)");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
@@ -590,6 +599,93 @@ public class FinanceiroServiceTests
             .ToListAsync();
         alheias.Should().HaveCount(3);
         alheias.Sum(c => c.VlCobrado).Should().Be(23331.00m);
+    }
+
+    [Fact]
+    public async Task Cobranca_cujo_servico_NAO_EXISTE_nesta_clinica_cai_no_balde_de_CONTINGENCIA()
+    {
+        // 🔴 F3 da fix wave pós-G2. `RotuloServicoNaoEncontrado` estava documentado como o
+        // mecanismo que impede a QUEBRA SILENCIOSA da reconciliação do R-9 — e nenhum teste
+        // executava esse caminho: trocá-lo por `RotuloAvulso` não mudava um resultado sequer.
+        // Documentação garantindo o que nenhum teste exige é exatamente a regra 5 do ciclo.
+        //
+        // 🔴 E o cenário é o REAL, não um id inventado: a FK aponta um SERVICO_PRECO que
+        // EXISTE no banco, só que na clínica B. `ListarPorIdsNaClinicaAsync` não o traz
+        // porque compara a clínica, então o rótulo não resolve. Isso faz deste teste também
+        // uma TRAVA DE TENANT no rótulo: se o predicado de clínica daquele repositório cair,
+        // o balde passa a exibir "Serviço do outro tenant" — o nome comercial do concorrente
+        // dentro do relatório da clínica A — e a asserção abaixo cai.
+        using var ctx = CenarioBase(
+            nameof(Cobranca_cujo_servico_NAO_EXISTE_nesta_clinica_cai_no_balde_de_CONTINGENCIA));
+
+        SemearCobranca(ctx, 1, 10, ClinicaA, 90.00m, MeioDoPeriodo, ServicoConsultaA);
+
+        // A linha com a FK cruzada. Ela é da clínica A (senão o filtro de tenant das
+        // COBRANÇAS já a derrubaria e o teste provaria outra coisa), mas aponta o serviço da
+        // clínica B.
+        SemearCobranca(ctx, 2, 11, ClinicaA, 60.00m, MeioDoPeriodo, ServicoDaClinicaB);
+
+        var resumo = await CriarService(ctx, ClinicaA).ObterResumoAsync(De, Ate);
+
+        // 🔴 O invariante: a receita da linha órfã ENTRA. Descartá-la seria a quebra
+        // silenciosa — 90,00 de mix contra 150,00 de receita, sem erro e sem log.
+        resumo.ReceitaBruta.Should().Be(150.00m);
+        resumo.MixPorServico.Sum(m => m.Receita).Should().Be(resumo.ReceitaBruta,
+            "o mix RECONCILIA mesmo quando o rótulo de um balde não resolve");
+        resumo.MixPorServico.Should().HaveCount(2);
+
+        var contingencia = resumo.MixPorServico.Single(m => m.IdServicoPreco == ServicoDaClinicaB);
+        contingencia.Receita.Should().Be(60.00m);
+        contingencia.NrCobrancas.Should().Be(1);
+
+        // Literal (F2), não `FinanceiroService.RotuloServicoNaoEncontrado`.
+        contingencia.NmServico.Should().Be("(serviço não encontrado)");
+
+        // 🔴 As duas negativas que dizem o que o balde NÃO pode ser:
+        // - o nome do serviço alheio seria vazamento cross-tenant no rótulo;
+        // - "(avulso)" confundiria FK ausente (legítima, D-2) com FK que não resolve.
+        contingencia.NmServico.Should().NotBe("Serviço do outro tenant");
+        contingencia.NmServico.Should().NotBe("(avulso)");
+
+        // Controle positivo do instrumento: o serviço da clínica B EXISTE mesmo no banco.
+        // Sem esta asserção, o "(serviço não encontrado)" seria compatível com um seed que
+        // nunca gravou a linha — e aí o teste não estaria provando o escopo de clínica.
+        (await ctx.ServicosPreco.IgnoreQueryFilters()
+            .SingleAsync(s => s.Id == ServicoDaClinicaB)).IdClinica.Should().Be(ClinicaB);
+    }
+
+    [Fact]
+    public async Task Receita_que_DESABA_A_ZERO_devolve_variacao_de_MENOS_100_por_cento()
+    {
+        // 🔴 F4 da fix wave pós-G2: a 4ª combinação de vazio — período anterior CHEIO,
+        // período atual VAZIO. As outras três já tinham trava; esta não, e é provavelmente o
+        // número que mais interessa a um gestor ("o faturamento desabou a zero").
+        //
+        // 🔴 E ela é a única em que o -100 tem de ser CALCULADO em vez de virar null: a
+        // guarda de divisão olha a receita ANTERIOR, que aqui é 100,00. Um `if` escrito na
+        // ponta errada (receita atual == 0 -> null) devolveria "não medimos" para uma queda
+        // total medida — o pior formato possível, porque some do gráfico.
+        using var ctx = CenarioBase(nameof(Receita_que_DESABA_A_ZERO_devolve_variacao_de_MENOS_100_por_cento));
+
+        SemearCobranca(ctx, 1, 20, ClinicaA, 100.00m, MeioDoAnterior, ServicoConsultaA);
+
+        var resumo = await CriarService(ctx, ClinicaA).ObterResumoAsync(De, Ate);
+
+        resumo.ReceitaBruta.Should().Be(0m);
+        resumo.NrCobrancas.Should().Be(0);
+        resumo.NrAtendimentosCobrados.Should().Be(0);
+        resumo.MixPorServico.Should().BeEmpty("o mix é do período ATUAL, que não faturou");
+
+        resumo.ReceitaBrutaPeriodoAnterior.Should().Be(100.00m);
+        resumo.NrAtendimentosCobradosPeriodoAnterior.Should().Be(1);
+
+        resumo.VariacaoPercentual.Should().Be(-100.00m, "(0 - 100) / 100 * 100");
+        resumo.VariacaoPercentual.Should().NotBeNull(
+            "há base de comparação: null aqui seria 'não medimos' para uma queda MEDIDA");
+
+        // O ticket médio, esse SIM é null: zero atendimento não tem ticket. Os dois nulos são
+        // decisões diferentes e este caso é o único em que uma vale e a outra não.
+        resumo.TicketMedio.Should().BeNull();
     }
 
     [Fact]

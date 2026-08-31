@@ -354,7 +354,12 @@ public class FinanceiroResumoHttpTests : IClassFixture<KuraApiFactory>
 
         var avulso = resumo.MixPorServico.Single(m => m.IdServicoPreco is null);
         avulso.Receita.Should().Be(25.00m);
-        avulso.NmServico.Should().Be(FinanceiroService.RotuloAvulso);
+
+        // 🔴 F2 da fix wave pós-G2: LITERAL, e não `FinanceiroService.RotuloAvulso` — a
+        // asserção anterior era derivada da constante que ela provava, então trocar o valor
+        // por "" deixava tudo verde com o app renderizando um balde em branco. Aqui, no
+        // caminho HTTP, o literal também prova que o rótulo ATRAVESSA a serialização.
+        avulso.NmServico.Should().Be("(avulso)");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
