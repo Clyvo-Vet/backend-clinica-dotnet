@@ -389,6 +389,68 @@ public class FinanceiroResumoHttpTests : IClassFixture<KuraApiFactory>
         resumo.PeriodoAnterior.Ate.Should().Be(new DateOnly(2017, 6, 30));
     }
 
+    [Fact]
+    public async Task Os_dois_periodos_NAO_se_sobrepoem_nem_deixam_buraco_POR_ROTA()
+    {
+        // 🔴 F5 da fix wave pós-G2. A partição dos dois períodos em MEMÓRIA é uma decisão
+        // que nasceu FORA do brief (o service faz UMA consulta de faixa cobrindo os dois e
+        // separa depois), e ela descansava num único teste de service — sem nenhuma cobertura
+        // por rota. Se aquele caso fosse apagado ou enfraquecido, a partição inteira ficava
+        // sem detector, e o modo de falha dela é silencioso: receita contada duas vezes
+        // (deflacionando a variação) ou receita sumindo no vão entre os dois baldes.
+        //
+        // Três instantes de borda, com valores inconfundíveis, num ano próprio (2021):
+        // último minuto do anterior, primeiro instante do atual, e a véspera do anterior —
+        // que não pode aparecer em NENHUM dos dois. Datas LITERAIS: o teste não repete a
+        // aritmética do produto.
+        var client = await ClienteGestorAsync();
+
+        // Primeiro instante do período atual (2021-06-10 .. 2021-06-12) — só pode contar no ATUAL.
+        await LancarAsync(client, KuraApiFactory.IdEventoClinicoSemeado, 7.00m,
+            "2021-06-10T00:00:00Z");
+
+        // Último minuto do período anterior (2021-06-07 .. 2021-06-09) — só no ANTERIOR.
+        await LancarAsync(client, KuraApiFactory.IdSegundoEventoClinicoSemeado, 300.00m,
+            "2021-06-09T23:59:00Z");
+
+        // Véspera do anterior — fora dos dois. Se aparecer em algum total, a faixa da consulta
+        // única está larga demais de um lado.
+        await LancarAsync(client, KuraApiFactory.IdEventoClinicoSemeado, 9999.00m,
+            "2021-06-06T23:59:00Z");
+
+        var resumo = await LerResumoAsync(
+            await client.GetAsync(Rota("2021-06-10", "2021-06-12")));
+
+        // 🔴 NADA vaza de um balde para o outro.
+        resumo.ReceitaBruta.Should().Be(7.00m,
+            "só a cobrança do primeiro instante do período atual entra na receita");
+        resumo.ReceitaBrutaPeriodoAnterior.Should().Be(300.00m,
+            "a cobrança das 23:59 do último dia do anterior é do ANTERIOR, não do atual");
+
+        // As duas somas erradas que a partição quebrada produziria, nomeadas:
+        resumo.ReceitaBruta.Should().NotBe(307.00m, "307,00 seria a partição não separando nada");
+        resumo.ReceitaBrutaPeriodoAnterior.Should().NotBe(307.00m,
+            "307,00 na base seria o primeiro dia do período atual contado DUAS vezes — na "
+            + "receita e na comparação — deflacionando a variação percentual");
+        (resumo.ReceitaBruta + resumo.ReceitaBrutaPeriodoAnterior).Should().Be(307.00m,
+            "os 9999,00 da véspera do anterior não entram em nenhum dos dois");
+
+        resumo.NrCobrancas.Should().Be(1);
+        resumo.NrAtendimentosCobradosPeriodoAnterior.Should().Be(1);
+        resumo.MixPorServico.Sum(m => m.Receita).Should().Be(7.00m,
+            "o mix é do período ATUAL: a receita do anterior não pode aparecer nele");
+
+        // 🔴 CONTÍGUOS E DISJUNTOS, atravessando a serialização: nem sobreposição, nem
+        // buraco. O fim exclusivo do anterior é EXATAMENTE o início do atual.
+        resumo.PeriodoAnterior.FimExclusivoUtc.Should().Be(resumo.Periodo.InicioUtc);
+        resumo.PeriodoAnterior.InicioUtc.Should().Be(
+            new DateTime(2021, 6, 7, 0, 0, 0, DateTimeKind.Utc));
+        resumo.PeriodoAnterior.FimExclusivoUtc.Should().Be(
+            new DateTime(2021, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        resumo.Periodo.FimExclusivoUtc.Should().Be(
+            new DateTime(2021, 6, 13, 0, 0, 0, DateTimeKind.Utc));
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────
     // 🔴 R-7 — o null atravessa a serialização
     // ─────────────────────────────────────────────────────────────────────────────────────
@@ -429,16 +491,33 @@ public class FinanceiroResumoHttpTests : IClassFixture<KuraApiFactory>
         // vazou" seria logicamente incapaz de falhar.
         var client = await ClienteGestorAsync();
 
-        var ontem = DateTime.UtcNow.AddDays(-1);
-        var deIso = DateOnly.FromDateTime(ontem).ToString("yyyy-MM-dd");
-        var ateIso = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+        // 🔴 F6 da fix wave pós-G2 — A JANELA É DETERMINÍSTICA. Antes, ela era calculada
+        // com `DateTime.UtcNow` DO TESTE, enquanto a isca tinha sido carimbada com
+        // `UtcNow.AddDays(-1)` na CONSTRUÇÃO DA FACTORY. Bastava a execução cruzar a
+        // meia-noite UTC entre os dois momentos para a isca cair FORA da janela: o teste
+        // passava por VÁCUO, provando "não vazou" sobre um período onde a isca nem estava —
+        // exatamente o modo de falha que ele existe para impedir.
+        //
+        // Hoje a isca e a janela saem da MESMA referência temporal: a data fixa da factory.
+        const string diaDaIsca = "2023-04-12";
+
+        // 🔴 E a guarda que impede o vácuo de VOLTAR pela porta dos fundos: se alguém mover
+        // a constante da factory, esta asserção CAI em vez de o teste ficar verde sem medir.
+        // Os limites são literais, não derivados da constante que eles cercam.
+        KuraApiFactory.DtCobrancaOutroTenant.Should().BeOnOrAfter(
+            new DateTime(2023, 4, 12, 0, 0, 0, DateTimeKind.Utc),
+            "a isca de 777,77 TEM de cair dentro da janela deste teste");
+        KuraApiFactory.DtCobrancaOutroTenant.Should().BeBefore(
+            new DateTime(2023, 4, 13, 0, 0, 0, DateTimeKind.Utc),
+            "a isca de 777,77 TEM de cair dentro da janela deste teste");
 
         // Controle positivo: uma cobrança NOSSA na mesma janela. Sem ela, uma receita zerada
         // seria compatível com "o filtro descarta tudo".
         await LancarAsync(client, KuraApiFactory.IdEventoClinicoSemeado, 11.00m,
-            ontem.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+            "2023-04-12T12:00:00Z");
 
-        var resumo = await LerResumoAsync(await client.GetAsync(Rota(deIso, ateIso)));
+        var resumo = await LerResumoAsync(
+            await client.GetAsync(Rota(diaDaIsca, diaDaIsca)));
 
         resumo.ReceitaBruta.Should().Be(11.00m);
         resumo.ReceitaBruta.Should().NotBe(788.77m,

@@ -1,4 +1,4 @@
-﻿namespace Kura.IntegrationTests;
+namespace Kura.IntegrationTests;
 
 using Kura.Domain.Entities;
 using Kura.Infrastructure.Persistence;
@@ -149,6 +149,24 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     // login na clinica 2; esta linha existe exclusivamente como isca de IDOR.
     public const long IdCobrancaOutroTenant = 1;
     public const decimal ValorCobrancaOutroTenant = 777.77m;
+
+    /// <summary>
+    /// 🔴 F6 da fix wave pos-G2 da FD-11: a data da isca e FIXA, nao `UtcNow.AddDays(-1)`.
+    ///
+    /// <para>O teste de IDOR do resumo financeiro precisa de uma JANELA que contenha a isca —
+    /// senao ele passa por VACUO, provando "nao vazou" sobre um periodo em que a isca nem
+    /// estava. Com a isca carimbada na CONSTRUCAO da factory e a janela calculada com o
+    /// `UtcNow` DO TESTE, uma execucao que cruzasse a meia-noite UTC jogava a isca para fora
+    /// da janela e o teste ficava verde sem ter medido nada — exatamente o modo de falha que
+    /// ele existe para impedir. Janela de risco pequena, consequencia silenciosa.</para>
+    ///
+    /// <para>Data fixa remove a corrida inteira: a isca e a janela saem da MESMA referencia
+    /// temporal, que agora e uma constante. O ano 2023 nao e usado por nenhum outro cenario
+    /// de `FinanceiroResumoHttpTests` (que isola cada teste num ano proprio, porque o resumo
+    /// e agregado e o banco InMemory e compartilhado pela IClassFixture).</para>
+    /// </summary>
+    public static readonly DateTime DtCobrancaOutroTenant =
+        new(2023, 4, 12, 9, 0, 0, DateTimeKind.Utc);
 
     /// <summary>Chave HMAC do JWT. &gt;= 32 bytes, exigência do <c>SymmetricSecurityKey</c>.</summary>
     public const string ChaveJwt = "chave-de-integracao-s3d06-com-mais-de-32-bytes";
@@ -479,7 +497,7 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             IdServicoPreco = IdServicoPrecoOutroTenant,
             VlCobrado = ValorCobrancaOutroTenant,
             DsFormaPagamento = "DINHEIRO",
-            DtCobranca = DateTime.UtcNow.AddDays(-1),
+            DtCobranca = DtCobrancaOutroTenant,
             StAtiva = true,
         });
 
