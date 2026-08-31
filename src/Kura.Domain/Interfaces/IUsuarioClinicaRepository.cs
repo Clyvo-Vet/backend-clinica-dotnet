@@ -83,4 +83,45 @@ public interface IUsuarioClinicaRepository : IRepository<UsuarioClinica>
     /// GESTOR ativo" — ver <c>UsuarioClinicaService</c> para o argumento da decisão.</para>
     /// </summary>
     Task<int> ContarGestoresAtivosAsync(long idClinica, long? excetoId = null);
+
+    /// <summary>
+    /// 🔴 <b>FD-13 — trava (lock pessimista) TODAS as linhas de GESTOR ativo da clínica até o
+    /// fim da transação em curso.</b> Tem de ser chamado <b>antes</b> de
+    /// <see cref="ContarGestoresAtivosAsync"/> quando a contagem for usada para DECIDIR uma
+    /// escrita, e <b>dentro</b> de uma transação — sem transação, o lock é liberado no fim do
+    /// próprio statement e não protege nada.
+    ///
+    /// <para><b>O defeito que ele fecha, medido:</b> duas desativações concorrentes de
+    /// gestores <b>diferentes</b> da mesma clínica passavam as duas (<c>204</c> + <c>204</c>)
+    /// e deixavam a clínica com <b>ZERO gestor ativo</b> — 3/3 reproduções contra Oracle real.
+    /// Serialmente a segunda dá <c>422</c>, ou seja, a regra existe: o buraco é a janela entre
+    /// CONTAR e GRAVAR.</para>
+    ///
+    /// <para><b>Por que lock pessimista, e não as alternativas mais baratas</b> (as 4 já foram
+    /// avaliadas e recusadas na FD-04): <c>NR_VERSION</c>/optimistic locking não se aplica
+    /// porque as duas escritas concorrentes tocam <b>linhas diferentes</b> — não há versão em
+    /// disputa; transação sozinha não fecha nada sob <c>READ COMMITTED</c>, que é o default do
+    /// Oracle e dá snapshot por STATEMENT (as duas contagens veem 2 gestores e as duas
+    /// passam); e revalidar no <c>SaveChanges</c> repete a mesma leitura na mesma janela cega.
+    /// A serialização precisa de um recurso COMUM às duas transações — e o único recurso comum
+    /// aqui é o próprio conjunto de gestores.</para>
+    ///
+    /// <para><b>Por que o conjunto INTEIRO, sem excluir o alvo.</b> É o que faz as duas
+    /// transações colidirem: A (alvo 100) e B (alvo 107) travam o MESMO conjunto
+    /// <c>{100, 107}</c>, então uma bloqueia a outra. Se cada uma travasse só "os outros", os
+    /// conjuntos seriam disjuntos e ninguém bloquearia ninguém — o lock existiria e não
+    /// serializaria nada.</para>
+    ///
+    /// <para><b>Deadlock:</b> as duas sessões executam o statement IDÊNTICO, com o mesmo plano
+    /// e o mesmo predicado, logo travam as linhas na mesma ordem de varredura. Deadlock exige
+    /// ordens diferentes.</para>
+    ///
+    /// <para>⚠️ <b>Degrada para no-op quando o provider não é relacional</b> (InMemory da
+    /// suíte), porque SQL cru não existe lá — e um <c>if</c> no service para desviar disso
+    /// faria o teste exercitar um caminho que produção não usa. A consequência é declarada e
+    /// não tem contorno: <b>nenhum teste desta suíte prova a serialização</b>; a prova é
+    /// medição contra Oracle real, registrada no relatório da FD-13.</para>
+    /// </summary>
+    Task BloquearGestoresAtivosAsync(long idClinica);
+
 }
