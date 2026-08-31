@@ -446,8 +446,25 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
             // Inclui o 422 do invariante: a transação existe só para segurar o lock, então
             // desfazê-la no caminho de recusa é o correto — nada foi gravado, e segurar as
             // linhas travadas até o fim do request bloquearia gestores legítimos.
+            //
+            // 🔴 O rollback vai dentro de try/catch PRÓPRIO (revisão G2 da FD-13): se ele
+            // lançar — conexão morta, transação já abortada pelo servidor — a exceção do
+            // rollback SUBSTITUIRIA a original, e o cliente receberia 500 no lugar do 422 que
+            // a regra de negócio produziu. Falha de infraestrutura no desfazer não pode apagar
+            // o MOTIVO da recusa.
             if (transacaoReal)
-                await _uow.RollbackTransactionAsync();
+            {
+                try
+                {
+                    await _uow.RollbackTransactionAsync();
+                }
+                catch
+                {
+                    // Engolido de propósito, e só aqui: a conexão é descartada com o escopo do
+                    // request e o Oracle libera os locks ao fim da sessão, então não há lock
+                    // vazado a reportar. Propagar trocaria o 422 correto por um 500.
+                }
+            }
 
             throw;
         }

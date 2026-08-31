@@ -39,10 +39,19 @@ public class UnitOfWork : IUnitOfWork
 
     /// <inheritdoc />
     /// <remarks>
-    /// <c>Database.IsRelational()</c> é a pergunta certa (e não <c>is InMemoryDatabase</c>):
-    /// ela é sobre a CAPACIDADE que o chamador precisa — transação + SQL cru —, não sobre o
-    /// nome de um provider específico. Um provider relacional novo (SQLite num teste futuro)
-    /// passa a valer automaticamente; um não relacional novo degrada sozinho.
+    /// <c>Database.IsRelational()</c> é a pergunta certa <b>para o que este método promete</b>
+    /// (e não <c>is InMemoryDatabase</c>): ela é sobre a CAPACIDADE de abrir <b>transação</b>,
+    /// não sobre o nome de um provider. Provider não relacional novo degrada sozinho.
+    ///
+    /// <para>🔴 <b>O que ela NÃO garante</b> — corrigido pela revisão G2 da FD-13, que pegou
+    /// esta documentação prometendo o que o código não entrega: um provider relacional novo
+    /// <b>não</b> passa a valer automaticamente para o invariante do último gestor. Aquele
+    /// caminho precisa de <b>duas</b> capacidades, e este método só responde por uma. O lock de
+    /// <c>UsuarioClinicaRepository.BloquearGestoresAtivosAsync</c> é <c>SELECT … FOR UPDATE</c>,
+    /// sintaxe que o <b>SQLite não implementa</b> (ele não tem lock de linha). Um teste futuro
+    /// em SQLite receberia <c>true</c> daqui, <b>pareceria</b> exercitar a serialização e não
+    /// exercitaria — falso verde, que é pior que a degradação honesta do InMemory. <b>Trocar o
+    /// provider de teste exige reescrever o SQL do lock, não só trocar o provider.</b></para>
     /// </remarks>
     public async Task<bool> TryBeginTransactionAsync()
     {
