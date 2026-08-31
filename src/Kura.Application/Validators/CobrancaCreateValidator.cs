@@ -1,4 +1,4 @@
-namespace Kura.Application.Validators;
+﻿namespace Kura.Application.Validators;
 
 using FluentValidation;
 using Kura.Application.DTOs.Cobranca;
@@ -61,7 +61,43 @@ public sealed class CobrancaCreateValidator : AbstractValidator<CobrancaCreateDt
     /// </summary>
     public static readonly DateTime DataMinima = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Folga sobre <c>UtcNow</c> para absorver fuso e relógio do cliente.</summary>
+    /// <summary>
+    /// Folga sobre <c>UtcNow</c> para absorver fuso e relógio do cliente.
+    ///
+    /// <para>
+    /// 🔴 <b>CONSEQUENCIA DECLARADA PARA A FD-11, achado F2 da revisão G2 — leia antes de
+    /// agregar por período.</b> Esta folga <b>atravessa fronteira de mês</b>: uma cobrança
+    /// lançada em 31/01 com data no limite da tolerância cai em 01/02 e é contada no balde do
+    /// <b>mês seguinte</b>. A FD-11 agrega por período e vai herdar isso.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Por que a folga foi MANTIDA em 1 dia em vez de apertada para minutos</b> — decisão
+    /// da fix wave pós-G2, com o argumento explícito:
+    /// <list type="number">
+    ///   <item><description><b>Apertar não elimina a classe, só estreita a janela.</b>
+    ///   QUALQUER tolerância maior que zero atravessa a virada do mês perto da meia-noite do
+    ///   último dia. Ir de 1 dia para 15 minutos reduz a janela de ~24h para ~15min e deixa o
+    ///   defeito de pé. Um controle que só estreita janela não é o lugar certo para consertar
+    ///   um invariante de <i>bucketing</i>.</description></item>
+    ///   <item><description><b>A folga absorve FUSO, não só relógio dessincronizado.</b> Um
+    ///   cliente que serializa um <c>DateTime</c> sem offset — exatamente o que
+    ///   <c>System.Text.Json</c> produz para <c>DateTimeKind.Unspecified</c>, medido nesta
+    ///   própria suíte — pode estar legitimamente até ±14h de UTC. Com tolerância de minutos,
+    ///   o "agora" de um cliente desses vira <c>400</c>: trocaríamos uma cobrança rara no
+    ///   balde errado por um lançamento comum que falha. É um negócio pior.</description></item>
+    ///   <item><description><b>O controle durável é da FD-11, não daqui.</b> Quem agrega tem
+    ///   de decidir e declarar a que dia uma cobrança pertence. O que a FD-10 deve à FD-11 é
+    ///   um limite <b>declarado</b> — este parágrafo — em vez de uma surpresa.</description></item>
+    /// </list>
+    /// </para>
+    ///
+    /// <para>⚠️ A fronteira é fixada por teste contra um <b>literal</b>
+    /// (<c>DtCobranca_a_tolerancia_futura_e_de_exatamente_UM_dia</c>), e não contra esta
+    /// constante: um teste escrito em função dela é incapaz de detectar que ela mudou —
+    /// medido por mutação nesta fix wave, trocando 1 dia por 7 e vendo a suíte continuar
+    /// verde.</para>
+    /// </summary>
     public static readonly TimeSpan ToleranciaFutura = TimeSpan.FromDays(1);
 
     public const string MensagemValorNegativo =

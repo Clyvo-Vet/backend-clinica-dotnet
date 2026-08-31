@@ -1,4 +1,4 @@
-namespace Kura.Application.DTOs.Cobranca;
+﻿namespace Kura.Application.DTOs.Cobranca;
 
 /// <summary>
 /// Corpo do lançamento de cobrança num evento clínico (FD-10, ciclo FIN).
@@ -68,6 +68,11 @@ public sealed class CobrancaCreateDto
     /// <c>0001-01-01</c>, o <c>default(DateTime)</c> que passa pelo <c>NOT NULL</c> do
     /// Oracle e some de todo relatório por período) e data no futuro além de um dia de
     /// tolerância (receita que ainda não existe inflando o mês corrente).</para>
+    ///
+    /// <para>⚠️ <b>Limite declarado para a FD-11 (F2 da revisão G2):</b> a tolerância futura
+    /// de 1 dia <b>atravessa fronteira de mês</b> — 31/01 no limite cai em 01/02, no balde do
+    /// mês seguinte. A decisão de manter a folga, e o porquê, estão em
+    /// <c>CobrancaCreateValidator.ToleranciaFutura</c>.</para>
     /// </summary>
     public DateTime? DtCobranca { get; init; }
 }

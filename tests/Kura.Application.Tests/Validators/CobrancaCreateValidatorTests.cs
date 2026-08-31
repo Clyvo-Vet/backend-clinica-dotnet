@@ -1,4 +1,4 @@
-namespace Kura.Application.Tests.Validators;
+﻿namespace Kura.Application.Tests.Validators;
 
 using FluentAssertions;
 using FluentValidation.Results;
@@ -161,6 +161,33 @@ public class CobrancaCreateValidatorTests
         Validar(dtCobranca: DateTime.UtcNow.AddDays(10)).IsValid.Should().BeFalse();
 
         // Controle positivo da tolerância: 1 hora à frente (relógio/fuso do cliente) passa.
+        Validar(dtCobranca: DateTime.UtcNow.AddHours(1)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DtCobranca_a_tolerancia_futura_e_de_exatamente_UM_dia()
+    {
+        // 🔴 F2 da revisão G2, e a lição que a MINHA PRIMEIRA VERSÃO DESTE TESTE não
+        // aprendeu: escrito em função de `CobrancaCreateValidator.ToleranciaFutura`, ele era
+        // logicamente incapaz de detectar que a constante mudou — medido, trocando 1 dia por
+        // 7 e vendo os 19 casos continuarem VERDES. A fronteira só é uma decisão travada se
+        // estiver fixada contra um LITERAL.
+        //
+        // E ela precisa estar travada porque a folga atravessa a virada do mês: 31/01 no
+        // limite cai em 01/02, e a FD-11 agrega por período. Alargar isto tem de quebrar a
+        // suíte, não passar despercebido.
+        CobrancaCreateValidator.ToleranciaFutura.Should().Be(TimeSpan.FromDays(1));
+
+        // A margem de 1 minuto para cada lado existe porque UtcNow anda entre a montagem do
+        // caso e a avaliação da regra — assertar no limite exato seria flaky.
+        Validar(dtCobranca: DateTime.UtcNow.AddDays(1).AddMinutes(-1))
+            .IsValid.Should().BeTrue();
+
+        Validar(dtCobranca: DateTime.UtcNow.AddDays(1).AddMinutes(1))
+            .IsValid.Should().BeFalse();
+
+        // Controle positivo do instrumento: um valor bem dentro da faixa passa, então o
+        // `false` acima é sobre a fronteira e não sobre a regra estar recusando tudo.
         Validar(dtCobranca: DateTime.UtcNow.AddHours(1)).IsValid.Should().BeTrue();
     }
 
