@@ -463,6 +463,51 @@ public class CobrancasHttpTests : IClassFixture<KuraApiFactory>
         lista.Should().NotContain(c => c.VlCobrado == KuraApiFactory.ValorCobrancaOutroTenant);
     }
 
+    [Fact]
+    public async Task Listagem_de_um_evento_NAO_traz_a_cobranca_de_OUTRO_evento_da_MESMA_clinica()
+    {
+        // F5 da fix wave 2, pela ROTA. O irmao unitario prova o predicado do repositorio;
+        // este prova que o segmento {idEventoClinico} da URL CHEGA nele -- que e exatamente
+        // a distincao que o F1 mordeu no GET por id, onde o segmento era aceito com qualquer
+        // valor e nenhum teste de service teria visto.
+        //
+        // As duas cobrancas sao da MESMA clinica, lidas pelo gestor dela: o predicado de
+        // tenant esta satisfeito nos dois lados e nao ajuda a separar nada aqui.
+        var veterinario = await ClienteVeterinarioAsync();
+        var gestor = await ClienteGestorAsync();
+
+        var noPrimeiro = await veterinario.PostAsJsonAsync(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado), new { vlCobrado = 131.31m });
+        noPrimeiro.StatusCode.Should().Be(HttpStatusCode.Created);
+        var cobrancaPrimeiro = await noPrimeiro.Content.ReadFromJsonAsync<CobrancaResponseDto>();
+
+        var noSegundo = await veterinario.PostAsJsonAsync(
+            Rota(KuraApiFactory.IdSegundoEventoClinicoSemeado), new { vlCobrado = 242.42m });
+        noSegundo.StatusCode.Should().Be(HttpStatusCode.Created);
+        var cobrancaSegundo = await noSegundo.Content.ReadFromJsonAsync<CobrancaResponseDto>();
+
+        var listaSegundo = await gestor.GetFromJsonAsync<List<CobrancaResponseDto>>(
+            Rota(KuraApiFactory.IdSegundoEventoClinicoSemeado));
+
+        // Este evento so tem a cobranca dele. Se o predicado de evento cair, a listagem passa
+        // a trazer TODAS as cobrancas da clinica -- e esta classe lanca varias.
+        listaSegundo.Should().NotBeNull();
+        listaSegundo!.Should().OnlyContain(
+            c => c.IdEventoClinico == KuraApiFactory.IdSegundoEventoClinicoSemeado);
+        listaSegundo.Should().Contain(c => c.Id == cobrancaSegundo!.Id);
+        listaSegundo.Should().NotContain(c => c.Id == cobrancaPrimeiro!.Id);
+        listaSegundo.Should().NotContain(c => c.VlCobrado == 131.31m);
+
+        // CONTROLE POSITIVO: a cobranca do PRIMEIRO evento existe e aparece na rota dela.
+        // Sem isto, um endpoint que devolvesse lista vazia sempre passaria nos "nao contem".
+        var listaPrimeiro = await gestor.GetFromJsonAsync<List<CobrancaResponseDto>>(
+            Rota(KuraApiFactory.IdEventoClinicoSemeado));
+        listaPrimeiro.Should().NotBeNull();
+        listaPrimeiro!.Should().Contain(c => c.Id == cobrancaPrimeiro!.Id);
+        listaPrimeiro.Should().OnlyContain(
+            c => c.IdEventoClinico == KuraApiFactory.IdEventoClinicoSemeado);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────
     // Contrato de entrada — o que o Oracle recusaria e o InMemory gravaria
     // ─────────────────────────────────────────────────────────────────────────────────────

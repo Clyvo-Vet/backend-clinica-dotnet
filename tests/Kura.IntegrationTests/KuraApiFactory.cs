@@ -132,6 +132,15 @@ public class KuraApiFactory : WebApplicationFactory<Program>
     public const long IdEventoClinicoSemeado = 1;
     public const long IdEventoClinicoOutroTenant = 2;
 
+    // -- F5 da fix wave 2: SEGUNDO evento da MESMA clinica semeada --------------------
+    // Isolamento entre EVENTOS, que e uma pergunta diferente de isolamento entre
+    // CLINICAS. A isca do tenant 2 (IdCobrancaOutroTenant) nao alcanca este caso: ela
+    // prova que a listagem nao cruza a fronteira de clinica, e nada diz sobre a listagem
+    // de um atendimento trazer a conta de OUTRO atendimento da mesma clinica -- que e o
+    // que acontece se o predicado de evento do repositorio cair. Medido: com
+    // `c.IdEventoClinico == idEventoClinico` neutralizado, a suite ficava 583/583 VERDE.
+    public const long IdSegundoEventoClinicoSemeado = 3;
+
     // -- F3 da revisao G2 da FD-10: COBRANCA semeada no OUTRO tenant ------------------
     // 🔴 Faltava, e a lacuna era mensuravel: a mutacao do predicado de tenant em
     // CobrancaRepository mordia so nas suites unitarias e a suite HTTP ficava VERDE,
@@ -445,6 +454,19 @@ public class KuraApiFactory : WebApplicationFactory<Program>
             IdTipoEvento = 1,
             DtEvento = DateTime.UtcNow.AddDays(-1),
             DsObservacao = "Atendimento do outro tenant (isca)",
+            StAtiva = true,
+        });
+
+        // F5 - segundo atendimento da MESMA clinica. Ver a constante.
+        db.EventosClinicos.Add(new EventoClinico
+        {
+            Id = IdSegundoEventoClinicoSemeado,
+            IdClinica = IdClinicaSemeada,
+            IdPet = 3,
+            IdVeterinario = IdVeterinarioSemeado,
+            IdTipoEvento = 1,
+            DtEvento = DateTime.UtcNow.AddDays(-2),
+            DsObservacao = "Segundo atendimento da clinica semeada (outro pet)",
             StAtiva = true,
         });
 

@@ -474,6 +474,47 @@ public class CobrancaServiceTests
         (await service.ObterPorIdAsync(EventoDaClinicaA, lancada.Id)).Id.Should().Be(lancada.Id);
     }
 
+    [Fact]
+    public async Task Listar_de_um_evento_NAO_traz_a_cobranca_de_OUTRO_evento_da_MESMA_clinica()
+    {
+        // F5 da fix wave 2. Isolamento entre EVENTOS -- pergunta DIFERENTE do isolamento
+        // entre CLINICAS que o F3 fechou. Aqui as duas cobrancas sao da MESMA clinica e sao
+        // lidas pela dona: o predicado de tenant esta satisfeito nos dois lados, e a UNICA
+        // coisa entre a resposta certa e a errada e `c.IdEventoClinico == idEventoClinico`.
+        //
+        // Sem este teste aquele predicado nao tinha trava nenhuma: neutraliza-lo deixava a
+        // suite inteira em 583/583 VERDE, e o defeito real seria a conta de um pet
+        // aparecendo no atendimento de outro.
+        using var ctx = CenarioComOsDoisTenants(
+            nameof(Listar_de_um_evento_NAO_traz_a_cobranca_de_OUTRO_evento_da_MESMA_clinica));
+        var service = CriarService(ctx, ClinicaA);
+
+        const long SegundoEventoDaClinicaA = 12L;
+        SemearEvento(ctx, SegundoEventoDaClinicaA, ClinicaA);
+
+        var doPrimeiro = await service.LancarAsync(
+            EventoDaClinicaA, new CobrancaCreateDto { VlCobrado = 111.11m });
+        var doSegundo = await service.LancarAsync(
+            SegundoEventoDaClinicaA, new CobrancaCreateDto { VlCobrado = 222.22m });
+
+        var lista = (await service.ListarDoEventoAsync(EventoDaClinicaA)).ToList();
+
+        lista.Should().ContainSingle();
+        lista[0].Id.Should().Be(doPrimeiro.Id);
+        lista[0].VlCobrado.Should().Be(111.11m);
+        lista.Should().NotContain(c => c.Id == doSegundo.Id);
+        lista.Should().NotContain(c => c.VlCobrado == 222.22m);
+
+        // CONTROLE POSITIVO: a cobranca do segundo evento EXISTE e e alcancavel pela rota
+        // dela. Sem isto, um repositorio que devolvesse lista vazia para tudo passaria nas
+        // assercoes de "nao contem" acima -- verde por vacuo.
+        var listaDoSegundo = (await service.ListarDoEventoAsync(SegundoEventoDaClinicaA))
+            .ToList();
+        listaDoSegundo.Should().ContainSingle();
+        listaDoSegundo[0].Id.Should().Be(doSegundo.Id);
+        listaDoSegundo[0].VlCobrado.Should().Be(222.22m);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────
     // DT_COBRANCA — a data que não pode nascer 0001-01-01
     // ─────────────────────────────────────────────────────────────────────────────────────
