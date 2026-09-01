@@ -324,12 +324,21 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
     /// <summary>
     /// Valida o vínculo opcional com <c>VETERINARIO</c>.
     ///
-    /// <para>🔴 <b>A <c>FK_USUARIO_CLINICA_VET</c> da V17 referencia só
+    /// <para>🔴 <b>A <c>FK_USUARIO_CLINICA_VET</c> da V17 referenciava só
     /// <c>VETERINARIO(ID_VETERINARIO)</c>, sem compor com <c>ID_CLINICA</c></b> — o Oracle
-    /// aceita, sem reclamar, um usuário da clínica A apontando o veterinário da clínica B.
+    /// aceitava, sem reclamar, um usuário da clínica A apontando o veterinário da clínica B.
     /// Esse estado <b>já foi encontrado</b> nesta trilha (achado da revisão G2 da FD-03, que
-    /// deixou o cenário semeado em <c>KuraApiFactory.EmailVinculoCruzado</c>). A única defesa
-    /// é esta comparação.</para>
+    /// deixou o cenário semeado em <c>KuraApiFactory.EmailVinculoCruzado</c>). Era a única
+    /// defesa.</para>
+    ///
+    /// <para>🟢 <b>Desde a V19 (FD-14) a FK é composta
+    /// <c>(ID_CLINICA, ID_VETERINARIO)</c> e o banco RECUSA o cruzamento
+    /// (<c>ORA-02291</c>)</b> — medido contra Oracle real, inclusive para o vetor que este
+    /// código <b>não tem como cobrir</b>: mover o veterinário de clínica com
+    /// <c>UPDATE VETERINARIO SET ID_CLINICA</c> (<c>ORA-02292</c>). Esta comparação
+    /// permanece porque (1) <c>EmailVinculoCruzado</c> representa linha gravada <b>antes</b>
+    /// da V19, que a migration não remove, e (2) ela devolve <c>422</c> de regra de negócio
+    /// em vez de deixar o erro do banco virar <c>500</c>.</para>
     ///
     /// <para>🔴 <b>A busca é <c>BuscarPorIdIgnorandoFiltrosAsync</c>, e não
     /// <c>GetByIdAsync</c>, de propósito — e a justificativa abaixo foi REESCRITA na fix wave

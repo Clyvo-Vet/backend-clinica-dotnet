@@ -20,7 +20,9 @@ public interface IEventoClinicoRepository : IRepository<EventoClinico>
     /// <c>FK_COBRANCA_EVENTO</c> da V18 referencia só <c>EVENTO_CLINICO(ID_EVENTO)</c>,
     /// <b>sem compor com <c>ID_CLINICA</c></b>. É a mesma forma da armadilha F1 da FD-03
     /// (<c>FK_USUARIO_CLINICA_VET</c> sem a clínica), onde a ausência da comparação era a
-    /// única coisa entre o schema e o vazamento.
+    /// única coisa entre o schema e o vazamento. ⚠️ <b>Aquela FK foi corrigida pela V19
+    /// (FD-14) e hoje é composta; a <c>FK_COBRANCA_EVENTO</c> NÃO foi — esta comparação
+    /// continua sendo a única defesa aqui.</b>
     /// </para>
     /// </summary>
     Task<EventoClinico?> BuscarPorIdNaClinicaAsync(long id, long idClinica);
