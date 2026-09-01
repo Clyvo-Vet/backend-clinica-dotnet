@@ -39,10 +39,12 @@ public sealed class UsuarioClinicaCreateDto
 
     /// <summary>
     /// Vínculo opcional com um registro de <c>VETERINARIO</c>. Quando informado, o
-    /// veterinário tem de ser da <b>mesma clínica</b> do JWT — a
-    /// <c>FK_USUARIO_CLINICA_VET</c> da V17 referencia só <c>VETERINARIO(ID_VETERINARIO)</c>,
-    /// <b>sem compor com <c>ID_CLINICA</c></b>, então o banco aceita o cruzamento e a única
-    /// defesa é código.
+    /// veterinário tem de ser da <b>mesma clínica</b> do JWT. A
+    /// <c>FK_USUARIO_CLINICA_VET</c> da V17 referenciava só <c>VETERINARIO(ID_VETERINARIO)</c>,
+    /// <b>sem compor com <c>ID_CLINICA</c></b>, e o banco aceitava o cruzamento — a única
+    /// defesa era código. <b>Desde a V19 (FD-14) a FK é composta e o Oracle recusa
+    /// (<c>ORA-02291</c>)</b>; a validação em C# permanece para devolver <c>422</c> em vez de
+    /// <c>500</c>, e porque linhas anteriores à V19 seguem no schema.
     /// </summary>
     public long? IdVeterinario { get; init; }
 }

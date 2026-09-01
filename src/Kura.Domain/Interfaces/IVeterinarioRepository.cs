@@ -22,9 +22,12 @@ public interface IVeterinarioRepository : IRepository<Veterinario>
     /// contexto. Ver <c>UsuarioClinicaService.GarantirVeterinarioDaClinicaAsync</c> para as
     /// duas medicoes.</para>
     ///
-    /// <para>A defesa importa porque <c>FK_USUARIO_CLINICA_VET</c> (V17) referencia so
+    /// <para>A defesa nasceu porque <c>FK_USUARIO_CLINICA_VET</c> (V17) referenciava so
     /// <c>VETERINARIO(ID_VETERINARIO)</c>, <b>sem compor com <c>ID_CLINICA</c></b>: o Oracle
-    /// aceita o vinculo cruzado. Mesmo achado da revisao G2 da FD-03.</para>
+    /// aceitava o vinculo cruzado. Mesmo achado da revisao G2 da FD-03. <b>Desde a V19
+    /// (FD-14) a FK e composta e o banco recusa (<c>ORA-02291</c>)</b> — a comparacao em C#
+    /// continua carga por causa de linhas gravadas ANTES da V19 e para devolver <c>422</c>
+    /// em vez de <c>500</c>.</para>
     ///
     /// <para>⚠️ Quem chamar este metodo assume a responsabilidade do escopo: ele NAO filtra
     /// clinica nem <c>ST_ATIVA</c>.</para>

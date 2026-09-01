@@ -41,7 +41,9 @@ using Kura.Domain.Interfaces;
 /// (<c>FK_COBRANCA_EVENTO</c>, <c>FK_COBRANCA_SERVICO</c>) referenciam só a PK,
 /// <b>sem compor com <c>ID_CLINICA</c></b> — o banco aceita alegremente uma cobrança da
 /// clínica A pendurada num evento da clínica B. A comparação é a única defesa, e é a mesma
-/// forma do achado F1 da FD-03.
+/// forma do achado F1 da FD-03. ⚠️ <b>O F1 foi fechado NO BANCO pela V19 (FD-14), que tornou
+/// a <c>FK_USUARIO_CLINICA_VET</c> composta. As duas FKs de cobrança continuam fracas</b> —
+/// o mesmo furo, por outro vetor, ainda aberto.
 /// </para>
 ///
 /// <para>

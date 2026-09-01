@@ -192,12 +192,16 @@ public sealed class AuthService : IAuthService
     /// Sem o <c>IdClinica</c> escrito aqui, um <c>ID_VETERINARIO</c> apontando para outra
     /// clínica devolveria a ficha do tenant errado sem nenhum aviso.</para>
     ///
-    /// <para>🔴 <b>Isto NÃO é hipotético — a FK da V17 permite o estado (F1 da fix wave
-    /// pós-G2).</b> <c>FK_USUARIO_CLINICA_VET</c> é
+    /// <para>🔴 <b>Isto NÃO é hipotético — a FK da V17 permitia o estado (F1 da fix wave
+    /// pós-G2).</b> <c>FK_USUARIO_CLINICA_VET</c> era
     /// <c>FOREIGN KEY (ID_VETERINARIO) REFERENCES VETERINARIO(ID_VETERINARIO)</c>: ela
-    /// <b>não é composta com <c>ID_CLINICA</c></b>, então o Oracle ACEITA um
+    /// <b>não era composta com <c>ID_CLINICA</c></b>, então o Oracle ACEITAVA um
     /// <c>USUARIO_CLINICA</c> da clínica A apontando um <c>VETERINARIO</c> da clínica B.
-    /// <b>Esta linha de código é hoje a única defesa contra isso.</b> A revisão G2 mediu o
+    /// <b>Desde a V19 (FD-14) a FK é composta e o banco RECUSA esse INSERT com
+    /// <c>ORA-02291</c></b> — medido contra Oracle real. Esta linha <b>deixou de ser a única
+    /// defesa</b> e continua carga por dois motivos: (1) linhas gravadas <b>antes</b> da V19
+    /// seguem no schema, porque a migration não as remove; (2) é ela que produz <c>422</c> de
+    /// regra de negócio em vez de deixar o <c>ORA-02291</c> virar <c>500</c>. A revisão G2 mediu o
     /// que acontece sem ela: a ficha COMPLETA do veterinário do outro tenant sai no corpo do
     /// <c>200</c>, junto de um token com <c>clinicaId</c> da clínica A. Travado por
     /// <c>AuthServiceTests.LoginAsync_UsuarioApontandoVeterinarioDeOutraClinica_NaoVazaAFicha</c>
