@@ -43,8 +43,15 @@ using Microsoft.AspNetCore.Mvc;
 /// <para>
 /// ⛔ <b><c>[AllowAnonymous]</c> NÃO é o desenho — seria regressão de segurança.</b> "Catálogo
 /// operacional" significa "qualquer autenticado da clínica", nunca "público, sem token". Um
-/// <c>GET</c> sem <c>[Authorize]</c> nenhum tornaria a tabela de preços alcançável por
-/// qualquer requisição sem credencial.
+/// <c>GET</c> sem <c>[Authorize]</c> nenhum removeria a única barreira <b>declarada</b> de
+/// autenticação desta rota.
+/// <b>⚠️ Medido, para não superestimar o efeito e não subestimar o risco:</b> hoje a rota
+/// <b>não</b> ficaria anônima na prática — <c>ClinicaContext.IdClinica</c> resolve
+/// <c>clinicaId</c> com <c>GetRequiredClaimValue</c> e <b>lança</b> sem a claim, o que o
+/// <c>ExceptionHandlerMiddleware</c> converte em <c>401</c> assim mesmo. O problema é que
+/// isso é <b>acidente de implementação</b>, não garantia: passaria a depender de todo caminho
+/// de leitura futuro tocar o contexto de clínica, e some no dia em que um endpoint não tocar.
+/// A barreira tem que ser declarada.
 /// </para>
 ///
 /// <para>
@@ -63,7 +70,7 @@ using Microsoft.AspNetCore.Mvc;
 /// <c>perfil</c>) agora LÊ.</b> <c>[Authorize]</c> simples exige só autenticação, não papel —
 /// então um token desse formato, que <c>SomenteGestor</c> barraria com <c>403</c>, passa no
 /// <c>GET</c> hoje. Continua barrado em toda escrita, onde a política ainda mora. Ver
-/// <c>Token_pre_FD03_sem_a_claim_perfil_continua_barrado_na_ESCRITA</c> — o teste antigo que
+/// <c>Token_pre_FD03_sem_a_claim_perfil_e_barrado_na_ESCRITA_com_403</c> — o teste antigo que
 /// checava esse token contra o <c>GET</c> deixou de fazer sentido depois da FD-15 e foi
 /// reapontado para um verbo de escrita, que é onde a política continua vivendo.
 /// </para>
@@ -90,8 +97,14 @@ public class ServicosPrecoController : ControllerBase
     /// </summary>
     /// <response code="200">Lista retornada com sucesso.</response>
     /// <response code="401">Sem token, ou token inválido/expirado.</response>
+    /// <response code="400">
+    /// <c>incluirInativos</c> fora de <c>true</c>/<c>false</c> — o model binder de
+    /// <c>bool</c> não-anulável recusa <c>1</c>, <c>0</c>, <c>on</c> e vazio com
+    /// <c>400</c>. Medido na revisão G2 da FD-16, não inferido.
+    /// </response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<ServicoPrecoResponseDto>), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 400)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> Listar([FromQuery] bool incluirInativos = false) =>
         Ok(await _service.ListarAsync(incluirInativos));

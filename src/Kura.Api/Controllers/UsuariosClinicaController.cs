@@ -53,8 +53,14 @@ public class UsuariosClinicaController : ControllerBase
     /// <response code="200">Lista retornada com sucesso.</response>
     /// <response code="401">Sem token, ou token inválido/expirado.</response>
     /// <response code="403">Token válido cujo perfil não é GESTOR (inclui token sem a claim).</response>
+    /// <response code="400">
+    /// <c>incluirInativos</c> fora de <c>true</c>/<c>false</c> — o model binder de
+    /// <c>bool</c> não-anulável recusa <c>1</c>, <c>0</c>, <c>on</c> e vazio com
+    /// <c>400</c>. Medido na revisão G2 da FD-16, não inferido.
+    /// </response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<UsuarioClinicaResponseDto>), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 400)]
     [ProducesResponseType(401)]
     [ProducesResponseType(403)]
     public async Task<IActionResult> Listar([FromQuery] bool incluirInativos = false) =>
