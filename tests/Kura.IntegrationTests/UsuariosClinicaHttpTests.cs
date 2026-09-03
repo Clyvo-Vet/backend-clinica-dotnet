@@ -564,4 +564,29 @@ public class UsuariosClinicaHttpTests : IClassFixture<KuraApiFactory>
         // passaria despercebido.
         lista.Should().Contain(u => u.Id == ativo!.Id && u.StAtiva);
     }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_NAO_vaza_de_outra_clinica()
+    {
+        // 🔴 R-1 da revisão G2 da FD-16 — gêmeo do teste de servicos-preco, e o lado que a
+        // suíte cobria SÓ no nível de service: a mutação de vazamento de tenant neste
+        // repositório era pega por 1 teste de service e por NENHUM de HTTP, enquanto a
+        // equivalente de servicos-preco era pega nos dois. Cobertura assimétrica no caminho
+        // de falha mais caro que existe aqui.
+        //
+        // Não precisa de dado novo: com `incluirInativos || (...)` o predicado devolve toda
+        // linha, e o tenant 2 já tem DOIS usuários ATIVOS semeados (Id = 2 e Id = 5) como
+        // isca de IDOR.
+        var client = await ClienteGestorAsync();
+
+        var lista = await (await client.GetAsync($"{Rota}?incluirInativos=true"))
+            .Content.ReadFromJsonAsync<List<UsuarioClinicaResponseDto>>();
+
+        // Controle positivo: sem isto o OnlyContain passa POR VÁCUO numa lista vazia.
+        lista.Should().NotBeNull();
+        lista!.Should().NotBeEmpty();
+        lista.Should().Contain(u => u.DsEmail == KuraApiFactory.EmailGestorPuro);
+
+        lista.Should().OnlyContain(u => u.IdClinica == KuraApiFactory.IdClinicaSemeada);
+    }
 }

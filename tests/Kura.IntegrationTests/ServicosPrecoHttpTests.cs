@@ -606,4 +606,29 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
         // passaria despercebido.
         lista.Should().Contain(s => s.Id == ativo!.Id && s.StAtiva);
     }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_NAO_vaza_de_outra_clinica()
+    {
+        // 🔴 R-1 da revisão G2 da FD-16 — a prova HTTP que faltava, e o diagnóstico que a
+        // destravou. O implementador declarou (honestamente) que provar isto exigiria semear
+        // um serviço INATIVO do tenant 2 em KuraApiFactory, e não quis mexer no fixture
+        // compartilhado. Não exige: a mutação que importa é
+        // `incluirInativos || (IdClinica == idClinica && StAtiva)`, que com o flag LIGADO
+        // devolve TODA linha da tabela — inclusive as ATIVAS do tenant 2, já semeadas há
+        // três tasks como isca de IDOR (IdServicoPrecoOutroTenant). O vazamento aparece sem
+        // nenhum dado novo.
+        var client = await ClienteGestorAsync();
+
+        var lista = await (await client.GetAsync($"{Rota}?incluirInativos=true"))
+            .Content.ReadFromJsonAsync<List<ServicoPrecoResponseDto>>();
+
+        // Controle positivo: sem esta linha o OnlyContain abaixo passa POR VÁCUO numa lista
+        // vazia — e um `0` só é interpretável se o instrumento enxergaria um `1`.
+        lista.Should().NotBeNull();
+        lista!.Should().NotBeEmpty();
+        lista.Should().Contain(s => s.Id == KuraApiFactory.IdServicoPrecoSemeado);
+
+        lista.Should().OnlyContain(s => s.IdClinica == KuraApiFactory.IdClinicaSemeada);
+    }
 }
