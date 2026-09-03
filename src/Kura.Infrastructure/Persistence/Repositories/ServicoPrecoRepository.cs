@@ -14,10 +14,18 @@ public class ServicoPrecoRepository : Repository<ServicoPreco>, IServicoPrecoRep
     {
     }
 
-    public async Task<IReadOnlyList<ServicoPreco>> ListarDaClinicaAsync(long idClinica) =>
+    /// <summary>
+    /// FD-16 — o predicado <c>(incluirInativos || s.StAtiva)</c> vai DENTRO do
+    /// <c>Where</c> traduzido para SQL, não filtrado depois em memória — numa clínica
+    /// grande, resolver isto pós-<c>ToListAsync()</c> traria a tabela inteira para o
+    /// processo. Ver o comentário de <see cref="ListarPorIdsNaClinicaAsync"/> sobre por que
+    /// avaliação client-side acidental já mordeu este repositório antes.
+    /// </summary>
+    public async Task<IReadOnlyList<ServicoPreco>> ListarDaClinicaAsync(
+        long idClinica, bool incluirInativos = false) =>
         await _dbSet
             .IgnoreQueryFilters()
-            .Where(s => s.IdClinica == idClinica && s.StAtiva)
+            .Where(s => s.IdClinica == idClinica && (incluirInativos || s.StAtiva))
             .OrderBy(s => s.NmServico)
             .ToListAsync();
 
