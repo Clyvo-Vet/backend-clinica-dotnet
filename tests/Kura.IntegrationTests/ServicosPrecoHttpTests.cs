@@ -68,6 +68,18 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
         // chegar à autorização. Um 403 aqui indicaria que o endpoint aceitou o anônimo como
         // autenticado.
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        // 🔴 R-4 da revisão G2 da FD-15 — SEM esta linha o teste não enxerga o que o nome
+        // dele promete. Medido por mutação: removendo o [Authorize] da CLASSE, a suíte
+        // inteira ficou VERDE, porque o status continua 401 nos dois mundos — só que pelo
+        // motivo errado (ClinicaContext.IdClinica usa GetRequiredClaimValue e LANÇA sem a
+        // claim clinicaId; o ExceptionHandlerMiddleware converte isso em 401). O que
+        // distingue "o pipeline desafiou a autenticação" de "o serviço explodiu lá dentro e
+        // por sorte virou 401" é o header do desafio.
+        resposta.Headers.WwwAuthenticate.Should().Contain(
+            h => h.Scheme == "Bearer",
+            "é ISTO que distingue o desafio de autenticação de um 401 acidental vindo de "
+            + "ClinicaContext lançar por falta de clinicaId — o status é 401 nos dois casos");
     }
 
     [Fact]
