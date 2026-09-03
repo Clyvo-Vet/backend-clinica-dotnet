@@ -43,7 +43,13 @@ public class UsuariosClinicaController : ControllerBase
 
     public UsuariosClinicaController(IUsuarioClinicaService service) => _service = service;
 
-    /// <summary>Lista os usuários ativos da clínica do token.</summary>
+    /// <summary>
+    /// Lista os usuários da clínica do token. FD-16: com <c>incluirInativos=true</c> traz
+    /// também os desativados (default: só ativos, igual ao comportamento anterior à FD-16).
+    /// ⚠️ Autorização desta rota NÃO mudou com a FD-15 — continua <c>SomenteGestor</c>,
+    /// herdada do controller (ver doc-comment da classe). A FD-15 abriu leitura só de
+    /// <c>servicos-preco</c>.
+    /// </summary>
     /// <response code="200">Lista retornada com sucesso.</response>
     /// <response code="401">Sem token, ou token inválido/expirado.</response>
     /// <response code="403">Token válido cujo perfil não é GESTOR (inclui token sem a claim).</response>
@@ -51,7 +57,8 @@ public class UsuariosClinicaController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<UsuarioClinicaResponseDto>), 200)]
     [ProducesResponseType(401)]
     [ProducesResponseType(403)]
-    public async Task<IActionResult> Listar() => Ok(await _service.ListarAsync());
+    public async Task<IActionResult> Listar([FromQuery] bool incluirInativos = false) =>
+        Ok(await _service.ListarAsync(incluirInativos));
 
     /// <summary>Busca um usuário da clínica do token pelo id.</summary>
     /// <response code="200">Usuário encontrado.</response>
