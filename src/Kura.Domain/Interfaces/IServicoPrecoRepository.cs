@@ -23,8 +23,20 @@ using Kura.Domain.Entities;
 /// </summary>
 public interface IServicoPrecoRepository : IRepository<ServicoPreco>
 {
-    /// <summary>Itens ATIVOS da tabela de preços de uma clínica, ordenados por nome.</summary>
-    Task<IReadOnlyList<ServicoPreco>> ListarDaClinicaAsync(long idClinica);
+    /// <summary>
+    /// Itens da tabela de preços de uma clínica, ordenados por nome.
+    ///
+    /// <para>
+    /// FD-16 — <c>incluirInativos=false</c> (default) preserva o comportamento anterior: só
+    /// os ATIVOS. <c>true</c> inclui também os desativados. O predicado de clínica se aplica
+    /// nos dois casos — o flag liga a inclusão de inativos, ele não desliga o escopo de
+    /// tenant. O achado que motivou o parâmetro:
+    /// <c>POST /{id}/reativacao</c> sempre existiu e funcionou, mas o app não tinha como
+    /// chegar nele — a listagem nunca devolvia o que precisaria ser reativado.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<ServicoPreco>> ListarDaClinicaAsync(
+        long idClinica, bool incluirInativos = false);
 
     /// <summary>
     /// Busca por id <b>dentro da clínica informada</b>, ativo ou não. Devolver o item
