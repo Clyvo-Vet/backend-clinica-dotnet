@@ -517,4 +517,51 @@ public class UsuariosClinicaHttpTests : IClassFixture<KuraApiFactory>
         var atualizado = await resposta.Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
         atualizado!.TpPerfil.Should().Be(PerfisUsuarioClinica.Veterinario);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // FD-16 — ?incluirInativos
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Listar_sem_incluirInativos_continua_omitindo_o_desativado()
+    {
+        // Controle de regressão: o comportamento SEM o parâmetro tem de continuar
+        // BYTE A BYTE o de antes da FD-16 — nada que já consome a rota pode mudar.
+        var client = await ClienteGestorAsync();
+        var email = EmailUnico("fd16-sem-flag");
+        var criado = await (await client.PostAsJsonAsync(Rota, CorpoDeCriacao(email)))
+            .Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+        (await client.DeleteAsync($"{Rota}/{criado!.Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var lista = await (await client.GetAsync(Rota))
+            .Content.ReadFromJsonAsync<List<UsuarioClinicaResponseDto>>();
+
+        lista!.Should().NotContain(u => u.Id == criado.Id);
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo()
+    {
+        var client = await ClienteGestorAsync();
+        var emailInativo = EmailUnico("fd16-inativo");
+        var emailAtivo = EmailUnico("fd16-ativo");
+
+        var inativo = await (await client.PostAsJsonAsync(Rota, CorpoDeCriacao(emailInativo)))
+            .Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+        (await client.DeleteAsync($"{Rota}/{inativo!.Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var ativo = await (await client.PostAsJsonAsync(Rota, CorpoDeCriacao(emailAtivo)))
+            .Content.ReadFromJsonAsync<UsuarioClinicaResponseDto>();
+
+        var lista = await (await client.GetAsync($"{Rota}?incluirInativos=true"))
+            .Content.ReadFromJsonAsync<List<UsuarioClinicaResponseDto>>();
+
+        lista!.Should().Contain(u => u.Id == inativo.Id && !u.StAtiva);
+        // 🔴 Controle positivo: o flag ACRESCENTA, não SUBSTITUI — o ativo continua na
+        // lista. Sem esta asserção, um bug que trocasse StAtiva por !StAtiva no predicado
+        // passaria despercebido.
+        lista.Should().Contain(u => u.Id == ativo!.Id && u.StAtiva);
+    }
 }
