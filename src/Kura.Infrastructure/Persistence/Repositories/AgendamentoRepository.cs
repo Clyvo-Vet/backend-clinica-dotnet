@@ -13,19 +13,21 @@ public class AgendamentoRepository : IAgendamentoRepository
         _context = context;
     }
 
-    public async Task<IEnumerable<Agendamento>> GetProximosDoDiaAsync(DateTime data, int limite)
+    public async Task<IEnumerable<Agendamento>> GetProximosDoDiaAsync(long idClinica, DateTime data, int limite)
     {
         return await _context.Agendamentos
-            .Where(a => a.DtAgendamento.Date == data.Date && a.DtAgendamento >= DateTime.UtcNow)
+            .Where(a => a.IdClinica == idClinica
+                && a.DtAgendamento.Date == data.Date
+                && a.DtAgendamento >= DateTime.UtcNow)
             .OrderBy(a => a.DtAgendamento)
             .Take(limite)
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Agendamento>> GetRecentesAsync(DateTime referencia, int limite)
+    public async Task<IEnumerable<Agendamento>> GetRecentesAsync(long idClinica, DateTime referencia, int limite)
     {
         return await _context.Agendamentos
-            .Where(a => a.DtAgendamento < referencia)
+            .Where(a => a.IdClinica == idClinica && a.DtAgendamento < referencia)
             .OrderByDescending(a => a.DtAgendamento)
             .Take(limite)
             .ToListAsync();
@@ -34,6 +36,14 @@ public class AgendamentoRepository : IAgendamentoRepository
     public Task<Agendamento?> GetByIdAsync(long id, long idClinica)
         => _context.Agendamentos
             .FirstOrDefaultAsync(a => a.Id == id && a.IdClinica == idClinica);
+
+    public Task<int> ContarTeleorientacoesHojeAsync(long idClinica, DateTime data)
+        => _context.Agendamentos
+            .Where(a => a.IdClinica == idClinica
+                && a.StTeleconsulta
+                && a.DtInicioSessao != null
+                && a.DtInicioSessao!.Value.Date == data.Date)
+            .CountAsync();
 
     public void Update(Agendamento agendamento)
         => _context.Agendamentos.Update(agendamento);
