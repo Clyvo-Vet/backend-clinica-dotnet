@@ -80,9 +80,9 @@ public sealed class ServicoPrecoService : IServicoPrecoService
         _clinicaContext = clinicaContext;
     }
 
-    public async Task<IEnumerable<ServicoPrecoResponseDto>> ListarAsync()
+    public async Task<IEnumerable<ServicoPrecoResponseDto>> ListarAsync(bool incluirInativos = false)
     {
-        var itens = await _repository.ListarDaClinicaAsync(_clinicaContext.IdClinica);
+        var itens = await _repository.ListarDaClinicaAsync(_clinicaContext.IdClinica, incluirInativos);
         return itens.Select(ToResponse);
     }
 
