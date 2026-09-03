@@ -61,10 +61,15 @@ public class UsuarioClinicaRepository : Repository<UsuarioClinica>, IUsuarioClin
     // contexto estivesse vazio.
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(long idClinica) =>
+    /// <remarks>
+    /// FD-16 — <c>(incluirInativos || u.StAtiva)</c> vai DENTRO do <c>Where</c> traduzido
+    /// para SQL, não filtrado depois em memória.
+    /// </remarks>
+    public async Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(
+        long idClinica, bool incluirInativos = false) =>
         await _dbSet
             .IgnoreQueryFilters()
-            .Where(u => u.IdClinica == idClinica && u.StAtiva)
+            .Where(u => u.IdClinica == idClinica && (incluirInativos || u.StAtiva))
             .OrderBy(u => u.DsEmail)
             .ToListAsync();
 
