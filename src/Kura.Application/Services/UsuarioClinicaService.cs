@@ -104,9 +104,9 @@ public sealed class UsuarioClinicaService : IUsuarioClinicaService
         _clinicaContext = clinicaContext;
     }
 
-    public async Task<IEnumerable<UsuarioClinicaResponseDto>> ListarAsync()
+    public async Task<IEnumerable<UsuarioClinicaResponseDto>> ListarAsync(bool incluirInativos = false)
     {
-        var usuarios = await _repository.ListarDaClinicaAsync(_clinicaContext.IdClinica);
+        var usuarios = await _repository.ListarDaClinicaAsync(_clinicaContext.IdClinica, incluirInativos);
         return usuarios.Select(ToResponse);
     }
 

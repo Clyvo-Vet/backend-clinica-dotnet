@@ -123,6 +123,51 @@ public class ServicoPrecoServiceTests
         lista.Should().OnlyContain(s => s.IdClinica == ClinicaA);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // FD-16 — ?incluirInativos
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo()
+    {
+        using var ctx = CriarContexto(
+            nameof(Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo));
+        Semear(ctx, 1, ClinicaA, "Consulta A");
+        Semear(ctx, 2, ClinicaA, "Desativado A", ativo: false);
+        Semear(ctx, 3, ClinicaB, "Consulta B");
+
+        var lista = (await CriarService(ctx, ClinicaA).ListarAsync(incluirInativos: true)).ToList();
+
+        lista.Select(s => s.NmServico).Should().BeEquivalentTo(["Consulta A", "Desativado A"]);
+        lista.Should().OnlyContain(s => s.IdClinica == ClinicaA);
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_NAO_vaza_inativo_de_outra_clinica()
+    {
+        // 🔴 FD-16 — o caso que mais importa: o flag LIGA a inclusão de inativos, ele não
+        // DESLIGA o escopo de tenant. Sem este teste, um predicado escrito como
+        // `incluirInativos || s.IdClinica == idClinica` (em vez de
+        // `s.IdClinica == idClinica && (incluirInativos || s.StAtiva)`) passaria
+        // despercebido — e devolveria a tabela de preços inteira de TODAS as clínicas
+        // sempre que o flag estivesse ligado.
+        using var ctx = CriarContexto(
+            nameof(Listar_com_incluirInativos_true_NAO_vaza_inativo_de_outra_clinica));
+        Semear(ctx, 1, ClinicaA, "Ativo A");
+        Semear(ctx, 2, ClinicaB, "Inativo B", ativo: false);
+
+        var lista = (await CriarService(ctx, ClinicaA).ListarAsync(incluirInativos: true)).ToList();
+
+        lista.Should().OnlyContain(s => s.IdClinica == ClinicaA);
+        lista.Should().NotContain(s => s.NmServico == "Inativo B");
+
+        // 🔴 CONTROLE POSITIVO: o MESMO item, lido pela clínica DONA com o flag ligado,
+        // aparece — então a ausência acima é isolamento de tenant, não um flag que nunca
+        // funciona.
+        var listaB = (await CriarService(ctx, ClinicaB).ListarAsync(incluirInativos: true)).ToList();
+        listaB.Should().Contain(s => s.NmServico == "Inativo B");
+    }
+
     [Fact]
     public async Task Obter_por_id_de_outra_clinica_lanca_EntidadeNaoEncontrada()
     {

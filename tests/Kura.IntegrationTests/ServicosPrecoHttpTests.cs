@@ -68,18 +68,40 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
         // chegar à autorização. Um 403 aqui indicaria que o endpoint aceitou o anônimo como
         // autenticado.
         resposta.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        // 🔴 R-4 da revisão G2 da FD-15 — SEM esta linha o teste não enxerga o que o nome
+        // dele promete. Medido por mutação: removendo o [Authorize] da CLASSE, a suíte
+        // inteira ficou VERDE, porque o status continua 401 nos dois mundos — só que pelo
+        // motivo errado (ClinicaContext.IdClinica usa GetRequiredClaimValue e LANÇA sem a
+        // claim clinicaId; o ExceptionHandlerMiddleware converte isso em 401). O que
+        // distingue "o pipeline desafiou a autenticação" de "o serviço explodiu lá dentro e
+        // por sorte virou 401" é o header do desafio.
+        resposta.Headers.WwwAuthenticate.Should().Contain(
+            h => h.Scheme == "Bearer",
+            "é ISTO que distingue o desafio de autenticação de um 401 acidental vindo de "
+            + "ClinicaContext lançar por falta de clinicaId — o status é 401 nos dois casos");
     }
 
     [Fact]
-    public async Task Token_de_perfil_VETERINARIO_devolve_403()
+    public async Task Token_de_perfil_VETERINARIO_le_o_catalogo_com_200()
     {
+        // 🔴 FD-15 (ruling D-13) — MUDANÇA DELIBERADA DE CONTRATO. Antes desta task este
+        // mesmo cenário devolvia 403: o controller inteiro exigia SomenteGestor, e o
+        // veterinário podia LANÇAR cobrança com idServicoPreco (CobrancasController,
+        // [Authorize] simples) sem conseguir LER a tabela para descobrir qual id mandar. A
+        // tabela de preços é catálogo operacional — qualquer autenticado da clínica lê; só
+        // o GESTOR decide preço (ver o doc-comment de ServicosPrecoController).
         // O usuário semeado em EmailClinica tem TpPerfil = VETERINARIO (KuraApiFactory).
         var client = _factory.CreateClient();
         client.UsarToken(await AutenticacaoHelper.ObterTokenAsync(client));
 
         var resposta = await client.GetAsync(Rota);
 
-        resposta.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
+        var lista = await resposta.Content.ReadFromJsonAsync<List<ServicoPrecoResponseDto>>();
+        lista.Should().NotBeNull();
+        // Escopo continua valendo para leitura de não-gestor: só a própria clínica.
+        lista!.Should().OnlyContain(s => s.IdClinica == KuraApiFactory.IdClinicaSemeada);
     }
 
     [Fact]
@@ -112,22 +134,42 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
     }
 
     [Fact]
-    public async Task Token_pre_FD03_sem_a_claim_perfil_devolve_403()
+    public async Task Token_pre_FD03_sem_a_claim_perfil_e_barrado_na_ESCRITA_com_403()
     {
-        // 🔴 A POLÍTICA TEM DE FALHAR FECHADA. Token assinado com a chave real, dentro da
-        // validade, no formato que AuthService emitia ANTES da FD-03 — sem a claim `perfil`.
-        // Tokens desse formato continuam sendo aceitos pela AUTENTICAÇÃO até expirar; o que
-        // decide aqui é a AUTORIZAÇÃO tratar papel AUSENTE como negação (RequireClaim).
+        // 🔴 A POLÍTICA TEM DE FALHAR FECHADA — E DEPOIS DA FD-15 ISSO SÓ É MEDÍVEL NUM
+        // VERBO DE ESCRITA. Token assinado com a chave real, dentro da validade, no formato
+        // que AuthService emitia ANTES da FD-03 — sem a claim `perfil`. Tokens desse formato
+        // continuam sendo aceitos pela AUTENTICAÇÃO até expirar; o que decide aqui é a
+        // AUTORIZAÇÃO tratar papel AUSENTE como negação (RequireClaim).
+        //
+        // ⚠️ Antes da FD-15 este teste usava o GET (a política protegia o controller
+        // inteiro). Depois da FD-15 o GET só exige [Authorize] simples — não consulta a
+        // claim `perfil` — e este MESMO token passaria a ler com 200 (ver o teste seguinte).
+        // O verbo que continua exercitando SomenteGestor é a ESCRITA.
         //
         // Se a política fosse escrita como lista de negação ("não é VETERINARIO, logo é
-        // GESTOR"), este mesmo token receberia 200 e remarcaria a tabela de preços da clínica.
+        // GESTOR"), este mesmo token receberia 201 e criaria um serviço na tabela de preços.
+        var client = _factory.CreateClient();
+        client.UsarToken(AutenticacaoHelper.GerarTokenPreFd03());
+
+        var resposta = await client.PostAsJsonAsync(Rota, Corpo(NomeUnico("pre-fd03")));
+
+        // 403 e não 401: o token É válido e o usuário ESTÁ autenticado. O que falta é papel.
+        resposta.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Token_pre_FD03_sem_a_claim_perfil_le_o_catalogo_com_200()
+    {
+        // 🔴 FD-15 — controle positivo do teste acima, e o que prova que o 403 de lá vem da
+        // política de ESCRITA, não de o token estar quebrado de algum outro jeito. O MESMO
+        // token, no GET, lê normalmente: [Authorize] simples não exige a claim `perfil`.
         var client = _factory.CreateClient();
         client.UsarToken(AutenticacaoHelper.GerarTokenPreFd03());
 
         var resposta = await client.GetAsync(Rota);
 
-        // 403 e não 401: o token É válido e o usuário ESTÁ autenticado. O que falta é papel.
-        resposta.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        resposta.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -146,11 +188,12 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
     }
 
     [Fact]
-    public async Task Token_de_VETERINARIO_e_barrado_em_TODOS_os_verbos_do_controller()
+    public async Task Token_de_VETERINARIO_le_normalmente_os_DOIS_GETs()
     {
-        // A política está no CONTROLLER, não método a método. Este teste trava essa decisão:
-        // mover para método a método e esquecer um deixaria o endpoint esquecido respondendo
-        // normalmente para um veterinário.
+        // 🔴 FD-15 (ruling D-13) — MUDANÇA DELIBERADA DE CONTRATO, metade de leitura do
+        // teste que antes desta task se chamava
+        // Token_de_VETERINARIO_e_barrado_em_TODOS_os_verbos_do_controller e esperava 403
+        // nos dois GETs abaixo. Catálogo operacional: qualquer autenticado da clínica lê.
         var client = _factory.CreateClient();
         client.UsarToken(await AutenticacaoHelper.ObterTokenAsync(client));
 
@@ -158,6 +201,23 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
         {
             await client.GetAsync(Rota),
             await client.GetAsync($"{Rota}/{KuraApiFactory.IdServicoPrecoSemeado}"),
+        };
+
+        respostas.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Token_de_VETERINARIO_e_barrado_em_TODOS_os_verbos_de_ESCRITA()
+    {
+        // A política SomenteGestor está em CADA MÉTODO de escrita, não no controller (FD-15
+        // moveu ela para lá — ver o doc-comment de ServicosPrecoController). Este teste
+        // trava essa decisão do lado que ainda é fechado: esquecer o atributo num método de
+        // escrita novo deixaria esse endpoint respondendo normalmente para um veterinário.
+        var client = _factory.CreateClient();
+        client.UsarToken(await AutenticacaoHelper.ObterTokenAsync(client));
+
+        var respostas = new[]
+        {
             await client.PostAsJsonAsync(Rota, Corpo(NomeUnico("vet-tentou"))),
             await client.PutAsJsonAsync(
                 $"{Rota}/{KuraApiFactory.IdServicoPrecoSemeado}", Corpo("Remarcado", 1m)),
@@ -510,5 +570,77 @@ public class ServicosPrecoHttpTests : IClassFixture<KuraApiFactory>
 
         lista.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         criacao.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // FD-16 — ?incluirInativos
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Listar_sem_incluirInativos_continua_omitindo_o_desativado()
+    {
+        // Controle de regressão: o comportamento SEM o parâmetro tem de continuar
+        // BYTE A BYTE o de antes da FD-16 — nada que já consome a rota pode mudar.
+        var client = await ClienteGestorAsync();
+        var nome = NomeUnico("fd16-sem-flag");
+        var criado = await (await client.PostAsJsonAsync(Rota, Corpo(nome, 20.00m)))
+            .Content.ReadFromJsonAsync<ServicoPrecoResponseDto>();
+        (await client.DeleteAsync($"{Rota}/{criado!.Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var lista = await (await client.GetAsync(Rota))
+            .Content.ReadFromJsonAsync<List<ServicoPrecoResponseDto>>();
+
+        lista!.Should().NotContain(s => s.Id == criado.Id);
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo()
+    {
+        var client = await ClienteGestorAsync();
+        var nomeInativo = NomeUnico("fd16-inativo");
+        var nomeAtivo = NomeUnico("fd16-ativo");
+
+        var inativo = await (await client.PostAsJsonAsync(Rota, Corpo(nomeInativo, 21.00m)))
+            .Content.ReadFromJsonAsync<ServicoPrecoResponseDto>();
+        (await client.DeleteAsync($"{Rota}/{inativo!.Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var ativo = await (await client.PostAsJsonAsync(Rota, Corpo(nomeAtivo, 22.00m)))
+            .Content.ReadFromJsonAsync<ServicoPrecoResponseDto>();
+
+        var lista = await (await client.GetAsync($"{Rota}?incluirInativos=true"))
+            .Content.ReadFromJsonAsync<List<ServicoPrecoResponseDto>>();
+
+        lista!.Should().Contain(s => s.Id == inativo.Id && !s.StAtiva);
+        // 🔴 Controle positivo: o flag ACRESCENTA, não SUBSTITUI — o ativo continua na
+        // lista. Sem esta asserção, um bug que trocasse StAtiva por !StAtiva no predicado
+        // passaria despercebido.
+        lista.Should().Contain(s => s.Id == ativo!.Id && s.StAtiva);
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_NAO_vaza_de_outra_clinica()
+    {
+        // 🔴 R-1 da revisão G2 da FD-16 — a prova HTTP que faltava, e o diagnóstico que a
+        // destravou. O implementador declarou (honestamente) que provar isto exigiria semear
+        // um serviço INATIVO do tenant 2 em KuraApiFactory, e não quis mexer no fixture
+        // compartilhado. Não exige: a mutação que importa é
+        // `incluirInativos || (IdClinica == idClinica && StAtiva)`, que com o flag LIGADO
+        // devolve TODA linha da tabela — inclusive as ATIVAS do tenant 2, já semeadas há
+        // três tasks como isca de IDOR (IdServicoPrecoOutroTenant). O vazamento aparece sem
+        // nenhum dado novo.
+        var client = await ClienteGestorAsync();
+
+        var lista = await (await client.GetAsync($"{Rota}?incluirInativos=true"))
+            .Content.ReadFromJsonAsync<List<ServicoPrecoResponseDto>>();
+
+        // Controle positivo: sem esta linha o OnlyContain abaixo passa POR VÁCUO numa lista
+        // vazia — e um `0` só é interpretável se o instrumento enxergaria um `1`.
+        lista.Should().NotBeNull();
+        lista!.Should().NotBeEmpty();
+        lista.Should().Contain(s => s.Id == KuraApiFactory.IdServicoPrecoSemeado);
+
+        lista.Should().OnlyContain(s => s.IdClinica == KuraApiFactory.IdClinicaSemeada);
     }
 }

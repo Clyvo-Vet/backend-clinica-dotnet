@@ -180,6 +180,67 @@ public class UsuarioClinicaServiceTests
         (await ctx.UsuariosClinica.IgnoreQueryFilters().CountAsync()).Should().Be(3);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // FD-16 — ?incluirInativos
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Listar_por_padrao_omite_usuario_desativado()
+    {
+        using var ctx = CriarContexto(nameof(Listar_por_padrao_omite_usuario_desativado));
+        Semear(ctx, 1, ClinicaA, "ativo@kura.test");
+        Semear(ctx, 2, ClinicaA, "inativo@kura.test", ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var lista = (await sut.ListarAsync()).ToList();
+
+        lista.Should().ContainSingle(u => u.DsEmail == "ativo@kura.test");
+        lista.Should().NotContain(u => u.DsEmail == "inativo@kura.test");
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo()
+    {
+        using var ctx = CriarContexto(
+            nameof(Listar_com_incluirInativos_true_traz_o_desativado_e_mantem_o_ativo));
+        Semear(ctx, 1, ClinicaA, "ativo@kura.test");
+        Semear(ctx, 2, ClinicaA, "inativo@kura.test", ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var lista = (await sut.ListarAsync(incluirInativos: true)).ToList();
+
+        lista.Select(u => u.DsEmail).Should()
+            .BeEquivalentTo(["ativo@kura.test", "inativo@kura.test"]);
+    }
+
+    [Fact]
+    public async Task Listar_com_incluirInativos_true_NAO_vaza_inativo_de_outra_clinica()
+    {
+        // 🔴 FD-16 — o caso que mais importa, mesmo raciocínio de
+        // ServicoPrecoServiceTests: o flag LIGA a inclusão de inativos, ele não DESLIGA o
+        // escopo de tenant. Um predicado escrito como
+        // `incluirInativos || u.IdClinica == idClinica` (em vez de
+        // `u.IdClinica == idClinica && (incluirInativos || u.StAtiva)`) vazaria a base
+        // inteira de usuários de TODAS as clínicas sempre que o flag estivesse ligado.
+        using var ctx = CriarContexto(
+            nameof(Listar_com_incluirInativos_true_NAO_vaza_inativo_de_outra_clinica));
+        Semear(ctx, 1, ClinicaA, "a1@kura.test");
+        Semear(ctx, 2, ClinicaB, "b-inativo@kura.test", ativo: false);
+        var sut = CriarService(ctx, ClinicaA);
+
+        var lista = (await sut.ListarAsync(incluirInativos: true)).ToList();
+
+        lista.Should().OnlyContain(u => u.IdClinica == ClinicaA);
+        lista.Should().NotContain(u => u.DsEmail == "b-inativo@kura.test");
+
+        // 🔴 CONTROLE POSITIVO: o MESMO usuário, lido pela clínica DONA com o flag ligado,
+        // aparece — então a ausência acima é isolamento de tenant, não um flag que nunca
+        // funciona.
+        var sutB = CriarService(ctx, ClinicaB);
+        (await sutB.ListarAsync(incluirInativos: true))
+            .Should().Contain(u => u.DsEmail == "b-inativo@kura.test");
+    }
+
     [Fact]
     public async Task Obter_usuario_de_outra_clinica_devolve_nao_encontrado()
     {

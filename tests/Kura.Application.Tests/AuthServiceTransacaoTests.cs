@@ -247,9 +247,10 @@ public class AuthServiceTransacaoTests
         // classe os exercita: o CRUD da FD-04 e provado contra o repositorio REAL sobre
         // KuraDbContext InMemory em UsuarioClinicaServiceTests, justamente para nao trocar a
         // prova do predicado de tenant por uma reimplementacao de fake.
-        public Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(long idClinica) =>
+        public Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(
+            long idClinica, bool incluirInativos = false) =>
             Task.FromResult<IReadOnlyList<UsuarioClinica>>(
-                _store.Where(u => u.IdClinica == idClinica && u.StAtiva)
+                _store.Where(u => u.IdClinica == idClinica && (incluirInativos || u.StAtiva))
                       .OrderBy(u => u.DsEmail).ToList());
 
         public Task<UsuarioClinica?> BuscarPorIdNaClinicaAsync(long id, long idClinica) =>

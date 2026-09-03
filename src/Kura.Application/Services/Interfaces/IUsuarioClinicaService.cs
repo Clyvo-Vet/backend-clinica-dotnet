@@ -9,7 +9,11 @@ using Kura.Application.DTOs.UsuarioClinica;
 /// </summary>
 public interface IUsuarioClinicaService
 {
-    Task<IEnumerable<UsuarioClinicaResponseDto>> ListarAsync();
+    /// <summary>
+    /// FD-16 — <c>incluirInativos=false</c> (default) preserva o comportamento anterior: só
+    /// os ativos. <c>true</c> inclui também os desativados.
+    /// </summary>
+    Task<IEnumerable<UsuarioClinicaResponseDto>> ListarAsync(bool incluirInativos = false);
 
     Task<UsuarioClinicaResponseDto> ObterPorIdAsync(long id);
 
