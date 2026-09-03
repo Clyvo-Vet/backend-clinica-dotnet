@@ -34,10 +34,20 @@ public interface IUsuarioClinicaRepository : IRepository<UsuarioClinica>
     Task<IReadOnlyList<UsuarioClinica>> BuscarAtivosPorEmailAsync(string email);
 
     /// <summary>
-    /// FD-04 — usuários ATIVOS de uma clínica, ordenados por e-mail (ordem estável para
-    /// listagem e para asserção de teste).
+    /// FD-04 — usuários de uma clínica, ordenados por e-mail (ordem estável para listagem e
+    /// para asserção de teste).
+    ///
+    /// <para>
+    /// FD-16 — <c>incluirInativos=false</c> (default) preserva o comportamento anterior: só
+    /// os ATIVOS. <c>true</c> inclui também os desativados, sem abrir mão do escopo de
+    /// clínica — o flag liga a inclusão de inativos, não desliga o isolamento de tenant.
+    /// Mesmo achado e mesmo motivo de <c>IServicoPrecoRepository.ListarDaClinicaAsync</c>:
+    /// <c>POST /{id}/reativacao</c> sempre existiu, mas a listagem nunca devolvia o que
+    /// precisaria ser reativado.
+    /// </para>
     /// </summary>
-    Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(long idClinica);
+    Task<IReadOnlyList<UsuarioClinica>> ListarDaClinicaAsync(
+        long idClinica, bool incluirInativos = false);
 
     /// <summary>
     /// FD-04 — um usuário pelo par (id, clínica), <b>incluindo desativados</b>.
