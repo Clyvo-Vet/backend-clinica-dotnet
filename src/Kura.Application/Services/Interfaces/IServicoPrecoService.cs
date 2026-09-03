@@ -8,7 +8,13 @@ using Kura.Application.DTOs.ServicoPreco;
 /// </summary>
 public interface IServicoPrecoService
 {
-    Task<IEnumerable<ServicoPrecoResponseDto>> ListarAsync();
+    /// <summary>
+    /// FD-16 — <c>incluirInativos=false</c> (default) preserva o comportamento anterior: só
+    /// os ativos. <c>true</c> inclui também os desativados, sem deixar de escopar por
+    /// clínica — ver
+    /// <see cref="Kura.Domain.Interfaces.IServicoPrecoRepository.ListarDaClinicaAsync"/>.
+    /// </summary>
+    Task<IEnumerable<ServicoPrecoResponseDto>> ListarAsync(bool incluirInativos = false);
 
     Task<ServicoPrecoResponseDto> ObterPorIdAsync(long id);
 
