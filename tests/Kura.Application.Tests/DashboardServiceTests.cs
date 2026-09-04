@@ -1,4 +1,4 @@
-namespace Kura.Application.Tests;
+﻿namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Moq;
@@ -8,19 +8,25 @@ using Kura.Domain.Interfaces;
 
 public class DashboardServiceTests
 {
+    private const long IdClinicaContexto = 1;
+
     private readonly Mock<IEventoClinicoRepository> _eventoMock = new();
     private readonly Mock<IRepository<AlertaTemperatura>> _alertaMock = new();
     private readonly Mock<IRepository<Pet>> _petMock = new();
     private readonly Mock<IRepository<Vacina>> _vacinaMock = new();
     private readonly Mock<IAgendamentoRepository> _agendamentoMock = new();
+    private readonly Mock<IClinicaContext> _clinicaContextMock = new();
     private readonly DashboardService _sut;
 
     public DashboardServiceTests()
     {
+        _clinicaContextMock.Setup(c => c.IdClinica).Returns(IdClinicaContexto);
+        // Sem setup explícito, Moq (loose mock) devolve default(int) = 0 para
+        // ContarTeleorientacoesHojeAsync -- suficiente para os testes que não avaliam esse campo.
         _sut = new DashboardService(
             _eventoMock.Object, _alertaMock.Object,
             _petMock.Object, _vacinaMock.Object,
-            _agendamentoMock.Object);
+            _agendamentoMock.Object, _clinicaContextMock.Object);
     }
 
     [Fact]
@@ -39,7 +45,7 @@ public class DashboardServiceTests
             {
                 new() { Id = 1, StResolvido = false, DsTipoAlerta = "T", VlLimite = 8, DsMensagem = "M", IdLeituraTemperatura = 1 }
             });
-        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(It.IsAny<DateTime>(), 3))
+        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3))
             .ReturnsAsync(new List<Agendamento>());
 
         // Act
@@ -48,6 +54,96 @@ public class DashboardServiceTests
         // Assert
         result.TotalConsultasHoje.Should().Be(1);
         result.TotalAlertasAtivos.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetHojeAsync_ComDoisPetsDistintosAtendidosHoje_TotalPacientesAtendidosHojeContaOsDois()
+    {
+        // Arrange -- FD-17 item 2: mais de 5 eventos hoje não pode saturar em 5 como
+        // UltimosPetsAtendidos satura; aqui usamos 2 para o teste ficar legível, mas o ponto é
+        // que o contador não tem .Take() nenhum.
+        var hoje = DateTime.UtcNow.Date;
+        var ontem = hoje.AddDays(-1);
+        _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
+            .ReturnsAsync(new List<EventoClinico>
+            {
+                new() { Id = 1, IdPet = 10, IdVeterinario = 1, IdTipoEvento = 1, DtEvento = hoje, DsObservacao = "ok", IdClinica = 1 },
+                new() { Id = 2, IdPet = 11, IdVeterinario = 1, IdTipoEvento = 1, DtEvento = hoje, DsObservacao = "ok", IdClinica = 1 },
+                new() { Id = 3, IdPet = 10, IdVeterinario = 1, IdTipoEvento = 1, DtEvento = hoje, DsObservacao = "ok", IdClinica = 1 }, // mesmo pet 10, mesmo dia -- não duplica
+                new() { Id = 4, IdPet = 12, IdVeterinario = 1, IdTipoEvento = 1, DtEvento = ontem, DsObservacao = "ok", IdClinica = 1 }, // ontem -- não conta
+            });
+        _alertaMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<AlertaTemperatura>());
+        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3))
+            .ReturnsAsync(new List<Agendamento>());
+
+        // Act
+        var result = await _sut.GetHojeAsync();
+
+        // Assert
+        result.TotalPacientesAtendidosHoje.Should().Be(2); // pets 10 e 11, distintos, hoje
+    }
+
+    /// <summary>
+    /// 🔴 <b>G2 da FD-17 — buraco de gate medido, não hipotético.</b> Antes deste teste, mutar
+    /// <b>só</b> o call site de <c>GetProximosDoDiaAsync</c> em <c>DashboardService</c>
+    /// (<c>idClinica</c> → <c>999L</c>) deixava a suíte <b>inteira verde</b>
+    /// (396/396, EXIT=0): os <c>Setup</c> existentes casavam <c>IdClinicaContexto</c> mas
+    /// devolviam lista <b>vazia</b>, e nenhuma asserção olhava <c>ProximosAgendamentos</c> —
+    /// então "Setup não casou, Moq devolveu o default" era indistinguível de "Setup casou".
+    /// Este teste fecha os dois lados: fixture <b>não vazia</b> (o default do Moq deixa de ser
+    /// igual ao esperado) + <c>Verify</c> do <c>idClinica</c> exato.
+    /// </summary>
+    [Fact]
+    public async Task GetHojeAsync_PropagaProximosAgendamentosEUsaIdClinicaDoContexto()
+    {
+        // Arrange
+        _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
+            .ReturnsAsync(new List<EventoClinico>());
+        _alertaMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<AlertaTemperatura>());
+        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3))
+            .ReturnsAsync(new List<Agendamento>
+            {
+                new()
+                {
+                    Id = 77,
+                    IdClinica = IdClinicaContexto,
+                    NmPaciente = "Rex",
+                    DsServico = "Consulta",
+                    StStatus = "AGENDADO",
+                    DtAgendamento = new DateTime(2099, 1, 1, 10, 0, 0, DateTimeKind.Utc)
+                }
+            });
+
+        // Act
+        var result = await _sut.GetHojeAsync();
+
+        // Assert -- a fixture NAO vazia e o que distingue "Setup casou" de "Moq devolveu default".
+        result.ProximosAgendamentos.Should().HaveCount(1);
+        result.ProximosAgendamentos[0].Id.Should().Be(77);
+        result.ProximosAgendamentos[0].NmPaciente.Should().Be("Rex");
+        _agendamentoMock.Verify(
+            r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetHojeAsync_ChamaContarTeleorientacoesHojeComIdClinicaDoContextoEPropagaParaODto()
+    {
+        // Arrange -- FD-17 item 3
+        var hoje = DateTime.UtcNow.Date;
+        _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
+            .ReturnsAsync(new List<EventoClinico>());
+        _alertaMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<AlertaTemperatura>());
+        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3))
+            .ReturnsAsync(new List<Agendamento>());
+        _agendamentoMock.Setup(r => r.ContarTeleorientacoesHojeAsync(IdClinicaContexto, hoje))
+            .ReturnsAsync(3);
+
+        // Act
+        var result = await _sut.GetHojeAsync();
+
+        // Assert
+        result.TotalTeleorientacoesHoje.Should().Be(3);
+        _agendamentoMock.Verify(r => r.ContarTeleorientacoesHojeAsync(IdClinicaContexto, hoje), Times.Once);
     }
 
     [Fact]
@@ -78,7 +174,7 @@ public class DashboardServiceTests
     {
         // Arrange
         var referencia = new DateTime(2026, 7, 20, 10, 0, 0, DateTimeKind.Utc);
-        _agendamentoMock.Setup(r => r.GetRecentesAsync(It.IsAny<DateTime>(), It.IsAny<int>()))
+        _agendamentoMock.Setup(r => r.GetRecentesAsync(IdClinicaContexto, It.IsAny<DateTime>(), It.IsAny<int>()))
             .ReturnsAsync(new List<Agendamento>
             {
                 new()
@@ -102,7 +198,7 @@ public class DashboardServiceTests
         result[0].StStatus.Should().Be("REALIZADO");
         result[0].DtAgendamento.Should().Be(referencia.AddDays(-1));
 
-        _agendamentoMock.Verify(r => r.GetRecentesAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
-        _agendamentoMock.Verify(r => r.GetProximosDoDiaAsync(It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+        _agendamentoMock.Verify(r => r.GetRecentesAsync(IdClinicaContexto, It.IsAny<DateTime>(), It.IsAny<int>()), Times.Once);
+        _agendamentoMock.Verify(r => r.GetProximosDoDiaAsync(It.IsAny<long>(), It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
     }
 }

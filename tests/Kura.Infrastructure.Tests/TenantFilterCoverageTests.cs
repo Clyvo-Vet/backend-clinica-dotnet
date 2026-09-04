@@ -1,4 +1,4 @@
-namespace Kura.Infrastructure.Tests;
+﻿namespace Kura.Infrastructure.Tests;
 
 using System.Linq;
 using System.Reflection;
@@ -29,7 +29,14 @@ public class TenantFilterCoverageTests
     // Cada entrada exige compensação manual no service — documentar onde.
     private static readonly Dictionary<string, string> CompensadasManualmente = new()
     {
-        ["Agendamento"] = "AgendaService.cs:39,53 — filtro manual por IClinicaContext.IdClinica",
+        // 🔴 Citação corrigida e completada na G2 da FD-17. A anterior apontava
+        // "AgendaService.cs:39,53" — essas linhas são XML doc sobre transição de status, NÃO a
+        // compensação manual (conferido com sed no arquivo, 2026-09-03). E, depois da FD-17,
+        // Agendamento é compensado em TRÊS services, não em um.
+        ["Agendamento"] =
+            "filtro manual por IClinicaContext.IdClinica em: AgendaService.cs:149,164; "
+            + "TeleconsultaService.cs:67; DashboardService.cs:71,76,128 (FD-17). "
+            + "Leituras via AgendaReadRepository.GetByIntervaloAsync recebem idClinica por parâmetro.",
     };
 
     private static KuraDbContext CreateContext(long? idClinicaFiltro, string? dbName = null)

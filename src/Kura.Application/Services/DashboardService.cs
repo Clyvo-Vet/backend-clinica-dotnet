@@ -12,27 +12,43 @@ public sealed class DashboardService : IDashboardService
     private readonly IRepository<Pet> _petRepository;
     private readonly IRepository<Vacina> _vacinaRepository;
     private readonly IAgendamentoRepository _agendamentoRepository;
+    private readonly IClinicaContext _clinicaContext;
 
     public DashboardService(
         IEventoClinicoRepository eventoRepository,
         IRepository<AlertaTemperatura> alertaRepository,
         IRepository<Pet> petRepository,
         IRepository<Vacina> vacinaRepository,
-        IAgendamentoRepository agendamentoRepository)
+        IAgendamentoRepository agendamentoRepository,
+        IClinicaContext clinicaContext)
     {
         _eventoRepository = eventoRepository;
         _alertaRepository = alertaRepository;
         _petRepository = petRepository;
         _vacinaRepository = vacinaRepository;
         _agendamentoRepository = agendamentoRepository;
+        _clinicaContext = clinicaContext;
     }
 
     public async Task<DashboardHojeDto> GetHojeAsync()
     {
         var hoje = DateTime.UtcNow.Date;
+        var idClinica = _clinicaContext.IdClinica;
+
+        // EventoClinico ESTÁ no ApplyTenantFilters (KuraDbContext), então GetByFiltersAsync já
+        // vem escopado pela clínica do contexto -- não precisa (e não deve) repetir o filtro aqui.
         var todosEventos = await _eventoRepository.GetByFiltersAsync(null, null, null, null, null);
         var consultasHoje = todosEventos.Count(e => e.DtEvento.Date == hoje);
         var retornosPendentes = todosEventos.Count(e => e.DtEvento.Date > hoje);
+
+        // FD-17 item 2 -- pets distintos com evento HOJE, sem teto. Mesmo critério de "hoje" já
+        // usado acima para consultasHoje (e.DtEvento.Date == hoje) -- não inventar segunda
+        // convenção de data neste método.
+        var pacientesAtendidosHoje = todosEventos
+            .Where(e => e.DtEvento.Date == hoje)
+            .Select(e => e.IdPet)
+            .Distinct()
+            .Count();
 
         var alertas = await _alertaRepository.GetAllAsync();
         var alertasAtivos = alertas.Count(a => !a.StResolvido);
@@ -49,15 +65,23 @@ public sealed class DashboardService : IDashboardService
             })
             .ToList();
 
-        var proximosAgendamentos = (await _agendamentoRepository.GetProximosDoDiaAsync(DateTime.UtcNow, 3))
+        // FD-17 item 1 -- Agendamento NÃO tem HasQueryFilter (é a única exceção do
+        // ApplyTenantFilters), então idClinica precisa ser passado explicitamente aqui, senão
+        // o dashboard mistura agendamento de todas as clínicas.
+        var proximosAgendamentos = (await _agendamentoRepository.GetProximosDoDiaAsync(idClinica, DateTime.UtcNow, 3))
             .Select(MapParaResumo)
             .ToList();
+
+        // FD-17 item 3 -- também escopado por clínica pela mesma razão acima.
+        var teleorientacoesHoje = await _agendamentoRepository.ContarTeleorientacoesHojeAsync(idClinica, hoje);
 
         return new DashboardHojeDto
         {
             TotalConsultasHoje = consultasHoje,
             TotalAlertasAtivos = alertasAtivos,
             TotalRetornosPendentes = retornosPendentes,
+            TotalPacientesAtendidosHoje = pacientesAtendidosHoje,
+            TotalTeleorientacoesHoje = teleorientacoesHoje,
             UltimosPetsAtendidos = ultimosPets,
             ProximosAgendamentos = proximosAgendamentos
         };
@@ -99,7 +123,9 @@ public sealed class DashboardService : IDashboardService
 
     public async Task<IEnumerable<AgendamentoResumoDto>> GetRecentesAsync()
     {
-        var recentes = await _agendamentoRepository.GetRecentesAsync(DateTime.UtcNow, LimiteAgendamentosRecentes);
+        // FD-17 item 1 -- mesma correção de idClinica explícito (ver GetHojeAsync).
+        var recentes = await _agendamentoRepository.GetRecentesAsync(
+            _clinicaContext.IdClinica, DateTime.UtcNow, LimiteAgendamentosRecentes);
         return recentes.Select(MapParaResumo).ToList();
     }
 
