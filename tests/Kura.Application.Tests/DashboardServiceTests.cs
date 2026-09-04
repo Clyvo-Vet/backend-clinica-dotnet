@@ -1,4 +1,4 @@
-namespace Kura.Application.Tests;
+﻿namespace Kura.Application.Tests;
 
 using FluentAssertions;
 using Moq;
@@ -81,6 +81,48 @@ public class DashboardServiceTests
 
         // Assert
         result.TotalPacientesAtendidosHoje.Should().Be(2); // pets 10 e 11, distintos, hoje
+    }
+
+    /// <summary>
+    /// 🔴 <b>G2 da FD-17 — buraco de gate medido, não hipotético.</b> Antes deste teste, mutar
+    /// <b>só</b> o call site de <c>GetProximosDoDiaAsync</c> em <c>DashboardService</c>
+    /// (<c>idClinica</c> → <c>999L</c>) deixava a suíte <b>inteira verde</b>
+    /// (396/396, EXIT=0): os <c>Setup</c> existentes casavam <c>IdClinicaContexto</c> mas
+    /// devolviam lista <b>vazia</b>, e nenhuma asserção olhava <c>ProximosAgendamentos</c> —
+    /// então "Setup não casou, Moq devolveu o default" era indistinguível de "Setup casou".
+    /// Este teste fecha os dois lados: fixture <b>não vazia</b> (o default do Moq deixa de ser
+    /// igual ao esperado) + <c>Verify</c> do <c>idClinica</c> exato.
+    /// </summary>
+    [Fact]
+    public async Task GetHojeAsync_PropagaProximosAgendamentosEUsaIdClinicaDoContexto()
+    {
+        // Arrange
+        _eventoMock.Setup(r => r.GetByFiltersAsync(null, null, null, null, null))
+            .ReturnsAsync(new List<EventoClinico>());
+        _alertaMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<AlertaTemperatura>());
+        _agendamentoMock.Setup(r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3))
+            .ReturnsAsync(new List<Agendamento>
+            {
+                new()
+                {
+                    Id = 77,
+                    IdClinica = IdClinicaContexto,
+                    NmPaciente = "Rex",
+                    DsServico = "Consulta",
+                    StStatus = "AGENDADO",
+                    DtAgendamento = new DateTime(2099, 1, 1, 10, 0, 0, DateTimeKind.Utc)
+                }
+            });
+
+        // Act
+        var result = await _sut.GetHojeAsync();
+
+        // Assert -- a fixture NAO vazia e o que distingue "Setup casou" de "Moq devolveu default".
+        result.ProximosAgendamentos.Should().HaveCount(1);
+        result.ProximosAgendamentos[0].Id.Should().Be(77);
+        result.ProximosAgendamentos[0].NmPaciente.Should().Be("Rex");
+        _agendamentoMock.Verify(
+            r => r.GetProximosDoDiaAsync(IdClinicaContexto, It.IsAny<DateTime>(), 3), Times.Once);
     }
 
     [Fact]

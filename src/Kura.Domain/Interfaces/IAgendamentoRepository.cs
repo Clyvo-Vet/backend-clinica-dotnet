@@ -1,4 +1,4 @@
-namespace Kura.Domain.Interfaces;
+﻿namespace Kura.Domain.Interfaces;
 
 using Kura.Domain.Entities;
 
@@ -22,9 +22,18 @@ public interface IAgendamentoRepository
     /// <summary>
     /// FD-17 — conta agendamentos de teleconsulta cuja sessão foi iniciada no dia informado,
     /// escopados por clínica (mesma razão de <see cref="GetProximosDoDiaAsync"/>: <c>Agendamento</c>
-    /// não tem filtro global). "Hoje" aqui é <c>DT_INICIO_SESSAO</c> (quando a sala foi
-    /// efetivamente criada/usada), não <c>DT_AGENDAMENTO</c> — ver decisão registrada em
-    /// <c>DashboardService.GetHojeAsync</c>.
+    /// não tem filtro global). "Hoje" aqui é <c>DT_INICIO_SESSAO</c>, não
+    /// <c>DT_AGENDAMENTO</c> — ver decisão registrada em <c>DashboardService.GetHojeAsync</c>.
+    ///
+    /// <para>⚠️ <b>Limite semântico medido na G2 (não corrigir sem decisão de produto):</b>
+    /// <c>DT_INICIO_SESSAO</c> é, pelo comentário da própria coluna na
+    /// <c>V10__agendamento_teleconsulta.sql</c> do repo Java, <i>"Timestamp de criação da sala
+    /// de videochamada"</i> — e <c>TeleconsultaService.CriarOuObterSalaAsync</c> tem
+    /// early-return quando a sala já existe, então reabrir a sala no dia seguinte <b>não</b>
+    /// atualiza o campo. Logo este contador conta <b>salas criadas hoje</b>, não sessões
+    /// realizadas hoje: uma teleconsulta com sala criada ontem e conduzida hoje é contada
+    /// ontem. Continua sendo a melhor âncora disponível (não existe coluna de fim/uso de
+    /// sessão), mas o rótulo do card não deve prometer mais que isso.</para>
     /// </summary>
     Task<int> ContarTeleorientacoesHojeAsync(long idClinica, DateTime data);
 

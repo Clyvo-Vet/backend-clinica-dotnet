@@ -1,4 +1,4 @@
-namespace Kura.Infrastructure.Tests;
+﻿namespace Kura.Infrastructure.Tests;
 
 using FluentAssertions;
 using Kura.Domain.Entities;
@@ -124,7 +124,15 @@ public class AgendamentoRepositoryTests
             new Agendamento { Id = 1, IdClinica = 1, StTeleconsulta = true, DtInicioSessao = DateTime.UtcNow, DtAgendamento = DateTime.UtcNow }, // conta
             new Agendamento { Id = 2, IdClinica = 1, StTeleconsulta = true, DtInicioSessao = ontem, DtAgendamento = DateTime.UtcNow }, // sessão de ontem -- não conta
             new Agendamento { Id = 3, IdClinica = 1, StTeleconsulta = false, DtInicioSessao = null, DtAgendamento = DateTime.UtcNow }, // não é teleconsulta -- não conta
-            new Agendamento { Id = 4, IdClinica = 2, StTeleconsulta = true, DtInicioSessao = DateTime.UtcNow, DtAgendamento = DateTime.UtcNow }); // outra clínica -- não conta
+            new Agendamento { Id = 4, IdClinica = 2, StTeleconsulta = true, DtInicioSessao = DateTime.UtcNow, DtAgendamento = DateTime.UtcNow }, // outra clínica -- não conta
+            // 🔴 G2 da FD-17 -- as 2 linhas abaixo existem para SEPARAR duas cláusulas que a
+            // fixture original confundia. Ela tinha uma única linha "negativa" não-tenant (a de
+            // Id=3), e essa linha era ao mesmo tempo StTeleconsulta=false E DtInicioSessao=null
+            // -- ou seja, as duas cláusulas disputavam a MESMA entrada. Medido: apagar
+            // "a.StTeleconsulta" do predicado deixava 123/123 verde (EXIT=0), e apagar
+            // "a.DtInicioSessao != null" também. Nenhuma das duas era vigiada.
+            new Agendamento { Id = 5, IdClinica = 1, StTeleconsulta = true, DtInicioSessao = null, DtAgendamento = DateTime.UtcNow }, // marcada como teleconsulta, sessão nunca iniciada -- não conta (vigia a guarda de null)
+            new Agendamento { Id = 6, IdClinica = 1, StTeleconsulta = false, DtInicioSessao = DateTime.UtcNow, DtAgendamento = DateTime.UtcNow }); // sessão hoje mas NÃO é teleconsulta -- não conta (vigia a cláusula StTeleconsulta)
         await ctx.SaveChangesAsync();
 
         var repository = new AgendamentoRepository(ctx);
