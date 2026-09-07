@@ -5,7 +5,7 @@
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 ![Azure](https://img.shields.io/badge/Azure-VM%20Linux-0078D4?logo=microsoftazure&logoColor=white)
 ![xUnit](https://img.shields.io/badge/Testes-xUnit%20%2B%20Moq-green)
-![Testes](https://img.shields.io/badge/Testes-305%20(285%20unit%20%C2%B7%2020%20integra%C3%A7%C3%A3o)-brightgreen)
+[![CI](https://github.com/KURA-Clyvo/backend-clinica-dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/KURA-Clyvo/backend-clinica-dotnet/actions/workflows/ci.yml)
 ![Health](https://img.shields.io/badge/Health%20Checks-self%20%C2%B7%20oracle%20%C2%B7%20luna-informational)
 ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-tracing%20%2B%20m%C3%A9tricas%20(Console)-blueviolet)
 
@@ -424,15 +424,16 @@ dotnet test KuraApi.slnx --filter "Categoria!=Integracao"     # só unitários
 dotnet test --filter "FullyQualifiedName~NomeDoServico"       # por classe
 ```
 
-Contagens **medidas nesta revisão** (`8 + 71 + 206 + 20`):
+Contagens **medidas em 2026-09-06** (`8 + 123 + 397 + 144`), com `dotnet test` e `EXIT=0` conferido no log. O badge de CI no topo é a fonte **viva** — os números abaixo
+são um retrato datado, e retrato envelhece:
 
 | Recorte | Testes | Projetos |
 |---|---|---|
-| Tudo | **305** | os 4 |
-| `Categoria=Integracao` | **20** | `Kura.IntegrationTests` |
-| `Categoria!=Integracao` | **285** | `Kura.Domain.Tests` · `Kura.Application.Tests` · `Kura.Infrastructure.Tests` |
+| Tudo | **672** | os 4 |
+| `Categoria=Integracao` | **144** | `Kura.IntegrationTests` |
+| `Categoria!=Integracao` | **528** | `Kura.Domain.Tests` · `Kura.Application.Tests` · `Kura.Infrastructure.Tests` |
 
-`20 + 285 = 305`. ⚠️ O filtro `!=` do VSTest casa **também** o teste que não declara a
+`144 + 528 = 672`. ⚠️ O filtro `!=` do VSTest casa **também** o teste que não declara a
 propriedade — é por isso que os arquivos unitários não precisaram ser anotados um a um, e é
 por isso que uma classe de integração que **esqueça** o `[Trait]` cairia silenciosamente no
 balde unitário. `ConvencaoDeTestesCoverageTests` existe para impedir exatamente isso.
